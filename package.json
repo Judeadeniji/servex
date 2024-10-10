@@ -1,0 +1,37 @@
+{
+  "name": "servex",
+  "version": "0.0.1-alpha",
+  "description": "ServeX (Codename: Aether) - A high-performance, extensible HTTP server framework inspired by Express, Hono, and Fastify. Delivering blazing speed, rock-solid reliability, and effortless elegance for modern web applications.",
+  "main": "dist/index.js",
+  "type": "module",
+  "scripts": {},
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/judeadeniji/servex.git"
+  },
+  "keywords": [
+    "http",
+    "server",
+    "framework",
+    "serve",
+    "workers",
+    "bun",
+    "web"
+  ],
+  "author": "Adeniji  Oluwaferanmi (adenijiferanmi64@gmail.com)",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/judeadeniji/servex/issues"
+  },
+  "homepage": "https://github.com/judeadeniji/servex#readme",
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/cookie": "^0.6.0"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "cookie": "^0.7.2"
+  }
+}
