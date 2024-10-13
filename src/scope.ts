@@ -5,14 +5,14 @@ import type { ServerRoute } from "./types";
 let currentScope: Scope<ServerRoute[]> | null = null;
 
 class Scope<T extends ServerRoute[], P extends ServerRoute[] = ServerRoute[]> {
-  route_matcher: RouterAdapter<T>;
+  router: RouterAdapter<T>;
   context: Context = null!;
   parent: Scope<P> | null;
 
   constructor(rm: RouterAdapter<T>,
     parent?: Scope<P>
   ) {
-    this.route_matcher = rm;
+    this.router = rm;
     this.parent = parent || null;
   }
 }

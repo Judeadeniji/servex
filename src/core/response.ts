@@ -1,7 +1,5 @@
 import { notFoundHandler } from "../basic-handlers";
 import type { Context } from "../context";
-import { HttpException } from "../http-exception";
-import { Redirect } from "../redirect";
 import type { Handler, RequestHandler } from "../types";
 
 /**
@@ -12,9 +10,9 @@ import type { Handler, RequestHandler } from "../types";
  * @returns A tuple indicating whether to throw the error and the corresponding response.
  */
 function handleErrorsGracefully(
-  error: unknown
+  error: any
 ): { shouldThrow: boolean; response: Response } {
-  if (error instanceof HttpException || error instanceof Redirect) {
+  if ("getResponse" in error) {
     return { shouldThrow: false, response: error.getResponse() };
   }
 

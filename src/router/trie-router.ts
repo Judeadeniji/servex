@@ -8,6 +8,8 @@ import {
   type MatchedRoute,
   type IRouter,
 } from "./base";
+import type { Context } from "../context";
+import type { MiddlewareHandler } from "../types";
 
 export class TrieRouter<Routes extends Route[]> implements IRouter<Routes> {
   private root = new TrieSegmentNode("/");
@@ -38,6 +40,83 @@ export class TrieRouter<Routes extends Route[]> implements IRouter<Routes> {
     }
 
     return this;
+  }
+
+  pushMiddlewares<C extends Context>(
+    path: string,
+    middleware: MiddlewareHandler<C>[]
+  ): void {
+    const sanitizedPath = this.sanitizeRoute(path);
+
+    if (sanitizedPath === "*") {
+      // Apply middleware to all existing routes
+      for (const route of this.#routes) {
+        this.addMiddlewareToPath(route.path, middleware);
+      }
+      // Apply middleware to all future routes by setting a global middleware
+      this.addGlobalMiddleware(middleware);
+    } else {
+      this.addMiddlewareToPath(sanitizedPath, middleware);
+    }
+  }
+
+
+  private addMiddlewareToPath<C extends Context>(
+    path: string,
+    middlewares: MiddlewareHandler<C>[]
+  ): void {
+    const segments = path === "/" ? [path] : path.split("/");
+    let currentTrieSegment = this.root;
+  
+    for (let i = 0; i < segments.length; i++) {
+      const seg = segments[i];
+      const isLastSegment = i === segments.length - 1;
+  
+      if (seg === "*") {
+        // Apply middleware to all child segments recursively
+        this.applyMiddlewareToAllChildren(currentTrieSegment, middlewares);
+        break; // Wildcard applies to all subsequent paths
+      }
+  
+      if (!currentTrieSegment.children.has(seg)) {
+        const trieSegment = new TrieSegmentNode(seg);
+        trieSegment.prevTrieSegment = currentTrieSegment;
+        currentTrieSegment.children.set(seg, trieSegment);
+      }
+  
+      currentTrieSegment = currentTrieSegment.children.get(seg)!;
+  
+      if (isLastSegment) {
+        // Attach middlewares to the specific segment
+        currentTrieSegment.middlewares.push(...middlewares as MiddlewareHandler<Context>[]);
+      }
+    }
+  }
+
+  private applyMiddlewareToAllChildren<C extends Context>(
+    segment: TrieSegmentNode,
+    middlewares: MiddlewareHandler<C>[]
+  ): void {
+    // Apply middleware to the current segment
+    segment.middlewares.push(...middlewares as MiddlewareHandler<Context>[]);
+  
+    // Recursively apply middleware to all child segments
+    for (const child of segment.children.values()) {
+      this.applyMiddlewareToAllChildren(child, middlewares);
+    }
+  }
+  
+
+  private addGlobalMiddleware<C extends Context>(
+    middlewares: MiddlewareHandler<C>[]
+  ): void {
+    const applyMiddlewareToSegment = (segment: TrieSegmentNode) => {
+      segment.middlewares.push(...middlewares as MiddlewareHandler<Context>[]);
+      for (const child of segment.children.values()) {
+        applyMiddlewareToSegment(child);
+      }
+    };
+    applyMiddlewareToSegment(this.root);
   }
 
   addRoute(route: Route<Routes[number]["data"]>) {
@@ -212,6 +291,7 @@ export class TrieRouter<Routes extends Route[]> implements IRouter<Routes> {
       searchParams: new URLSearchParams(),
       data: null!,
       hash: null,
+      middlewares: new Set, // Initialize middleware array
     };
 
     {
@@ -260,6 +340,9 @@ export class TrieRouter<Routes extends Route[]> implements IRouter<Routes> {
 
     matched_route.matched_route += `/${route.value}`;
 
+    // Collect middlewares from the current node
+    this.collectMiddlewares(route, matched_route.middlewares);
+
     if (!nextSegment && route.isEndOfRoute) {
       if (route.data[method]) {
         matched_route.matched = true as Matched;
@@ -289,7 +372,10 @@ export class TrieRouter<Routes extends Route[]> implements IRouter<Routes> {
       return null; // No match found
     }
 
-    const orderedTrieSegments = orderTrieSegmentByType(route.children);
+    const orderedTrieSegments = orderTrieSegmentByType(route.children) as [
+      string,
+      TrieSegmentNode
+    ][];
 
     for (const [seg, trieSegment] of orderedTrieSegments) {
       // Switch on the current trie segment type of the route child
@@ -303,6 +389,7 @@ export class TrieRouter<Routes extends Route[]> implements IRouter<Routes> {
             [...paths, nextSegment],
             index + 1
           );
+
         case "wildcard":
           const isNamedWildcard = seg.startsWith("*") && seg.length > 1;
           const routeSegArr = this.sanitizeRoute(
@@ -323,6 +410,7 @@ export class TrieRouter<Routes extends Route[]> implements IRouter<Routes> {
           if (trieSegment.data[method]) {
             matched_route.matched = true as Matched;
             matched_route.data = trieSegment.data[method];
+            this.collectMiddlewares(trieSegment, matched_route.middlewares);
             //@ts-ignore
             return matched_route;
           }
@@ -345,12 +433,28 @@ export class TrieRouter<Routes extends Route[]> implements IRouter<Routes> {
     return matched_route;
   }
 
+  private collectMiddlewares(
+    node: TrieSegmentNode,
+    middlewares: Set<MiddlewareHandler<Context>>
+  ) {
+    const stack: MiddlewareHandler<Context>[] = [];
+    let current: TrieSegmentNode | null = node;
+    while (current) {
+      if (current.middlewares.length > 0) {
+        stack.push(...current.middlewares);
+      }
+      current = current.prevTrieSegment;
+    }
+    // Middlewares should be executed from root to leaf, so reverse the stack
+    stack.reverse().forEach((middleware) => middlewares.add(middleware));
+  }
+
   private isDynamicSegment(seg: string) {
     return seg.startsWith(":");
   }
 
   private isWildCard(seg: string) {
-    return seg === "*" || seg.startsWith("*"); // unamed & named wildcards
+    return seg === "*" || seg.startsWith("*"); // unnamed & named wildcards
   }
 
   private findAllRoutes(
@@ -401,13 +505,4 @@ export class TrieRouter<Routes extends Route[]> implements IRouter<Routes> {
 
     return { hash, searchParams };
   }
-}
-
-export function RouteMatcher<T, Routes extends Route<T>[]>(routes: Routes) {
-  const route_table = new TrieRouter<Routes>();
-  for (const route of routes) {
-    route_table.addRoute(route);
-  }
-
-  return route_table as Omit<typeof route_table, "addRoute">;
 }

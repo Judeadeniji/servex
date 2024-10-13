@@ -9,6 +9,8 @@ import {
   type SegmentType,
 } from "./base";
 import type { DynamicSegmentsRemoved, RouteMatch } from "./types";
+import type { Context } from "../context";
+import type { MiddlewareHandler } from "../types";
 
 /**
  * Radix Tree implementation for route matching.
@@ -23,6 +25,91 @@ export class RadixRouteTrie<Routes extends Route[]> implements IRouter<Routes> {
    */
   get routes() {
     return Array.from(this.#routes);
+  }
+
+  pushMiddlewares<C extends Context>(
+    path: string,
+    middlewares: MiddlewareHandler<C>[]
+  ): void {
+    const sanitizedPath = this.sanitizeRoute(path);
+
+    if (sanitizedPath === "*") {
+      for (const route of this.#routes) {
+        this.addMiddlewareToPath(route.path, middlewares);
+      }
+      this.addGlobalMiddleware(middlewares);
+    } else {
+      this.addMiddlewareToPath(sanitizedPath, middlewares);
+    }
+  }
+
+  private addMiddlewareToPath<C extends Context>(
+    path: string,
+    middlewares: MiddlewareHandler<C>[]
+  ): void {
+    const segments = path === "/" ? [path] : path.split("/");
+    let currentRadixSegment = this.root;
+
+    for (let i = 0; i < segments.length; i++) {
+      const seg = segments[i];
+      const isLastSegment = i === segments.length - 1;
+
+      if (seg === "*") {
+        this.applyMiddlewareToAllChildren(currentRadixSegment, middlewares);
+        break; // Wildcard applies to all subsequent paths
+      }
+
+      if (!currentRadixSegment.children.has(seg)) {
+        const radixSegment = new RadixSegmentNode(seg);
+        radixSegment.previousRadixSegment = currentRadixSegment;
+        currentRadixSegment.children.set(seg, radixSegment);
+      }
+
+      currentRadixSegment = currentRadixSegment.children.get(seg)!;
+
+      if (isLastSegment) {
+        currentRadixSegment.middlewares.push(...middlewares as MiddlewareHandler<Context>[]);
+      }
+    }
+  }
+
+  private applyMiddlewareToAllChildren<C extends Context>(
+    segment: RadixSegmentNode,
+    middlewares: MiddlewareHandler<C>[]
+  ): void {
+    segment.middlewares.push(...middlewares as MiddlewareHandler<Context>[]);
+
+    for (const child of segment.children.values()) {
+      this.applyMiddlewareToAllChildren(child, middlewares);
+    }
+  }
+
+  private addGlobalMiddleware<C extends Context>(
+    middlewares: MiddlewareHandler<C>[]
+  ): void {
+    const applyMiddlewareToSegment = (segment: RadixSegmentNode) => {
+      segment.middlewares.push(...middlewares as MiddlewareHandler<Context>[]);
+      for (const child of segment.children.values()) {
+        applyMiddlewareToSegment(child);
+      }
+    };
+    applyMiddlewareToSegment(this.root);
+  }
+
+  private collectMiddlewares(
+    node: RadixSegmentNode,
+  ) {
+    const stack: MiddlewareHandler<Context>[] = [];
+    let current: RadixSegmentNode | null = node;
+    while (current) {
+      if (current.middlewares.length > 0) {
+        stack.push(...current.middlewares);
+      }
+
+      current = current.previousRadixSegment
+    }
+    // Middlewares should be executed from root to leaf, so reverse the stack
+    return stack;
   }
 
   /**
@@ -81,6 +168,7 @@ export class RadixRouteTrie<Routes extends Route[]> implements IRouter<Routes> {
     currentNode.data[method.toUpperCase() as HTTPMethod] = data;
     this.#routes.add(route);
   }
+
 
   addSubTrie(parent: string, trie: RadixRouteTrie<Routes>) {
     const sanitizedPath = this.sanitizeRoute(parent);
@@ -147,6 +235,7 @@ export class RadixRouteTrie<Routes extends Route[]> implements IRouter<Routes> {
               searchParams: new URLSearchParams(searchParams),
               hash: hash || null,
               data: child.data[methodUpper],
+              middlewares: new Set(this.collectMiddlewares(child)),
             };
           }
           // Wildcard exists but doesn't have the required method
@@ -186,6 +275,7 @@ export class RadixRouteTrie<Routes extends Route[]> implements IRouter<Routes> {
         searchParams: new URLSearchParams(searchParams),
         hash: hash || null,
         data: currentNode.data[methodUpper],
+        middlewares: new Set(this.collectMiddlewares(currentNode)),
       };
     }
 

@@ -1,5 +1,5 @@
 // ./context.ts
-import * as ck from "cookie";
+import * as ck from "./cookie";
 import type { StatusCode } from "./http-status";
 import type { Env, HeaderRecord, JSONValue } from "./types";
 import type { ExtractUrl } from "./router/types";
@@ -43,16 +43,16 @@ export class Context<
     this.#body = ctx.parsedBody;
   }
 
-  setHeaders(headers: { [key: string]: string }) {
-    const preResponseHeaders = parseHeaders(this.#response.headers);
-    const responseHeaders = {
-      ...preResponseHeaders,
-      ...headers,
-    } as HeadersInit;
-    this.#response = new Response(this.#response.body, {
-      status: this.#response.status,
-      headers: new Headers(responseHeaders)
-    });
+  setHeaders(headers: { [key: string]: string | string[] }) {
+    for (const name in headers) {
+      if (Object.prototype.hasOwnProperty.call(headers, name)) {
+        const value = headers[name];
+        this.#response.headers.append(
+          name,
+          Array.isArray(value) ? value.join(",") : value
+        );
+      }
+    }
     return this;
   }
 
@@ -67,10 +67,10 @@ export class Context<
     options?: ck.CookieSerializeOptions
   ) {
     for (const [name, value] of Object.entries(cookies)) {
-      this.setCookie(name, value, options)
+      this.setCookie(name, value, options);
     }
 
-    return this
+    return this;
   }
 
   /**
@@ -78,6 +78,10 @@ export class Context<
    */
   get req() {
     return this.#rawRequest;
+  }
+
+  get res() {
+    return this.#response;
   }
 
   /**
@@ -93,7 +97,7 @@ export class Context<
    * // URL: /heroes/spiderman
    * // params: { heroName: "spiderman" }
    */
-  params<K extends keyof I['params']>(
+  params<K extends keyof I["params"]>(
     k?: K
   ): K extends string ? string | undefined : Record<string, string> {
     return (typeof k === "string" ? this.#params[k] : this.#params) as any;

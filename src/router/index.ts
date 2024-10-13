@@ -15,28 +15,28 @@ export function route<M extends Method, P extends string, P1 extends string>(
 )
 {
   const [method, url] = path.split(" ") as [Method, P];
-  return (scope: Scope<ServerRoute[], ServerRoute[]>, parent = '') => {
+  return (scope: Scope<ServerRoute[], ServerRoute[]>, parent = ''): ReturnType<Route<P, P1>> => {
     // Combine handlers with middlewares if any
     const handlers = Array.isArray(options?.middlewares)
       ? [...options.middlewares, handler]
       : [handler];
 
-    scope.route_matcher.addRoute({
+    scope.router.addRoute({
       method: method.toUpperCase() as Method, // Ensure method is uppercase
       path: url,
       data: handlers,
     });
 
-    scope.parent?.route_matcher.addSubTrie(
+    scope.parent?.router.addSubTrie(
       parent,
-      scope.route_matcher
+      scope.router
     );
 
     return {
       path: url,
       method,
       handlers,
-      children: options?.children
+      children: options?.children as Route<string, string>[] | [],
     }
   }
 }

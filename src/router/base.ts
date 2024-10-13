@@ -1,4 +1,4 @@
-import type { Method } from "../types";
+import type { Context, Method, MiddlewareHandler } from "../types";
 import type { DynamicSegmentsRemoved, ExtractUrl, RouteMatch } from "./types";
 
 export type HTTPMethod = Method;
@@ -10,7 +10,7 @@ export type Route<T = unknown> = {
 };
 
 export type SegmentType = "static" | "dynamic" | "wildcard";
-export type SegmentNode<T = unknown> = TrieSegmentNode<T> | RadixSegmentNode<T>
+export type SegmentNode<T = unknown> = TrieSegmentNode<T> | RadixSegmentNode<T>;
 
 export type MatchedRoute<Routes extends Route[] = Route[], M = boolean> = {
   /**
@@ -67,8 +67,9 @@ export type MatchedRoute<Routes extends Route[] = Route[], M = boolean> = {
    * @description This is the data associated with the route
    */
   data: Routes[number]["data"];
-};
 
+  middlewares: Set<MiddlewareHandler<Context>>; 
+};
 
 /**
  * Orders a map of trie segments by type (static, dynamic, wildcard)
@@ -76,7 +77,9 @@ export type MatchedRoute<Routes extends Route[] = Route[], M = boolean> = {
  * @param trieMap - A map of the trie segments
  * @returns {Array<[string, TrieSegmentNode]>} - An array of the trie segments ordered by type
  */
-export function orderTrieSegmentByType<T>(trieMap: Map<string, SegmentNode<T>>) {
+export function orderTrieSegmentByType<T>(
+  trieMap: Map<string, SegmentNode<T>>
+) {
   const orderedSegments: Array<[string, SegmentNode<T>]> = [];
   const dynamicSegments: Array<[string, SegmentNode<T>]> = [];
   const wildcardSegments: Array<[string, SegmentNode<T>]> = [];
@@ -98,37 +101,37 @@ export function orderTrieSegmentByType<T>(trieMap: Map<string, SegmentNode<T>>) 
   return [...orderedSegments, ...dynamicSegments, ...wildcardSegments];
 }
 
-
 /**
-* Represents a node in the Radix Tree.
-*/
+ * Represents a node in the Radix Tree.
+ */
 export class RadixSegmentNode<T = unknown> {
- children: Map<string, RadixSegmentNode> = new Map();
- isEndOfRoute: boolean = false;
- data: Record<HTTPMethod, T> = {} as Record<HTTPMethod, T>;
- type: SegmentType = "static";
- paramsKeys: string[] = []; // Keys for dynamic segments
- value: string;
+  children: Map<string, RadixSegmentNode> = new Map();
+  isEndOfRoute: boolean = false;
+  data: Record<HTTPMethod, T> = {} as Record<HTTPMethod, T>;
+  type: SegmentType = "static";
+  paramsKeys: string[] = []; // Keys for dynamic segments
+  value: string;
+  middlewares: MiddlewareHandler<Context>[] = [];
+  previousRadixSegment: RadixSegmentNode | null = null;
 
- constructor(value: string, type: SegmentType = "static") {
-   this.value = value;
-   this.type = type;
- }
+  constructor(value: string, type: SegmentType = "static") {
+    this.value = value;
+    this.type = type;
+  }
 
- /**
-  * Inserts a child node or merges existing paths for compactness.
-  * @param segment - The path segment to insert.
-  * @returns The child node corresponding to the segment.
-  */
- insertChild(segment: string, type: SegmentType = "static"): RadixSegmentNode {
-   if (!this.children.has(segment)) {
-     const child = new RadixSegmentNode(segment, type);
-     this.children.set(segment, child);
-   }
-   return this.children.get(segment)!;
- }
+  /**
+   * Inserts a child node or merges existing paths for compactness.
+   * @param segment - The path segment to insert.
+   * @returns The child node corresponding to the segment.
+   */
+  insertChild(segment: string, type: SegmentType = "static"): RadixSegmentNode {
+    if (!this.children.has(segment)) {
+      const child = new RadixSegmentNode(segment, type);
+      this.children.set(segment, child);
+    }
+    return this.children.get(segment)!;
+  }
 }
-
 
 export class TrieSegmentNode<T = unknown> {
   /**
@@ -156,7 +159,18 @@ export class TrieSegmentNode<T = unknown> {
    */
   prevTrieSegment: TrieSegmentNode | null = null;
 
-  constructor(public value: string) {}
+  middlewares: MiddlewareHandler<Context>[] = [];
+
+  constructor(public value: string) {
+    this.type = this.determineType(value);
+  }
+
+
+  private determineType(value: string): 'static' | 'dynamic' | 'wildcard' {
+    if (value.startsWith(':')) return 'dynamic';
+    if (value.startsWith('*')) return 'wildcard';
+    return 'static';
+  }
 }
 
 
@@ -191,4 +205,9 @@ export interface IRouter<Routes extends Route[] = Route[]> {
   get routes(): Route<Routes[number]["data"]>[];
 
   addSubTrie(parent: string, trie: IRouter<Routes>): IRouter<Routes>;
+
+  pushMiddlewares<C extends Context>(
+    path: string,
+    middleware: MiddlewareHandler<C>[]
+  ): void;
 }

@@ -26,7 +26,7 @@ export type Route<P extends string, P1 extends string> = <C extends Context<Env,
   method: Method;
   path: P;
   handlers: Handler<C>[];
-  children?: Route<P1, P>[]
+  children?: Route<string, string>[]
 };
 
 export type Handler<C extends Context> = RequestHandler<C> | MiddlewareHandler<C>
@@ -40,7 +40,7 @@ export type RequestHandler<C extends Context> = (
 export type MiddlewareHandler<C extends Context> = (
   ctx: C,
   next: NextFunction
-) => Promise<void> | void;
+) => Promise<void | undefined | Response> | void | undefined | Response;
 
 
 export interface ServerOptions<P extends string = '', P1 extends string = ''> {
@@ -51,7 +51,7 @@ export interface ServerOptions<P extends string = '', P1 extends string = ''> {
 
 // http methods
 export type Method =
-  | "*"
+  | "ALL"
   | "GET"
   | "POST"
   | "PUT"

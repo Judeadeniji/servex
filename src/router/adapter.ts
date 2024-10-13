@@ -1,4 +1,5 @@
 // RouterAdapter.ts
+import type { Context, MiddlewareHandler } from "../types";
 import type { HTTPMethod, IRouter, MatchedRoute, Route } from "./base";
 import { RadixRouteTrie } from "./radix-router";
 import { TrieRouter } from "./trie-router";
@@ -28,8 +29,6 @@ export class RouterAdapter<Routes extends Route[] = Route[]> implements IRouter<
 
   constructor(options: RouterAdapterOptions<Routes>) {
     const { type, routes = [] } = options;
-
-    console.log("RouterAdapter constructor", type);
 
     switch (type) {
       case RouterType.RADIX:
@@ -104,7 +103,17 @@ export class RouterAdapter<Routes extends Route[] = Route[]> implements IRouter<
     }
   }
 
+  /**
+   * Adds a sub-trie to the parent route.
+   * @param parent - The parent route path.
+   * @param trie - The sub-trie to add.
+   * @returns The parent route with the sub-trie added.
+   */
   addSubTrie(parent: string, trie: IRouter<Routes>): IRouter<Routes> {
     return this.router.addSubTrie(parent, trie);
+  }
+
+  pushMiddlewares<C extends Context>(path: string, middlewares: MiddlewareHandler<C>[]): void {
+    this.router.pushMiddlewares(path, middlewares);
   }
 }

@@ -16,21 +16,23 @@ describe("RouterAdapter", () => {
       routes,
     });
 
+    
     const matched = router.match("GET", "/heroes/spiderman");
     expect(matched).not.toBeNull();
     expect(matched?.matched).toBe(true);
     expect(matched?.params.heroName).toBe("spiderman");
   });
-
+  
   it("should switch to Radix router and retain routes", () => {
     const router = new RouterAdapter({
       type: RouterType.TRIE,
       routes,
     });
-
+    
     router.switchRouter(RouterType.RADIX);
-
+    
     const matched = router.match("GET", "/assets/images/logo.png");
+
     expect(matched).not.toBeNull();
     expect(matched?.matched).toBe(true);
     expect(matched?.params.filepath).toBe("images/logo.png");

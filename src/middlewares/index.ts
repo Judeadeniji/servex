@@ -1,6 +1,7 @@
 // middleware.ts
 
-import type { Middleware, Context, NextFunction } from "../types";
+import { executeHandlers } from "../core/response";
+import type { Middleware, Context, NextFunction, Handler } from "../types";
 
 export class MiddlewareManager<T extends Context> {
   private middlewares: Middleware<T>[] = [];
@@ -25,4 +26,11 @@ export class MiddlewareManager<T extends Context> {
 
     await dispatch(0);
   }
+}
+
+// flatten handlers into one single fu
+export function flattenHandlers<T extends Context>(handlers: Handler<T>[]) {
+  return ((c: T, n: NextFunction) => {
+    return executeHandlers(c as Context, handlers as Handler<Context>[]);
+  }) as Handler<T>;
 }
