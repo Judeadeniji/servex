@@ -15,8 +15,6 @@ import {
   RouterType,
   type RouterAdapterOptions,
 } from "./router/adapter";
-import type { Route as RouteType } from "./router/base";
-import { flattenHandlers } from "./middlewares";
 
 export class ServeXRequest extends Request {}
 
@@ -51,7 +49,11 @@ async function baseFetch(
     if (anyMethodRoute && anyMethodRoute.matched) {
       route = anyMethodRoute;
       // return new Response("Method Not Allowed", { status: 405 });
-    } else return new Response("Not Found", { status: 404 });
+    } else return await executeHandlers(new Context(request, process.env, {
+      parsedBody: await parseRequestBody(request.clone()),
+      params: {},
+      query: new URLSearchParams(),
+    }), middlewares);
   }
 
   const parsedBody = await parseRequestBody(request.clone());
@@ -64,9 +66,6 @@ async function baseFetch(
   scope.context = context;
   setScope(scope); // Set the current scope, because the scope gets disposed after the request is handled
 
-  console.dir(route.middlewares, {
-    depth: Infinity
-  })
   const response = await executeHandlers(context, [
     ...Array.from(route.middlewares),
     ...middlewares, // Add root level middlewares
@@ -98,7 +97,7 @@ export function createServer(options: ServerOptions<any, any>) {
       const pathname = url.pathname;
 
       try {
-        return baseFetch(thisScope, request, method, pathname, middlewares);
+        return baseFetch.call(this, thisScope, request, method, pathname, middlewares);
       } catch (error) {
         console.error("Error handling request:", error);
         return new Response("Internal Server Error", { status: 500 });

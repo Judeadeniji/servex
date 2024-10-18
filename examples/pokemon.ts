@@ -11,13 +11,16 @@ import { RouterType } from "../src/router/adapter";
 //  Little Hacks
 // ----------------------
 const sysConsoleLog = console.log;
+console.log = () => {}
 function log(...args: Parameters<typeof console.log>) {
   const stack = new Error().stack || '';
   const caller = stack.split('\n')[2].trim();
   sysConsoleLog(`[${new Date().toISOString()}] ${caller}:\n`, ...args);
 }
 
-console.log = log;
+if (log !== sysConsoleLog) {
+  console.log = log
+}
 
 // ----------------------
 // Define Types and Interfaces
@@ -168,6 +171,7 @@ const listPokemons = route(
 // Route to add a new Pokémon
 const addPokemon = route("POST /pokemons", async (c) => {
   const req = request();
+  
   const body = await req.json<{
     name: string;
     type: string;
@@ -378,10 +382,12 @@ const server = createServer({
   middlewares: [loggerMiddleware],
 });
 
+export default server.fetch
+
 // Start the server on port 3000
-serve({
-  port: 3000,
-  fetch: server.fetch,
-});
+// serve({
+//   port: 3000,
+//   fetch: server.fetch,
+// });
 
 console.log("Pokémon Server is running on http://localhost:3000");

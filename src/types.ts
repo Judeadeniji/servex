@@ -44,9 +44,9 @@ export type MiddlewareHandler<C extends Context> = (
 
 
 export interface ServerOptions<P extends string = '', P1 extends string = ''> {
-  router: RouterType
+  router?: RouterType
   routes: Route<P, P1>[];
-  middlewares?: Middleware<Context>[];
+  middlewares?: MiddlewareHandler<Context>[];
 }
 
 // http methods
@@ -104,9 +104,6 @@ export type TypedResponse<
 };
 
 export type NextFunction = () => Promise<void>;
-export type Middleware<T> = (
-  context: T,
-  next: NextFunction
-) => Promise<void> | void;
+export declare function fetch(request: Request): Promise<Response>
 
 export { Context };

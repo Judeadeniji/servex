@@ -51,13 +51,14 @@ export async function executeHandlers(
     let nextCalled = false;
 
     try {
-      const result = await handler(context, async () => {
+      const handleNext = async () => {
         if (nextCalled) {
           throw new Error("next() called multiple times");
         }
         nextCalled = true;
         await invokeHandler(index + 1);
-      });
+      };
+      const result = await handler(context, handleNext);
 
       if (result instanceof Response) {
         response = result;
@@ -74,7 +75,7 @@ export async function executeHandlers(
   try {
     await invokeHandler(currentIndex);
   } catch (error) {
-    console.warn(`Error encountered at handler index ${currentIndex}:`, error);
+    context.debug && console.error(error);
     const { shouldThrow, response: errorResponse } = handleErrorsGracefully(error);
     if (shouldThrow) {
       throw error;
@@ -89,7 +90,7 @@ export async function executeHandlers(
         // Default handler typically does not call next()
       });
     } catch (error) {
-      console.warn(`Error in default handler:`, error);
+      context.debug && console.warn(`Error in default handler:`, error);
       const { shouldThrow, response: errorResponse } = handleErrorsGracefully(error);
       if (shouldThrow) {
         throw error;

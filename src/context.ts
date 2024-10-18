@@ -3,13 +3,14 @@ import * as ck from "./cookie";
 import type { StatusCode } from "./http-status";
 import type { Env, HeaderRecord, JSONValue } from "./types";
 import type { ExtractUrl } from "./router/types";
+import { STATUS_CODES } from "node:http";
 
 function parseHeaders(headers: Headers): HeaderRecord {
   const result: HeaderRecord = {};
-  for (const key in headers.toJSON()) {
-    const value = headers.get(key);
+  headers.forEach((value, key) => {
     result[key] = value!;
-  }
+  });
+
   return result;
 }
 
@@ -34,6 +35,8 @@ export class Context<
   #query: URLSearchParams;
   #body: any;
   #response: Response = new Response();
+  #status: StatusCode = 200;
+  debug = false;
 
   constructor(request: Request, env: E["Bindings"], ctx: RequestContext) {
     this.#rawRequest = request;
@@ -145,16 +148,24 @@ export class Context<
   json<T extends Record<any, any>>(
     object: T,
     status: StatusCode = 200,
-    headers: HeaderRecord = {}
+    _headers: HeaderRecord = {}
   ): Response {
     const body = JSON.stringify(object);
     const preResponseHeaders = parseHeaders(this.#response.headers);
     const responseHeaders: HeadersInit = {
       ...preResponseHeaders,
       "Content-Type": "application/json; charset=UTF-8",
-      ...headers,
+      ..._headers,
     };
-    this.#response = new Response(body, { status, headers: responseHeaders });
+
+    const headers = new Headers(responseHeaders);
+
+    this.#status = status;
+    this.#response = new Response(body, {
+      status,
+      headers,
+      statusText: STATUS_CODES[status],
+    });
 
     return this.#response;
   }
@@ -168,13 +179,20 @@ export class Context<
   text(
     text: string,
     status: StatusCode = 200,
-    headers: HeaderRecord = {}
+    _headers: HeaderRecord = {}
   ): Response {
     const responseHeaders: HeadersInit = {
       "Content-Type": "text/plain; charset=UTF-8",
-      ...headers,
+      ..._headers,
     };
-    return new Response(text, { status, headers: responseHeaders });
+
+    this.#status = status;
+    const headers = new Headers(responseHeaders);
+    return new Response(text, {
+      status,
+      headers,
+      statusText: STATUS_CODES[status],
+    });
   }
 
   /**
@@ -186,13 +204,20 @@ export class Context<
   html(
     html: string,
     status: StatusCode = 200,
-    headers: HeaderRecord = {}
+    _headers: HeaderRecord = {}
   ): Response {
     const responseHeaders: HeadersInit = {
       "Content-Type": "text/html; charset=UTF-8",
-      ...headers,
+      ..._headers,
     };
-    return new Response(html, { status, headers: responseHeaders });
+
+    this.#status = status;
+    const headers = new Headers(responseHeaders);
+    return new Response(html, {
+      status,
+      headers,
+      statusText: STATUS_CODES[status],
+    });
   }
 
   /**
@@ -201,6 +226,7 @@ export class Context<
    * @param status - Optional HTTP status code (default: 302).
    */
   redirect(location: string, status: StatusCode = 302): Response {
+    this.#status = status;
     return new Response(null, {
       status,
       headers: {
@@ -210,11 +236,34 @@ export class Context<
   }
 
   /**
-   * Constructs and returns a response with a specified status code and message.
-   * @param status - The HTTP status code.
-   * @param message - The message to include in the response body.
+   * Constructs and returns a streaming response.
+   * @param stream - The ReadableStream to return.
+   * @param status - Optional HTTP status code (default: 200).
+   * @param headers - Optional headers to include in the response.
    */
-  status(status: StatusCode, message: string = ""): Response {
-    return new Response(message, { status });
+  stream(
+    stream: ReadableStream,
+    status: StatusCode = 200,
+    _headers: HeaderRecord = {}
+  ): Response {
+    const preResponseHeaders = parseHeaders(this.#response.headers);
+    const responseHeaders = {
+      "Content-Type": "text/plain; charset=UTF-8",
+      "Transfer-Encoding": "chunked",
+      ...preResponseHeaders,
+      ..._headers,
+    } as HeadersInit;
+
+    this.#status = status;
+    const headers = new Headers(responseHeaders);
+    return new Response(stream, {
+      status,
+      headers,
+      statusText: STATUS_CODES[status],
+    });
+  }
+
+  get status() {
+    return this.#status;
   }
 }
