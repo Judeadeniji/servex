@@ -1,38 +1,38 @@
 import type { Context } from "./context";
 import type { RouterAdapter } from "./router/adapter";
-import type { ServerRoute } from "./types";
+import type { Env, ServerRoute } from "./types";
 
-let currentScope: Scope<ServerRoute[]> | null = null;
+let currentScope: Scope<any> | null = null;
 
-class Scope<T extends ServerRoute[], P extends ServerRoute[] = ServerRoute[]> {
-  router: RouterAdapter<T>;
-  context: Context = null!;
-  parent: Scope<P> | null;
+class Scope<E extends Env, P extends ServerRoute[] = ServerRoute[]> {
+  router: RouterAdapter<E>;
+  context: Context<E> = null!;
+  parent: Scope<E, P> | null;
 
-  constructor(rm: RouterAdapter<T>,
-    parent?: Scope<P>
+  constructor(routerAdapter: RouterAdapter<E>,
+    parent?: Scope<E, P>
   ) {
-    this.router = rm;
+    this.router = routerAdapter;
     this.parent = parent || null;
   }
 }
 
-export function getCurrentScope<T extends ServerRoute[], P extends ServerRoute[] = ServerRoute[]>() {
+export function getCurrentScope<E extends Env, P extends ServerRoute[] = ServerRoute[]>() {
   if (currentScope === null) {
     throw new Error("No scope found");
   }
-  return currentScope as Scope<T, P>;
+  return currentScope as unknown as Scope<E, P>;
 }
 
-export function createScope<T extends any[]>(rm: RouterAdapter<T>) {
-  const scope = new Scope<T>(rm);
+export function createScope<E extends Env>(rm: RouterAdapter<E>) {
+  const scope = new Scope<E>(rm);
 
   currentScope = scope;
 
   return scope;
 }
 
-export function setScope<T extends any[]>(scope: Scope<T>) {
+export function setScope<E extends Env>(scope: Scope<E>) {
   currentScope = scope
 }
 

@@ -1,6 +1,6 @@
 // RouterAdapter.ts
-import type { Context, MiddlewareHandler } from "../types";
-import type { HTTPMethod, IRouter, MatchedRoute, Route } from "./base";
+import type { Context, Env, MiddlewareHandler } from "../types";
+import type { HTTPMethod, IRouter, MatchedRoute, RouteDescriptor } from "./base";
 import { RadixRouteTrie } from "./radix-router";
 import { TrieRouter } from "./trie-router";
 import type { DynamicSegmentsRemoved, RouteMatch } from "./types";
@@ -16,7 +16,7 @@ export enum RouterType {
 /**
  * Configuration options for the RouterAdapter.
  */
-export interface RouterAdapterOptions<Routes extends Route[] = Route[]> {
+export interface RouterAdapterOptions<Routes extends RouteDescriptor[] = RouteDescriptor[]> {
   type: RouterType;
   routes?: Routes;
 }
@@ -24,19 +24,21 @@ export interface RouterAdapterOptions<Routes extends Route[] = Route[]> {
 /**
  * Adapter that allows switching between different router implementations.
  */
-export class RouterAdapter<Routes extends Route[] = Route[]> implements IRouter<Routes> {
-  private router: IRouter<Routes>;
+export class RouterAdapter<E extends Env, Routes extends RouteDescriptor[] = RouteDescriptor[]>
+  implements IRouter<E, Routes>
+{
+  private router: IRouter<E, Routes>;
 
   constructor(options: RouterAdapterOptions<Routes>) {
     const { type, routes = [] } = options;
 
     switch (type) {
       case RouterType.RADIX:
-        this.router = new RadixRouteTrie<Routes>();
+        this.router = new RadixRouteTrie<E, Routes>();
         break;
       case RouterType.TRIE:
       default:
-        this.router = new TrieRouter<Routes>();
+        this.router = new TrieRouter<E, Routes>();
         break;
     }
 
@@ -50,7 +52,7 @@ export class RouterAdapter<Routes extends Route[] = Route[]> implements IRouter<
    * Adds a new route by delegating to the underlying router.
    * @param route - The route to add.
    */
-  addRoute(route: Route<Routes[number]["data"]>): void {
+  addRoute<T extends RouteDescriptor<Routes[number]["data"]>>(route: T): void {
     this.router.addRoute(route);
   }
 
@@ -63,10 +65,7 @@ export class RouterAdapter<Routes extends Route[] = Route[]> implements IRouter<
   match<
     RoutePath extends DynamicSegmentsRemoved<Routes[number]["path"]>,
     Matched = RouteMatch<Routes[number]["path"], RoutePath>
-  >(
-    method: HTTPMethod,
-    url: RoutePath
-  ): MatchedRoute<Routes, boolean> | null {
+  >(method: HTTPMethod, url: RoutePath): MatchedRoute<E, Routes, boolean> | null {
     return this.router.match(method, url);
   }
 
@@ -74,7 +73,7 @@ export class RouterAdapter<Routes extends Route[] = Route[]> implements IRouter<
    * Retrieves all registered routes by delegating to the underlying router.
    * @returns An array of all routes.
    */
-  get routes(): Route<Routes[number]["data"]>[] {
+  get routes(): RouteDescriptor<Routes[number]["data"]>[] {
     return this.router.routes;
   }
 
@@ -85,14 +84,14 @@ export class RouterAdapter<Routes extends Route[] = Route[]> implements IRouter<
    */
   switchRouter(type: RouterType): void {
     if (this.router instanceof RadixRouteTrie && type === RouterType.TRIE) {
-      const newRouter = new TrieRouter<Routes>();
+      const newRouter = new TrieRouter<E, Routes>();
       // Re-register all routes from RadixRouteTrie to TrieRouter
       for (const route of this.router.routes) {
         newRouter.addRoute(route);
       }
       this.router = newRouter;
     } else if (this.router instanceof TrieRouter && type === RouterType.RADIX) {
-      const newRouter = new RadixRouteTrie<Routes>();
+      const newRouter = new RadixRouteTrie<E, Routes>();
       // Re-register all routes from TrieRouter to RadixRouteTrie
       for (const route of this.router.routes) {
         newRouter.addRoute(route);
@@ -109,11 +108,14 @@ export class RouterAdapter<Routes extends Route[] = Route[]> implements IRouter<
    * @param trie - The sub-trie to add.
    * @returns The parent route with the sub-trie added.
    */
-  addSubTrie(parent: string, trie: IRouter<Routes>): IRouter<Routes> {
+  addSubTrie(parent: string, trie: IRouter<E, Routes>): IRouter<E, Routes> {
     return this.router.addSubTrie(parent, trie);
   }
 
-  pushMiddlewares<C extends Context>(path: string, middlewares: MiddlewareHandler<C>[]): void {
+  pushMiddlewares(
+    path: string,
+    middlewares: MiddlewareHandler<E>[]
+  ): void {
     this.router.pushMiddlewares(path, middlewares);
   }
 }

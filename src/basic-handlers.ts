@@ -1,6 +1,5 @@
-import type { Context } from "./context";
-import type {  RequestHandler} from "./types";
+import type {  Env, RequestHandler} from "./types";
 
-export const notFoundHandler: RequestHandler<Context> = async (context) => {
+export const notFoundHandler: RequestHandler<Env> = async (context) => {
   return context.text("Not Found", 404)
 };

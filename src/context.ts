@@ -1,7 +1,12 @@
 // ./context.ts
 import * as ck from "./cookie";
 import type { StatusCode } from "./http-status";
-import type { Env, HeaderRecord, JSONValue } from "./types";
+import type {
+  Env,
+  HeaderRecord,
+  JSONValue,
+  RequestContext,
+} from "./types";
 import type { ExtractUrl } from "./router/types";
 import { STATUS_CODES } from "node:http";
 
@@ -18,32 +23,65 @@ interface ServeXRequest extends Request {
   json<T = JSONValue>(): Promise<T>;
 }
 
-type RequestContext = {
-  parsedBody: any;
-  params: Record<string, string>;
-  query: URLSearchParams;
-};
-
 export class Context<
   E extends Env = Env,
   P extends string = "/",
   I extends Record<string, any> = ExtractUrl<P>
 > {
   #rawRequest: ServeXRequest;
-  #env: E["Bindings"];
+  #variables: E["Variables"];
   #params: Record<string, string>;
   #query: URLSearchParams;
   #body: any;
   #response: Response = new Response();
   #status: StatusCode = 200;
+  #locals = new Map<keyof E["Bindings"], E["Bindings"][keyof E["Bindings"]]>();
+  /**
+   * Global variables set by plugins, this lives for the duration of the server.
+   * @example
+   * // get a function from a plugin
+   * const parse = ctx.globals("yaml2json").parse;
+   * // use the function
+   * const json = parse(yaml);
+   */
+  #globals: Map<keyof E["Globals"], E["Globals"][keyof E["Globals"]]>;
   debug = false;
+  locals: {
+    (key: keyof E["Bindings"]): E["Bindings"][keyof E["Bindings"]] | undefined;
+    set(
+      key: keyof E["Bindings"],
+      value: E["Bindings"][keyof E["Bindings"]]
+    ): void;
+  };
 
-  constructor(request: Request, env: E["Bindings"], ctx: RequestContext) {
+  constructor(
+    request: Request,
+    variables: E["Variables"],
+    ctx: RequestContext<E>
+  ) {
     this.#rawRequest = request;
-    this.#env = env;
+    this.#variables = variables;
     this.#params = ctx.params;
     this.#query = ctx.query;
     this.#body = ctx.parsedBody;
+    this.#globals = ctx.globals;
+
+    const l = (key: keyof E["Bindings"]) => {
+      return this.#locals.get(key);
+    };
+
+    l.set = (
+      key: keyof E["Bindings"],
+      value: E["Bindings"][keyof E["Bindings"]]
+    ) => {
+       this.#locals.set(key, value);
+    };
+
+    this.locals = l
+  }
+
+  globals(key: keyof E["Globals"]) {
+    return this.#globals.get(key);
   }
 
   setHeaders(headers: { [key: string]: string | string[] }) {
@@ -90,8 +128,8 @@ export class Context<
   /**
    * Environment bindings (e.g., variables, secrets).
    */
-  get env(): E["Bindings"] {
-    return this.#env;
+  env(): E["Variables"] {
+    return this.#variables;
   }
 
   /**

@@ -4,17 +4,19 @@ import {
   TrieSegmentNode,
   type HTTPMethod,
   orderTrieSegmentByType,
-  type Route,
+  type RouteDescriptor,
   type MatchedRoute,
   type IRouter,
 } from "./base";
 import type { Context } from "../context";
-import type { MiddlewareHandler } from "../types";
+import type { Env, MiddlewareHandler } from "../types";
 
-export class TrieRouter<Routes extends Route[]> implements IRouter<Routes> {
-  private root = new TrieSegmentNode("/");
-  private subTries: Map<string, TrieRouter<Routes>> = new Map();
-  #routes = new Set<Route<Routes[number]["data"]>>();
+export class TrieRouter<
+E extends Env,
+Routes extends RouteDescriptor[]> implements IRouter<E, Routes> {
+  private root = new TrieSegmentNode<E>("/");
+  private subTries: Map<string, TrieRouter<E,Routes>> = new Map();
+  #routes = new Set<RouteDescriptor<Routes[number]["data"]>>();
 
   /**
    * @property routes - A list of all the routes added to the trie
@@ -23,7 +25,7 @@ export class TrieRouter<Routes extends Route[]> implements IRouter<Routes> {
     return Array.from(this.#routes);
   }
 
-  addSubTrie(path: string, subTrie: TrieRouter<Routes>) {
+  addSubTrie(path: string, subTrie: TrieRouter<E, Routes>) {
     const sanitizedPath = this.sanitizeRoute(path);
     if (this.subTries.has(sanitizedPath)) {
       console.warn(
@@ -42,9 +44,9 @@ export class TrieRouter<Routes extends Route[]> implements IRouter<Routes> {
     return this;
   }
 
-  pushMiddlewares<C extends Context>(
+  pushMiddlewares(
     path: string,
-    middleware: MiddlewareHandler<C>[]
+    middleware: MiddlewareHandler<E>[]
   ): void {
     const sanitizedPath = this.sanitizeRoute(path);
 
@@ -61,9 +63,9 @@ export class TrieRouter<Routes extends Route[]> implements IRouter<Routes> {
   }
 
 
-  private addMiddlewareToPath<C extends Context>(
+  private addMiddlewareToPath(
     path: string,
-    middlewares: MiddlewareHandler<C>[]
+    middlewares: MiddlewareHandler<E>[]
   ): void {
     const segments = path === "/" ? [path] : path.split("/");
     let currentTrieSegment = this.root;
@@ -79,7 +81,7 @@ export class TrieRouter<Routes extends Route[]> implements IRouter<Routes> {
       }
   
       if (!currentTrieSegment.children.has(seg)) {
-        const trieSegment = new TrieSegmentNode(seg);
+        const trieSegment = new TrieSegmentNode<E>(seg);
         trieSegment.prevTrieSegment = currentTrieSegment;
         currentTrieSegment.children.set(seg, trieSegment);
       }
@@ -88,17 +90,17 @@ export class TrieRouter<Routes extends Route[]> implements IRouter<Routes> {
   
       if (isLastSegment) {
         // Attach middlewares to the specific segment
-        currentTrieSegment.middlewares.push(...middlewares as MiddlewareHandler<Context>[]);
+        currentTrieSegment.middlewares.push(...middlewares);
       }
     }
   }
 
-  private applyMiddlewareToAllChildren<C extends Context>(
-    segment: TrieSegmentNode,
-    middlewares: MiddlewareHandler<C>[]
+  private applyMiddlewareToAllChildren(
+    segment: TrieSegmentNode<E>,
+    middlewares: MiddlewareHandler<E>[]
   ): void {
     // Apply middleware to the current segment
-    segment.middlewares.push(...middlewares as MiddlewareHandler<Context>[]);
+    segment.middlewares.push(...middlewares);
   
     // Recursively apply middleware to all child segments
     for (const child of segment.children.values()) {
@@ -107,11 +109,11 @@ export class TrieRouter<Routes extends Route[]> implements IRouter<Routes> {
   }
   
 
-  private addGlobalMiddleware<C extends Context>(
-    middlewares: MiddlewareHandler<C>[]
+  private addGlobalMiddleware(
+    middlewares: MiddlewareHandler<E>[]
   ): void {
-    const applyMiddlewareToSegment = (segment: TrieSegmentNode) => {
-      segment.middlewares.push(...middlewares as MiddlewareHandler<Context>[]);
+    const applyMiddlewareToSegment = (segment: TrieSegmentNode<E>) => {
+      segment.middlewares.push(...middlewares);
       for (const child of segment.children.values()) {
         applyMiddlewareToSegment(child);
       }
@@ -119,7 +121,7 @@ export class TrieRouter<Routes extends Route[]> implements IRouter<Routes> {
     applyMiddlewareToSegment(this.root);
   }
 
-  addRoute(route: Route<Routes[number]["data"]>) {
+  addRoute(route: RouteDescriptor<Routes[number]["data"]>) {
     const { method, path, data } = route;
     const routeKey = `${method.toUpperCase()} ${path}`;
     if (this.#routes.has(route)) {
@@ -137,7 +139,7 @@ export class TrieRouter<Routes extends Route[]> implements IRouter<Routes> {
         break;
 
       if (!currentTrieSegment.children.has(seg)) {
-        const trieSegment = new TrieSegmentNode(seg);
+        const trieSegment = new TrieSegmentNode<E>(seg);
         trieSegment.prevTrieSegment = currentTrieSegment;
         currentTrieSegment.children.set(seg, trieSegment);
       }
@@ -162,12 +164,12 @@ export class TrieRouter<Routes extends Route[]> implements IRouter<Routes> {
   }
 
   private resolveWildCard(
-    currentTrieSegment: TrieSegmentNode,
+    currentTrieSegment: TrieSegmentNode<E>,
     method: HTTPMethod,
     seg: string,
     route: string
-  ): currentTrieSegment is TrieSegmentNode {
-    function childHasWildCard(children: Map<string, TrieSegmentNode>): boolean {
+  ): currentTrieSegment is TrieSegmentNode<E> {
+    function childHasWildCard(children: Map<string, TrieSegmentNode<E>>): boolean {
       return Array.from(children).some(
         ([key, child]) => child.type === "wildcard"
       );
@@ -214,13 +216,13 @@ export class TrieRouter<Routes extends Route[]> implements IRouter<Routes> {
   }
 
   private resolveDynamicSegment(
-    currentTrieSegment: TrieSegmentNode,
+    currentTrieSegment: TrieSegmentNode<E>,
     method: HTTPMethod,
     seg: string,
     route: string
   ) {
     function childHasDynamicSegment(
-      children: Map<string, TrieSegmentNode>
+      children: Map<string, TrieSegmentNode<E>>
     ): boolean {
       return Array.from(children).some(([, child]) => child.type === "dynamic");
     }
@@ -247,10 +249,10 @@ export class TrieRouter<Routes extends Route[]> implements IRouter<Routes> {
   /**
    * @method lookup - Lookup a route in the trie
    * @param route - The route to lookup
-   * @returns {TrieSegmentNode[][]} - A list of all the routes that match the given route
+   * @returns {TrieSegmentNode<E>[][]} - A list of all the routes that match the given route
    */
   lookup(route: Routes[number]["path"]) {
-    const routes: TrieSegmentNode[][] = [];
+    const routes: TrieSegmentNode<E>[][] = [];
     const sanitizedRoute = this.sanitizeRoute(route);
     const routeSegments =
       sanitizedRoute === "/" ? [sanitizedRoute] : sanitizedRoute.split("/");
@@ -261,7 +263,7 @@ export class TrieRouter<Routes extends Route[]> implements IRouter<Routes> {
         currentTrieSegment.children
       ).filter(([key, child]) => key === seg || child.type === "dynamic") as [
         string,
-        TrieSegmentNode
+        TrieSegmentNode<E>
       ][];
 
       if (!dynamicChildren.length) return routes; // No match found
@@ -279,10 +281,10 @@ export class TrieRouter<Routes extends Route[]> implements IRouter<Routes> {
   >(
     method: HTTPMethod,
     _route: RoutePath
-  ): MatchedRoute<Routes, boolean> | null {
+  ): MatchedRoute<E, Routes, boolean> | null {
     const route = this.sanitizeRoute(_route) as RoutePath;
     const segments = route === "/" ? [route] : route.split("/");
-    const matched_route: MatchedRoute<Routes, Matched> = {
+    const matched_route: MatchedRoute<E, Routes, Matched> = {
       matched: false as Matched,
       method: method,
       route: _route,
@@ -306,21 +308,21 @@ export class TrieRouter<Routes extends Route[]> implements IRouter<Routes> {
       matched_route,
       segments,
       method
-    ) as MatchedRoute<Routes, boolean> | null;
+    ) as MatchedRoute<E, Routes, boolean> | null;
   }
 
   private matchAll<
     R extends DynamicSegmentsRemoved<Routes[number]["path"]>,
     Matched = RouteMatch<Routes[number]["path"], R>
   >(
-    matched_route: MatchedRoute<Routes, Matched>,
+    matched_route: MatchedRoute<E, Routes, Matched>,
     segments: string[],
     method: HTTPMethod,
     paths: string[] = [segments[0]],
     index: number = 0
   ): Matched extends false
-    ? Coerce<MatchedRoute<Routes> & { matched: false }> | null
-    : Coerce<MatchedRoute<Routes> & { matched: true }> {
+    ? Coerce<MatchedRoute<E, Routes> & { matched: false }> | null
+    : Coerce<MatchedRoute<E, Routes> & { matched: true }> {
     const nextSegment = segments[index + 1];
     const path = paths.join("/") as R;
     const routes = this.lookup(path);
@@ -330,7 +332,7 @@ export class TrieRouter<Routes extends Route[]> implements IRouter<Routes> {
       return null; // No match found
     }
 
-    const route = routes[0][0] as TrieSegmentNode;
+    const route = routes[0][0];
 
     // I don't think this will ever hit
     if (!route) {
@@ -374,7 +376,7 @@ export class TrieRouter<Routes extends Route[]> implements IRouter<Routes> {
 
     const orderedTrieSegments = orderTrieSegmentByType(route.children) as [
       string,
-      TrieSegmentNode
+      TrieSegmentNode<E>
     ][];
 
     for (const [seg, trieSegment] of orderedTrieSegments) {
@@ -434,11 +436,11 @@ export class TrieRouter<Routes extends Route[]> implements IRouter<Routes> {
   }
 
   private collectMiddlewares(
-    node: TrieSegmentNode,
-    middlewares: Set<MiddlewareHandler<Context>>
+    node: TrieSegmentNode<E>,
+    middlewares: Set<MiddlewareHandler<E>>
   ) {
-    const stack: MiddlewareHandler<Context>[] = [];
-    let current: TrieSegmentNode | null = node;
+    const stack: MiddlewareHandler<E>[] = [];
+    let current: TrieSegmentNode<E> | null = node;
     while (current) {
       if (current.middlewares.length > 0) {
         stack.push(...current.middlewares);
@@ -458,9 +460,9 @@ export class TrieRouter<Routes extends Route[]> implements IRouter<Routes> {
   }
 
   private findAllRoutes(
-    currentTrieSegment: TrieSegmentNode,
-    route: TrieSegmentNode[],
-    routes: TrieSegmentNode[][]
+    currentTrieSegment: TrieSegmentNode<E>,
+    route: TrieSegmentNode<E>[],
+    routes: TrieSegmentNode<E>[][]
   ) {
     if (currentTrieSegment.isEndOfRoute) {
       routes.push(route);

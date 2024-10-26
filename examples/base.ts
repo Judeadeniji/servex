@@ -1,27 +1,31 @@
 import { route } from "../src/router";
 import { createServer } from "../src";
+import type { ServeX } from "../src/types";
+import { devTools } from "../src/plugins/dev-tools";
+import { dotenv } from "../src/plugins/dotenv";
 
-const app = createServer({
+interface E extends ServeX.Env {
+  Globals: {
+    date: Date;
+  };
+  Variables: {
+    KEY: number
+  }
+}
+
+const app = createServer<E>({
   routes: [
-    route("GET /", (c) => c.text("Hello World")),
-    route("GET /stream", (c) => {
-      const readableStream = new ReadableStream({
-        async start(controller) {
-          const encoder = new TextEncoder();
-          controller.enqueue(encoder.encode("First chunk\n"));
-          await new Promise((resolve) => setTimeout(resolve, 3000)); // Simulate delay
-          controller.enqueue(encoder.encode("Second chunk\n"));
-          await new Promise((resolve) => setTimeout(resolve, 3000)); // Simulate delay
-          controller.enqueue(encoder.encode("Third chunk\n"));
-          await new Promise((resolve) => setTimeout(resolve, 3000)); // Simulate delay
-
-          controller.close();
-        }
-      });
-
-      return c.stream(readableStream);
-    }),
+    route("GET /", (c) =>
+      c.text(`Hello from ServeX!\n`)
+    ),
+    route("GET /env", (c) => c.json({ KEY: c.env().KEY })),
   ],
+
+  plugins: [devTools(), dotenv({
+    debug: true,
+    encoding: "binary",
+    DOTENV_KEY: "dotenv://:key_1234@dotenvx.com/vault/.env.vault?environment=production"
+  })],
 });
 
 export default {

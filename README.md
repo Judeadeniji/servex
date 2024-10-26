@@ -15,7 +15,6 @@ ServeX is a high-performance, extensible HTTP server framework inspired by Expre
 - **Scalability**: Efficient concurrency model, load balancing, and caching strategies.
 - **Logging and Monitoring**: Structured logging and integration with monitoring tools.
 - **Error Handling**: Global error handlers and custom error pages.
-- **Internationalization**: Support for multiple languages and locales.
 
 ## Getting Started
 

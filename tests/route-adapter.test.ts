@@ -1,9 +1,9 @@
 import { describe, it, expect } from "bun:test"
 import { RouterAdapter, RouterType } from "../src/router/adapter";
-import type { Route } from "../src/router/base";
+import type { RouteDescriptor } from "../src/router/base";
 
 describe("RouterAdapter", () => {
-  const routes: Route[] = [
+  const routes: RouteDescriptor[] = [
     { method: "GET", path: "/heroes/:heroName", data: { /* ... */ } },
     { method: "POST", path: "/heroes", data: { /* ... */ } },
     { method: "GET", path: "/search", data: { /* ... */ } },

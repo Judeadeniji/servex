@@ -1,6 +1,6 @@
 import { notFoundHandler } from "../basic-handlers";
 import type { Context } from "../context";
-import type { Handler, RequestHandler } from "../types";
+import type { Env, Handler, RequestHandler } from "../types";
 
 /**
  * Handles errors gracefully by determining whether to throw the error
@@ -29,10 +29,12 @@ function handleErrorsGracefully(
  * @param defaultHandler - The handler to execute if no other handler returns a response.
  * @returns The final HTTP response after processing all handlers.
  */
-export async function executeHandlers(
-  context: Context,
-  handlers: Handler<Context>[],
-  defaultHandler: RequestHandler<Context> = notFoundHandler
+export async function executeHandlers
+  <E extends Env>
+(
+  context: Context<E>,
+  handlers: Handler<E>[],
+  defaultHandler = notFoundHandler  as unknown as RequestHandler<E>
 ): Promise<Response> {
   let currentIndex = 0;
   let response!: Response;

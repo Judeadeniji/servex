@@ -1,18 +1,20 @@
-import type { Context, Method, MiddlewareHandler } from "../types";
+import type { Env, Method, MiddlewareHandler } from "../types";
 import type { DynamicSegmentsRemoved, ExtractUrl, RouteMatch } from "./types";
 
 export type HTTPMethod = Method;
 
-export type Route<T = unknown> = {
+export type RouteDescriptor<T = unknown> = {
   method: HTTPMethod;
   path: string;
   data: T;
 };
 
 export type SegmentType = "static" | "dynamic" | "wildcard";
-export type SegmentNode<T = unknown> = TrieSegmentNode<T> | RadixSegmentNode<T>;
+export type SegmentNode<E extends Env, T = unknown> =
+  | TrieSegmentNode<E, T>
+  | RadixSegmentNode<E, T>;
 
-export type MatchedRoute<Routes extends Route[] = Route[], M = boolean> = {
+export type MatchedRoute<E extends Env, Routes extends RouteDescriptor[] = RouteDescriptor[], M = boolean> = {
   /**
    * @property matched - A boolean to indicate if the route was matched
    */
@@ -68,7 +70,7 @@ export type MatchedRoute<Routes extends Route[] = Route[], M = boolean> = {
    */
   data: Routes[number]["data"];
 
-  middlewares: Set<MiddlewareHandler<Context>>; 
+  middlewares: Set<MiddlewareHandler<E>>;
 };
 
 /**
@@ -77,12 +79,12 @@ export type MatchedRoute<Routes extends Route[] = Route[], M = boolean> = {
  * @param trieMap - A map of the trie segments
  * @returns {Array<[string, TrieSegmentNode]>} - An array of the trie segments ordered by type
  */
-export function orderTrieSegmentByType<T>(
-  trieMap: Map<string, SegmentNode<T>>
+export function orderTrieSegmentByType<E extends Env, T>(
+  trieMap: Map<string, SegmentNode<E, T>>
 ) {
-  const orderedSegments: Array<[string, SegmentNode<T>]> = [];
-  const dynamicSegments: Array<[string, SegmentNode<T>]> = [];
-  const wildcardSegments: Array<[string, SegmentNode<T>]> = [];
+  const orderedSegments: Array<[string, SegmentNode<E, T>]> = [];
+  const dynamicSegments: Array<[string, SegmentNode<E, T>]> = [];
+  const wildcardSegments: Array<[string, SegmentNode<E, T>]> = [];
 
   for (const [key, segment] of trieMap) {
     switch (segment.type) {
@@ -104,15 +106,15 @@ export function orderTrieSegmentByType<T>(
 /**
  * Represents a node in the Radix Tree.
  */
-export class RadixSegmentNode<T = unknown> {
-  children: Map<string, RadixSegmentNode> = new Map();
+export class RadixSegmentNode<E extends Env, T = unknown> {
+  children: Map<string, RadixSegmentNode<E>> = new Map();
   isEndOfRoute: boolean = false;
   data: Record<HTTPMethod, T> = {} as Record<HTTPMethod, T>;
   type: SegmentType = "static";
   paramsKeys: string[] = []; // Keys for dynamic segments
   value: string;
-  middlewares: MiddlewareHandler<Context>[] = [];
-  previousRadixSegment: RadixSegmentNode | null = null;
+  middlewares: MiddlewareHandler<E>[] = [];
+  previousRadixSegment: RadixSegmentNode<E> | null = null;
 
   constructor(value: string, type: SegmentType = "static") {
     this.value = value;
@@ -124,20 +126,23 @@ export class RadixSegmentNode<T = unknown> {
    * @param segment - The path segment to insert.
    * @returns The child node corresponding to the segment.
    */
-  insertChild(segment: string, type: SegmentType = "static"): RadixSegmentNode {
+  insertChild(
+    segment: string,
+    type: SegmentType = "static"
+  ): RadixSegmentNode<E> {
     if (!this.children.has(segment)) {
-      const child = new RadixSegmentNode(segment, type);
+      const child = new RadixSegmentNode<E>(segment, type);
       this.children.set(segment, child);
     }
     return this.children.get(segment)!;
   }
 }
 
-export class TrieSegmentNode<T = unknown> {
+export class TrieSegmentNode<E extends Env, T = unknown> {
   /**
    * @property children - A map of the children of the current segment
    */
-  children: Map<string, TrieSegmentNode> = new Map();
+  children: Map<string, TrieSegmentNode<E>> = new Map();
   /**
    * @property isEndOfRoute - A boolean to indicate if the current segment is the end of a route
    */
@@ -157,32 +162,33 @@ export class TrieSegmentNode<T = unknown> {
   /**
    * @property prevTrieSegment - The previous trie segment
    */
-  prevTrieSegment: TrieSegmentNode | null = null;
+  prevTrieSegment: TrieSegmentNode<E> | null = null;
 
-  middlewares: MiddlewareHandler<Context>[] = [];
+  middlewares: MiddlewareHandler<E>[] = [];
 
   constructor(public value: string) {
     this.type = this.determineType(value);
   }
 
-
-  private determineType(value: string): 'static' | 'dynamic' | 'wildcard' {
-    if (value.startsWith(':')) return 'dynamic';
-    if (value.startsWith('*')) return 'wildcard';
-    return 'static';
+  private determineType(value: string): "static" | "dynamic" | "wildcard" {
+    if (value.startsWith(":")) return "dynamic";
+    if (value.startsWith("*")) return "wildcard";
+    return "static";
   }
 }
-
 
 /**
  * Interface that defines the standard methods for a router.
  */
-export interface IRouter<Routes extends Route[] = Route[]> {
+export interface IRouter<
+  E extends Env = Env,
+  Routes extends RouteDescriptor[] = RouteDescriptor[]
+> {
   /**
    * Adds a new route to the router.
    * @param route - The route to add.
    */
-  addRoute(route: Route<Routes[number]["data"]>): void;
+  addRoute(route: RouteDescriptor<Routes[number]["data"]>): void;
 
   /**
    * Matches a given URL against the registered routes.
@@ -196,18 +202,15 @@ export interface IRouter<Routes extends Route[] = Route[]> {
   >(
     method: HTTPMethod,
     url: RoutePath
-  ): MatchedRoute<Routes, boolean> | null;
+  ): MatchedRoute<E, Routes, boolean> | null;
 
   /**
    * Retrieves all registered routes.
    * @returns An array of all routes.
    */
-  get routes(): Route<Routes[number]["data"]>[];
+  get routes(): RouteDescriptor<Routes[number]["data"]>[];
 
-  addSubTrie(parent: string, trie: IRouter<Routes>): IRouter<Routes>;
+  addSubTrie(parent: string, trie: IRouter<E, Routes>): IRouter<E, Routes>;
 
-  pushMiddlewares<C extends Context>(
-    path: string,
-    middleware: MiddlewareHandler<C>[]
-  ): void;
+  pushMiddlewares(path: string, middleware: MiddlewareHandler<E>[]): void;
 }

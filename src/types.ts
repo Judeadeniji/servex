@@ -1,52 +1,93 @@
+import type { createServer, ServeX } from ".";
 import { Context } from "./context";
 import type { StatusCode } from "./http-status";
 import type { RouterType } from "./router/adapter";
-import type { MergePaths } from "./router/types";
 import type { Scope } from "./scope";
 
 type Bindings = object;
 type Variables = object;
+type Globals = object;
 
-export type Env = Partial<{
-  Bindings: Bindings;
-  Variables: Variables;
-}>;
+export declare namespace ServeX {
+  export interface Env {
+    Bindings?: Bindings;
+    Variables?: Variables;
+    Globals?: Globals;
+  }
+}
 
+export type Env = ServeX.Env;
 
 export type ServerRoute = {
   method: Method; // Added HTTP method
   path: string;
-  data: Handler<Context>[];
+  data: Handler<Env>[];
 };
 
-export type Route<P extends string, P1 extends string> = <C extends Context<Env, P>>(
-  scope: Scope<ServerRoute[]>,
+export type Route<E extends Env, P extends string, P1 extends string> = (
+  scope: Scope<E, ServerRoute[]>,
   parent?: P1
 ) => {
   method: Method;
   path: P;
-  handlers: Handler<C>[];
-  children?: Route<string, string>[]
+  handlers: Handler<E>[];
+  children?: Route<E, string, string>[];
 };
 
-export type Handler<C extends Context> = RequestHandler<C> | MiddlewareHandler<C>
+export type RequestContext<E extends Env> = {
+  parsedBody: any;
+  params: Record<string, string>;
+  query: URLSearchParams;
+  globals: Map<keyof E["Globals"], E["Globals"][keyof E["Globals"]]>;
+  path: string;
+};
 
-export type RequestHandler<C extends Context> = (
-  ctx: C,
+export type Handler<E extends Env> = RequestHandler<E> | MiddlewareHandler<E>;
+
+export type RequestHandler<E extends Env> = (
+  ctx: Context<E>,
   next: NextFunction
 ) => Promise<Response> | Response;
 
-
-export type MiddlewareHandler<C extends Context> = (
-  ctx: C,
+export type MiddlewareHandler<E extends Env> = (
+  ctx: Context<E>,
   next: NextFunction
 ) => Promise<void | undefined | Response> | void | undefined | Response;
 
+export type PluginContext<E extends Env = Env> = {
+  scope: Scope<E, ServerRoute[]>;
+  server: ServeX<E>;
+  env?: E;
+  events$: {
+    [K in keyof PluginLifecycleEvents<E>]: (
+      cb: PluginLifecycleEvents<E>[K]
+    ) => void;
+  };
+};
 
-export interface ServerOptions<P extends string = '', P1 extends string = ''> {
-  router?: RouterType
-  routes: Route<P, P1>[];
-  middlewares?: MiddlewareHandler<Context>[];
+export type PluginLifecycleEvents<E extends Env> = {
+  onRequest: (requestContext: RequestContext<E>, request: Request) => void;
+  onResponse: (requestContext: RequestContext<E>, response: Response) => void;
+};
+
+export interface Plugin<E extends Env = Env> {
+  name: string;
+  onInit(
+    pluginContext: PluginContext<E>,
+  ): {
+    dispose(): void | Promise<void>;
+  } | void;
+}
+
+export interface ServerOptions<
+  E extends Env,
+  P extends string = "",
+  P1 extends string = ""
+> {
+  router?: RouterType;
+  routes: Route<E, P, P1>[];
+  middlewares?: MiddlewareHandler<E>[];
+  plugins?: Plugin<E>[];
 }
 
 // http methods
@@ -104,6 +145,6 @@ export type TypedResponse<
 };
 
 export type NextFunction = () => Promise<void>;
-export declare function fetch(request: Request): Promise<Response>
+export declare function fetch(request: Request): Promise<Response>;
 
 export { Context };
