@@ -1,14 +1,15 @@
-import type { createServer, ServeX } from ".";
 import { Context } from "./context";
-import type { StatusCode } from "./http-status";
-import type { RouterType } from "./router/adapter";
+import { createServer } from "../index"
+import type { RouterRoute } from "./router/types";
+
 import type { Scope } from "./scope";
+import type { ServeX } from ".";
 
 type Bindings = object;
 type Variables = object;
 type Globals = object;
 
-export declare namespace ServeX {
+export declare namespace ServeXInterface {
   export interface Env {
     Bindings?: Bindings;
     Variables?: Variables;
@@ -16,7 +17,7 @@ export declare namespace ServeX {
   }
 }
 
-export type Env = ServeX.Env;
+export type Env = ServeXInterface.Env;
 
 export type RequestContext<E extends Env> = {
   parsedBody: any;
@@ -26,20 +27,22 @@ export type RequestContext<E extends Env> = {
   path: string;
 };
 
-export type Handler<E extends Env, P extends string = "/"> = MiddlewareHandler<E, P> | RequestHandler<E, P>;
+export type Handler<E extends Env, P extends string = string> =
+  | MiddlewareHandler<E, P>
+  | RequestHandler<E, P>;
 
 export type RequestHandler<E extends Env, P extends string> = (
   ctx: Context<E, P>,
   next: NextFunction
 ) => Promise<Response> | Response;
 
-export type MiddlewareHandler<E extends Env, P extends string> = (
+export type MiddlewareHandler<E extends Env, P extends string = "/"> = (
   ctx: Context<E, P>,
   next: NextFunction
 ) => Promise<void | undefined | Response> | void | undefined | Response;
 
-export type PluginContext<E extends Env = Env> = {
-  scope: Scope<E>;
+export type PluginContext<E extends Env = Env, T = [Handler<E>, RouterRoute<E>]> = {
+  scope: Scope<E, T>;
   server: ServeX<E>;
   env?: E;
   events$: {
@@ -61,22 +64,22 @@ export interface Plugin<E extends Env = Env> {
   } | void;
 }
 
-export interface ServerOptions<E extends Env, P extends string> {
-  router?: RouterType;
-  middlewares?: MiddlewareHandler<E, P>[];
+export interface ServerOptions<E extends Env> {
   plugins?: Plugin<E>[];
+  basePath?: string
 }
 
 // http methods
-export type Method =
-  | "ALL"
-  | "GET"
-  | "POST"
-  | "PUT"
-  | "DELETE"
-  | "PATCH"
-  | "OPTIONS"
-  | "HEAD";
+export type HTTPMethod =
+  | "get"
+  | "post"
+  | "put"
+  | "delete"
+  | "patch"
+  | "head"
+  | "options"
+  | "trace"
+  | "connect";
 
 // Headers Record
 export type HeaderRecord = Record<string, string | string[]>;

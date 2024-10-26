@@ -1,14 +1,11 @@
 import { describe, it, expect } from "bun:test";
 import { createServer } from "../..";
-import { RouterType } from "../../router/adapter";
 import { cors } from ".";
 
 
 describe("CORS via middleware", () => {
   
-  const server = createServer({
-    router: RouterType.RADIX,
-  });
+  const server = createServer();
 
 
   server.get("GET /api/abc", cors({

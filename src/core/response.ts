@@ -1,5 +1,6 @@
 import { notFoundHandler } from "../basic-handlers";
 import type { Context } from "../context";
+import type { RouterRoute, Params, ParamIndexMap } from "../router/types";
 import type { Env, Handler, RequestHandler } from "../types";
 
 /**
@@ -33,8 +34,8 @@ export async function executeHandlers
   <E extends Env>
 (
   context: Context<E>,
-  handlers: Handler<E>[],
-  defaultHandler = notFoundHandler  as unknown as RequestHandler<E>
+  handlers: [[Handler<E>, RouterRoute<E>], Params][] | [[Handler<E>, RouterRoute<E>], ParamIndexMap][],
+  defaultHandler = notFoundHandler  as unknown as RequestHandler<E, string>
 ): Promise<Response> {
   let currentIndex = 0;
   let response!: Response;
@@ -49,7 +50,8 @@ export async function executeHandlers
       return;
     }
 
-    const handler = handlers[index];
+    const [[handler, r], params] = handlers[index];
+    console.log({params, r})
     let nextCalled = false;
 
     try {

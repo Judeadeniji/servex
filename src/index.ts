@@ -1,22 +1,25 @@
 import type {
   Env,
   Handler,
-  Method,
-  MiddlewareHandler,
+  HTTPMethod,
   Plugin,
   RequestContext,
   ServerOptions,
-  ServerRoute,
+  ServeXInterface,
 } from "./types";
 import { Context } from "./context";
 import { parseRequestBody } from "./core/request";
-import { createScope, disposeScope, setScope, type Scope } from "./scope";
+import { createScope, disposeScope, type Scope } from "./scope";
 import { executeHandlers } from "./core/response";
+import { RegExpRouter } from "./router/reg-exp-router/router";
 import {
-  RouterAdapter,
-  RouterType,
-  type RouterAdapterOptions,
-} from "./router/adapter";
+  METHOD_NAME_ALL_LOWERCASE,
+  METHODS,
+  type Params,
+  type RouterRoute,
+} from "./router/types";
+import { route } from "../dist";
+import { mergePath } from "./router/utils";
 
 export class ServeXRequest extends Request {}
 
@@ -29,7 +32,7 @@ class ServeXPluginManager<E extends Env> {
     this.#server = server;
   }
 
-  invokePlugins = (scope: Scope<E, ServerRoute[]>) => {
+  invokePlugins = (scope: Scope<E, any>) => {
     const disposers: (() => void)[] = [];
     for (const plugin of this.#plugins) {
       const { name } = plugin;
@@ -39,14 +42,20 @@ class ServeXPluginManager<E extends Env> {
           server: this.#server,
           events$: {
             onRequest: (cb) => {
-              this.#server.on("server:request", (rc: RequestContext<E>, req: Request) => {
-                cb!(rc, req);
-              });
+              this.#server.on(
+                "server:request",
+                (rc: RequestContext<E>, req: Request) => {
+                  cb!(rc, req);
+                }
+              );
             },
             onResponse: (cb) =>
-              this.#server.on("server:response", (rc: RequestContext<E>, response: Response) => {
-                cb!(rc, response);
-              }),
+              this.#server.on(
+                "server:response",
+                (rc: RequestContext<E>, response: Response) => {
+                  cb!(rc, response);
+                }
+              ),
           },
         });
         if (ret) {
@@ -103,109 +112,91 @@ class EventManager {
   }
 }
 
-class ServeX<E extends Env = Env> extends EventManager {
-  private scope: Scope<E, ServerRoute[]>;
-  private middlewares: MiddlewareHandler<E>[];
+type RouteHandlerPair<E extends Env> = [Handler<E>, RouterRoute<E>];
+class ServeX<E extends Env = Env, P extends string = "/"> {
+  private scope: Scope<E, RouteHandlerPair<E>>;
   #pluginManager: ServeXPluginManager<E>;
   #globals = new Map<keyof E["Globals"], E["Globals"][keyof E["Globals"]]>();
   #__env__: () => E["Variables"] = () => process.env;
+  #events = new EventManager();
+  routes: RouterRoute<E>[] = [];
+  #router = new RegExpRouter<RouteHandlerPair<E>>();
+  #path: string = "";
+  get!: <P extends string>(path: P, ...handlers: Handler<E, P>[]) => this;
+  post!: <P extends string>(path: P, ...handlers: Handler<E, P>[]) => this;
+  put!: <P extends string>(path: P, ...handlers: Handler<E, P>[]) => this;
+  patch!: <P extends string>(path: P, ...handlers: Handler<E, P>[]) => this;
+  delete!: <P extends string>(path: P, ...handlers: Handler<E, P>[]) => this;
+  trace!: <P extends string>(path: P, ...handlers: Handler<E, P>[]) => this;
+  connect!: <P extends string>(path: P, ...handlers: Handler<E, P>[]) => this;
+  options!: <P extends string>(path: P, ...handlers: Handler<E, P>[]) => this;
+  head!: <P extends string>(path: P, ...handlers: Handler<E, P>[]) => this;
+  all!: <P extends string>(path: P, ...handlers: Handler<E, P>[]) => this;
+  private _basePath: string;
 
-  constructor(options: ServerOptions<E>) {
-    super();
-    const {
-      router = RouterType.RADIX,
-      middlewares = [],
-      plugins = [],
-    } = options;
+  constructor(options?: ServerOptions<E>) {
+    const { plugins = [], basePath = "/" } = options || {};
+    this._basePath = basePath;
     this.#pluginManager = new ServeXPluginManager(this, plugins);
-    this.middlewares = middlewares;
-    this.scope = createScope(
-      new RouterAdapter({
-        type: router,
-      })
-    ) as Scope<E, ServerRoute[]>;
-
-
+    this.scope = createScope(this.#router);
     this.#pluginManager.invokePlugins(this.scope);
+
+    const allMethods = [...METHODS, METHOD_NAME_ALL_LOWERCASE];
+    allMethods.forEach((method) => {
+      this[method] = (args1: string | Handler<E>, ...args: Handler<E>[]) => {
+        if (typeof args1 === "string") {
+          this.#path = args1;
+        } else {
+          this.addRoute(method, this.#path, args1);
+        }
+        args.forEach((handler) => {
+          if (typeof handler !== "string") {
+            this.addRoute(method, this.#path, handler);
+          }
+        });
+        return this as any;
+      };
+    });
   }
 
+  private errorCallback = (e?: any) => {
+    console.log(e);
+  };
+
   private dispatch = async (
-    scope: Scope<E, ServerRoute[]>,
+    scope: Scope<E, RouteHandlerPair<E>>,
     request: Request,
-    method: Method,
-    pathname: string,
-    middlewares: Handler<E>[],
     globals: Map<keyof E["Globals"], E["Globals"][keyof E["Globals"]]>
   ) => {
+    const { method, url } = request;
+    const { pathname, searchParams } = new URL(url);
     // Match using method and pathname separately
-    let route = scope.router.match(method, pathname);
-    if (!route || !route.matched) {
-      // Check if the path exists with a different method for 405
-      const anyMethodRoute = scope.router.match("ALL", pathname);
-      if (anyMethodRoute && anyMethodRoute.matched) {
-        route = anyMethodRoute;
-        // return new Response("Method Not Allowed", { status: 405 });
-      } else {
-        const requestContext: RequestContext<E> = {
-          parsedBody: await parseRequestBody(request.clone()),
-          params: route?.params || {},
-          query: new URLSearchParams(),
-          globals,
-          path: request.url
-        };
+    const [handlers, paramsStash] = scope.router.match(method, pathname);
 
-        // Emit a server:request event
-        await this.emit("server:request", requestContext, request);
-
-        const ctx = new Context<E>(request, this.#__env__(), requestContext);
-        const response = await executeHandlers(ctx, middlewares);
-
-        // Emit a server:response event
-        await this.emit("server:response", requestContext, response);
-        return response;
-      }
+    function exec(c: Context<E>) {
+      return executeHandlers<E>(c, handlers);
     }
 
-    const parsedBody = await parseRequestBody(request.clone());
     const requestContext: RequestContext<E> = {
-      parsedBody,
-      params: route.params,
-      query: route.searchParams,
+      parsedBody: await parseRequestBody(request.clone()),
+      params: {},
+      query: searchParams,
       globals,
-      path: request.url
+      path: pathname,
     };
-    const context = new Context<E>(request, this.#__env__(), requestContext);
 
-    scope.context = context;
-    setScope(scope); // Set the current scope, because the scope gets disposed after the request is handled
-
-    await this.emit("server:request", requestContext, request);
-    const response = await executeHandlers(context, [
-      ...Array.from(route.middlewares),
-      ...middlewares, // Add root level middlewares
-      ...(route.data as Handler<E>[]),
-    ]);
-
-    await this.emit("server:response", requestContext, response);
-
-    // If no handler returned a response, return 204 No Content
-    return response || new Response(null, { status: 204 });
+    // Emit a server:request event
+    await this.#events.emit("server:request", requestContext, request);
+    const ctx = new Context<E>(request, this.#__env__(), requestContext);
+    const response = await exec(ctx);
+    // Emit a server:response event
+    await this.#events.emit("server:response", requestContext, response);
+    return response;
   };
 
   fetch = async (request: Request) => {
-    const url = new URL(request.url);
-    const method = request.method.toUpperCase() as Method;
-    const pathname = url.pathname;
-
     try {
-      return await this.dispatch(
-        this.scope,
-        request,
-        method,
-        pathname,
-        this.middlewares,
-        this.#globals
-      );
+      return await this.dispatch(this.scope, request, this.#globals);
     } catch (error) {
       console.error("Error handling request:", error);
       return new Response("Internal Server Error", { status: 500 });
@@ -218,99 +209,20 @@ class ServeX<E extends Env = Env> extends EventManager {
     return this.fetch(new ServeXRequest(input, init));
   }
 
-  use(
-    path: string | MiddlewareHandler<E>,
-    ...middlewares: MiddlewareHandler<E>[]
-  ) {
-    const router = this.scope.router;
-    if (typeof path === "string") {
-      router.pushMiddlewares(path, middlewares);
-      return this;
-    }
-    const handlers = [path, ...middlewares];
-    // Add middleware to all routes
-    router.pushMiddlewares("*", handlers);
-
-    return this;
-  }
-
-  get = (route: string, ...handlers: Handler<E>[]) => {
-    this.scope.router.addRoute({
-      data: handlers,
-      method: "GET",
-      path: route,
-    });
-    return this;
+  // Helper method to add routes
+  private addRoute = (method: string, path: string, handler: Handler<E, P>) => {
+    method = method.toUpperCase();
+    path = mergePath(this._basePath, path);
+    const r: RouterRoute<E> = { path: path, method: method, handler: handler };
+    this.#router.add(method, path, [handler, r]);
+    this.routes.push(r);
   };
 
-  post = (route: string, ...handlers: Handler<E>[]) => {
-    this.scope.router.addRoute({
-      data: handlers,
-      method: "POST",
-      path: route,
-    });
-    return this;
-  };
-
-  put = (route: string, ...handlers: Handler<E>[]) => {
-    this.scope.router.addRoute({
-      data: handlers,
-      method: "PUT",
-      path: route,
-    });
-    return this;
-  };
-
-  patch = (route: string, ...handlers: Handler<E>[]) => {
-    this.scope.router.addRoute({
-      data: handlers,
-      method: "PATCH",
-      path: route,
-    });
-    return this;
-  };
-
-  all = (route: string, ...handlers: Handler<E>[]) => {
-    this.scope.router.addRoute({
-      data: handlers,
-      method: "ALL",
-      path: route,
-    });
-    return this;
-  };
-
-  head = (route: string, ...handlers: Handler<E>[]) => {
-    this.scope.router.addRoute({
-      data: handlers,
-      method: "HEAD",
-      path: route,
-    });
-    return this;
-  };
-
-  delete = (route: string, ...handlers: Handler<E>[]) => {
-    this.scope.router.addRoute({
-      data: handlers,
-      method: "DELETE",
-      path: route,
-    });
-    return this;
-  };
-
-  options = (route: string, ...handlers: Handler<E>[]) => {
-    this.scope.router.addRoute({
-      data: handlers,
-      method: "OPTIONS",
-      path: route,
-    });
-    return this;
-  };
+  on = (...args: Parameters<EventManager["on"]>) => this.#events.on(...args);
 }
 
-export function createServer<E extends Env = Env>(
-  options: ServerOptions<E>
-) {
+export function createServer<E extends Env = Env>(options?: ServerOptions<E>) {
   return new ServeX<E>(options);
 }
 
-export type { ServeX };
+export type { ServeXInterface, ServeX };

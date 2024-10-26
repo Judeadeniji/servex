@@ -2,15 +2,10 @@ import { createServer } from "../src";
 import { context, params, request } from "../src/hooks";
 import { HttpException } from "../src/http-exception";
 import type { Env, MiddlewareHandler } from "../src/types";
-import { RouterType } from "../src/router/adapter";
-
 
 
 // Create the server with routes and middlewares
-const server = createServer({
-  router: RouterType.TRIE,
- middlewares: [],
-});
+const server = createServer();
 
 
 // ----------------------

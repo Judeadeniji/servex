@@ -1,10 +1,9 @@
 import { createServer } from "../src";
-import { Context, type ServeX } from "../src/types";
+import { type ServeXInterface } from "../src/types";
 import { devTools } from "../src/plugins/dev-tools";
 import { dotenv } from "../src/plugins/dotenv";
-import Router from "../src/router/lib";
 
-interface E extends ServeX.Env {
+interface E extends ServeXInterface.Env {
   Globals: {
     date: Date;
   };
@@ -13,27 +12,15 @@ interface E extends ServeX.Env {
   };
 }
 
-const r = new Router();
-
-r.get("/hi/:name", (c) => c.text(`hi, ${c.params("name")}`));
-r.get("/hi/", (c) => c.text("Hi"));
-// r.get("/hi/:name/*hu", (c) => c.text("Hi"));
-
-
-(async () => {
-  const res = r.handle(
-    new Request("http://localhost:3000/hi/ServeX"),
-    function () {
-  
-      console.log("done");
-    }
-  );
-  console.log(await (await res)?.text())
-})()
-
 const app = createServer<E>({
-  plugins: [devTools(), dotenv()],
+  // plugins: [devTools(), dotenv()],
 });
+
+app.get("/hi/:name", async (ctx) => {
+  return ctx.json({ date: ctx.globals("date"), key: ctx.env().KEY, name: ctx.params("name"),  hi: "there"  });
+});
+
+app.request("http://localhost:3000/hi").then(v => v.text()).then(console.log)
 
 export default {
   fetch: app.fetch,
