@@ -1,16 +1,16 @@
 // middleware.ts
 
 import { executeHandlers } from "../core/response";
-import type { Middleware, Context, NextFunction, Handler } from "../types";
+import type { MiddlewareHandler, Env, NextFunction, Handler, Context } from "../types";
 
-export class MiddlewareManager<T extends Context> {
-  private middlewares: Middleware<T>[] = [];
+export class MiddlewareManager<E extends Env> {
+  private middlewares: MiddlewareHandler<E>[] = [];
 
-  use(middleware: Middleware<T>) {
+  use(middleware: MiddlewareHandler<E>) {
     this.middlewares.push(middleware);
   }
 
-  async execute(context: T) {
+  async execute(context: Context<E>) {
     let index = -1;
 
     const dispatch = async (i: number): Promise<void> => {
@@ -29,8 +29,8 @@ export class MiddlewareManager<T extends Context> {
 }
 
 // flatten handlers into one single fu
-export function flattenHandlers<T extends Context>(handlers: Handler<T>[]) {
-  return ((c: T, n: NextFunction) => {
-    return executeHandlers(c as Context, handlers as Handler<Context>[]);
-  }) as Handler<T>;
+export function flattenHandlers<E extends Env>(handlers: Handler<E>[]) {
+  return ((context: Context<E>, n: NextFunction) => {
+    return executeHandlers<E>(context, handlers as Handler<E>[]);
+  }) as Handler<E>;
 }

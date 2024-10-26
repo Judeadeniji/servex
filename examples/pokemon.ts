@@ -1,10 +1,16 @@
-import { serve } from "bun";
 import { createServer } from "../src";
-import { route } from "../src/router";
 import { context, params, request } from "../src/hooks";
 import { HttpException } from "../src/http-exception";
-import type { Context, MiddlewareHandler } from "../src/types";
+import type { Env, MiddlewareHandler } from "../src/types";
 import { RouterType } from "../src/router/adapter";
+
+
+
+// Create the server with routes and middlewares
+const server = createServer({
+  router: RouterType.TRIE,
+ middlewares: [],
+});
 
 
 // ----------------------
@@ -70,7 +76,7 @@ let nextBattleId = 1;
 // ----------------------
 
 // Logger Middleware
-const loggerMiddleware: MiddlewareHandler<Context> = async (_, next) => {
+const loggerMiddleware: MiddlewareHandler<Env> = async (_, next) => {
   const c = context();
   console.log(`[${new Date().toISOString()}] ${c.req.method} ${c.req.url}`);
   await next();
@@ -141,7 +147,7 @@ const resolveBattle = (battle: Battle): Battle => {
 // ----- Pokémon Routes -----
 
 // Route to get a single Pokémon by ID
-const singlePokemon = route("GET /:id", (c) => {
+server.get("/:id", (c) => {
   const idParam = params("id");
   if (!idParam) {
     throw new HttpException(400, "ID parameter is required");
@@ -158,18 +164,15 @@ const singlePokemon = route("GET /:id", (c) => {
 });
 
 // Route to list all Pokémon
-const listPokemons = route(
-  "GET /pokemons",
+server.get(
+  "/pokemons",
   (c) => {
     return c.json(pokemons);
-  },
-  {
-    children: [singlePokemon],
   }
 );
 
 // Route to add a new Pokémon
-const addPokemon = route("POST /pokemons", async (c) => {
+server.get("/pokemons", async (c) => {
   const req = request();
   
   const body = await req.json<{
@@ -225,7 +228,7 @@ const addPokemon = route("POST /pokemons", async (c) => {
 });
 
 // Route to delete a Pokémon by ID
-const deletePokemon = route("DELETE /pokemons/:id", (c) => {
+server.get("/pokemons/:id", (c) => {
   const idParam = params("id");
   if (!idParam) {
     throw new HttpException(400, "ID parameter is required");
@@ -248,12 +251,12 @@ const deletePokemon = route("DELETE /pokemons/:id", (c) => {
 // ----- Skill Routes -----
 
 // Route to get all skills
-const listSkills = route("GET /skills", (c) => {
+server.get("/skills", (c) => {
   return c.json(skills);
 });
 
 // Route to add a new skill
-const addSkill = route("POST /skills", async (c) => {
+server.post("/skills", async (c) => {
   const req = request();
   const body = await req.json<{
     name: string;
@@ -286,7 +289,7 @@ const addSkill = route("POST /skills", async (c) => {
 // ----- Battle Routes -----
 
 // Route to get a single battle by ID
-const singleBattle = route("GET :id", (c) => {
+server.get(":id", (c) => {
   const idParam = params("id");
   if (!idParam) {
     throw new HttpException(400, "ID parameter is required");
@@ -303,14 +306,12 @@ const singleBattle = route("GET :id", (c) => {
 });
 
 // Route to list all battles
-const listBattles = route("GET /battles", (c) => {
+server.get("/battles", (c) => {
   return c.json(battles);
-}, {
-  children: [singleBattle],
 });
 
 // Route to create a new battle
-const createBattle = route("POST /battles", async (c) => {
+server.post("/battles", async (c) => {
   const req = request();
   const body = await req.json<{
     pokemon1Id: number;
@@ -357,7 +358,7 @@ const createBattle = route("POST /battles", async (c) => {
 // ----- Leaderboard Route -----
 
 // Route to get the leaderboard
-const getLeaderboard = route("GET /leaderboard", (c) => {
+server.get("/leaderboard", (c) => {
   const sortedPokemons = [...pokemons].sort((a, b) => b.points - a.points);
   return c.json(sortedPokemons);
 });
@@ -365,22 +366,6 @@ const getLeaderboard = route("GET /leaderboard", (c) => {
 // ----------------------
 // Server Setup
 // ----------------------
-
-// Create the server with routes and middlewares
-const server = createServer({
-  router: RouterType.TRIE,
-  routes: [
-    listPokemons,
-    addPokemon,
-    deletePokemon,
-    listSkills,
-    addSkill,
-    listBattles,
-    createBattle,
-    getLeaderboard,
-  ],
-  middlewares: [loggerMiddleware],
-});
 
 export default server.fetch
 

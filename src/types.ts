@@ -18,22 +18,6 @@ export declare namespace ServeX {
 
 export type Env = ServeX.Env;
 
-export type ServerRoute = {
-  method: Method; // Added HTTP method
-  path: string;
-  data: Handler<Env>[];
-};
-
-export type Route<E extends Env, P extends string, P1 extends string> = (
-  scope: Scope<E, ServerRoute[]>,
-  parent?: P1
-) => {
-  method: Method;
-  path: P;
-  handlers: Handler<E>[];
-  children?: Route<E, string, string>[];
-};
-
 export type RequestContext<E extends Env> = {
   parsedBody: any;
   params: Record<string, string>;
@@ -42,20 +26,20 @@ export type RequestContext<E extends Env> = {
   path: string;
 };
 
-export type Handler<E extends Env> = RequestHandler<E> | MiddlewareHandler<E>;
+export type Handler<E extends Env, P extends string = "/"> = MiddlewareHandler<E, P> | RequestHandler<E, P>;
 
-export type RequestHandler<E extends Env> = (
-  ctx: Context<E>,
+export type RequestHandler<E extends Env, P extends string> = (
+  ctx: Context<E, P>,
   next: NextFunction
 ) => Promise<Response> | Response;
 
-export type MiddlewareHandler<E extends Env> = (
-  ctx: Context<E>,
+export type MiddlewareHandler<E extends Env, P extends string> = (
+  ctx: Context<E, P>,
   next: NextFunction
 ) => Promise<void | undefined | Response> | void | undefined | Response;
 
 export type PluginContext<E extends Env = Env> = {
-  scope: Scope<E, ServerRoute[]>;
+  scope: Scope<E>;
   server: ServeX<E>;
   env?: E;
   events$: {
@@ -72,21 +56,14 @@ export type PluginLifecycleEvents<E extends Env> = {
 
 export interface Plugin<E extends Env = Env> {
   name: string;
-  onInit(
-    pluginContext: PluginContext<E>,
-  ): {
+  onInit(pluginContext: PluginContext<E>): {
     dispose(): void | Promise<void>;
   } | void;
 }
 
-export interface ServerOptions<
-  E extends Env,
-  P extends string = "",
-  P1 extends string = ""
-> {
+export interface ServerOptions<E extends Env, P extends string> {
   router?: RouterType;
-  routes: Route<E, P, P1>[];
-  middlewares?: MiddlewareHandler<E>[];
+  middlewares?: MiddlewareHandler<E, P>[];
   plugins?: Plugin<E>[];
 }
 
@@ -126,23 +103,6 @@ export type JSONValue =
 
 // Renderer Type (for HTML rendering)
 export type Renderer = (...args: any[]) => Response | Promise<Response>;
-
-export type KnownResponseFormat = "json" | "text" | "redirect";
-export type ResponseFormat = KnownResponseFormat | string;
-
-export type TypedResponse<
-  T = unknown,
-  U extends StatusCode = StatusCode,
-  F extends ResponseFormat = T extends string
-    ? "text"
-    : T extends JSONValue
-    ? "json"
-    : ResponseFormat
-> = {
-  _data: T;
-  _status: U;
-  _format: F;
-};
 
 export type NextFunction = () => Promise<void>;
 export declare function fetch(request: Request): Promise<Response>;

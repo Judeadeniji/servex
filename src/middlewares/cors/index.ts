@@ -1,10 +1,10 @@
-import type { Context, MiddlewareHandler } from "../../types";
+import type { Context, Env, MiddlewareHandler } from "../../types";
 
-type CORSOptions = {
+type CORSOptions<E extends Env> = {
   origin:
     | string
     | string[]
-    | ((origin: string, c: Context) => string | undefined | null);
+    | ((origin: string, c: Context<E>) => string | undefined | null);
   allowMethods?: string[];
   allowHeaders?: string[];
   maxAge?: number;
@@ -12,10 +12,10 @@ type CORSOptions = {
   exposeHeaders?: string[];
 };
 
-export function cors<C extends Context>(
-  options?: CORSOptions
-): MiddlewareHandler<C> {
-  const defaults: CORSOptions = {
+export function cors<E extends Env>(
+  options?: CORSOptions<E>
+): MiddlewareHandler<E> {
+  const defaults: CORSOptions<E> = {
     origin: "*",
     allowMethods: ["GET", "HEAD", "PUT", "POST", "DELETE", "PATCH"],
     allowHeaders: [],
@@ -26,7 +26,7 @@ export function cors<C extends Context>(
 
   const opts = { ...defaults, ...options };
 
-  function findAllowOrigin(origin: CORSOptions["origin"], c: Context) {
+  function findAllowOrigin(origin: CORSOptions<E>["origin"], c: Context<E>) {
     if (typeof opts.origin === "string") {
       return opts.origin;
     }

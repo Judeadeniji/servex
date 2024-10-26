@@ -5,7 +5,6 @@ import type {
   MiddlewareHandler,
   Plugin,
   RequestContext,
-  Route,
   ServerOptions,
   ServerRoute,
 } from "./types";
@@ -20,22 +19,6 @@ import {
 } from "./router/adapter";
 
 export class ServeXRequest extends Request {}
-
-function processRoutesAndChildren<E extends Env>(
-  routes: Route<E, any, any>[], // I don't need type safety here
-  scope: Scope<E, ServerRoute[]>,
-  options: RouterAdapterOptions<ServerRoute[]>,
-  parent = ""
-) {
-  for (const route of routes) {
-    const { children, path } = route(scope, parent);
-    const childScope = createScope(new RouterAdapter<E>(options));
-    childScope.parent = scope;
-    if (children) {
-      processRoutesAndChildren(children, childScope, path);
-    }
-  }
-}
 
 class ServeXPluginManager<E extends Env> {
   #plugins: Plugin<E>[];
@@ -127,11 +110,10 @@ class ServeX<E extends Env = Env> extends EventManager {
   #globals = new Map<keyof E["Globals"], E["Globals"][keyof E["Globals"]]>();
   #__env__: () => E["Variables"] = () => process.env;
 
-  constructor(options: ServerOptions<E, any>) {
+  constructor(options: ServerOptions<E>) {
     super();
     const {
       router = RouterType.RADIX,
-      routes,
       middlewares = [],
       plugins = [],
     } = options;
@@ -143,9 +125,6 @@ class ServeX<E extends Env = Env> extends EventManager {
       })
     ) as Scope<E, ServerRoute[]>;
 
-    processRoutesAndChildren(routes, this.scope, {
-      type: router,
-    });
 
     this.#pluginManager.invokePlugins(this.scope);
   }
@@ -213,13 +192,13 @@ class ServeX<E extends Env = Env> extends EventManager {
     return response || new Response(null, { status: 204 });
   };
 
-  fetch = (request: Request) => {
+  fetch = async (request: Request) => {
     const url = new URL(request.url);
     const method = request.method.toUpperCase() as Method;
     const pathname = url.pathname;
 
     try {
-      return this.dispatch(
+      return await this.dispatch(
         this.scope,
         request,
         method,
@@ -329,7 +308,7 @@ class ServeX<E extends Env = Env> extends EventManager {
 }
 
 export function createServer<E extends Env = Env>(
-  options: ServerOptions<E, any>
+  options: ServerOptions<E>
 ) {
   return new ServeX<E>(options);
 }

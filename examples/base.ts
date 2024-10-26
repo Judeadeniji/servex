@@ -1,31 +1,38 @@
-import { route } from "../src/router";
 import { createServer } from "../src";
-import type { ServeX } from "../src/types";
+import { Context, type ServeX } from "../src/types";
 import { devTools } from "../src/plugins/dev-tools";
 import { dotenv } from "../src/plugins/dotenv";
+import Router from "../src/router/lib";
 
 interface E extends ServeX.Env {
   Globals: {
     date: Date;
   };
   Variables: {
-    KEY: number
-  }
+    KEY: number;
+  };
 }
 
-const app = createServer<E>({
-  routes: [
-    route("GET /", (c) =>
-      c.text(`Hello from ServeX!\n`)
-    ),
-    route("GET /env", (c) => c.json({ KEY: c.env().KEY })),
-  ],
+const r = new Router();
 
-  plugins: [devTools(), dotenv({
-    debug: true,
-    encoding: "binary",
-    DOTENV_KEY: "dotenv://:key_1234@dotenvx.com/vault/.env.vault?environment=production"
-  })],
+r.get("/hi/:name", (c) => c.text(`hi, ${c.params("name")}`));
+r.get("/hi/", (c) => c.text("Hi"));
+// r.get("/hi/:name/*hu", (c) => c.text("Hi"));
+
+
+(async () => {
+  const res = r.handle(
+    new Request("http://localhost:3000/hi/ServeX"),
+    function () {
+  
+      console.log("done");
+    }
+  );
+  console.log(await (await res)?.text())
+})()
+
+const app = createServer<E>({
+  plugins: [devTools(), dotenv()],
 });
 
 export default {

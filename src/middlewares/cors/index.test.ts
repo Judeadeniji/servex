@@ -1,30 +1,26 @@
 import { describe, it, expect } from "bun:test";
 import { createServer } from "../..";
 import { RouterType } from "../../router/adapter";
-import { route } from "../../router";
 import { cors } from ".";
 
 
 describe("CORS via middleware", () => {
-  const genRoute = route("GET /api/abc", async (c) => {
-    return c.json({ success: true });
-  }, {
-    middlewares: [
-      cors({
-        origin: "*",
-        exposeHeaders: ["X-Pam"]
-      })
-    ]
-  });
-
-  const api2Route = route("GET /api2/abc", async (c) => {
-    return c.json({ success: true });
-  });
-
+  
   const server = createServer({
     router: RouterType.RADIX,
-    routes: [genRoute, api2Route],
   });
+
+
+  server.get("GET /api/abc", cors({
+    origin: "*",
+    exposeHeaders: ["X-Pam"]
+  }), async (c) => {
+    return c.json({ success: true });
+  });
+  
+  server.get("/api2/abc", async (c) => {
+      return c.json({ success: true });
+    });
 
   server.use(async (c, n) => {
     console.log("Middleware 1");
