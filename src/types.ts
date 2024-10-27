@@ -1,5 +1,5 @@
 import { Context } from "./context";
-import { createServer } from "../index"
+import { createServer } from "../index";
 import type { RouterRoute } from "./router/types";
 
 import type { Scope } from "./scope";
@@ -41,7 +41,10 @@ export type MiddlewareHandler<E extends Env, P extends string = "/"> = (
   next: NextFunction
 ) => Promise<void | undefined | Response> | void | undefined | Response;
 
-export type PluginContext<E extends Env = Env, T = [Handler<E>, RouterRoute<E>]> = {
+export type PluginContext<
+  E extends Env = Env,
+  T = [Handler<E>, RouterRoute<E>]
+> = {
   scope: Scope<E, T>;
   server: ServeX<E>;
   env?: E;
@@ -59,14 +62,19 @@ export type PluginLifecycleEvents<E extends Env> = {
 
 export interface Plugin<E extends Env = Env> {
   name: string;
-  onInit(pluginContext: PluginContext<E>): {
-    dispose(): void | Promise<void>;
-  } | void;
+  onInit(pluginContext: PluginContext<E>):
+    | {
+        dispose(): void | Promise<void>;
+      }
+    | void
+    | Promise<{
+        dispose(): void | Promise<void>;
+      } | void>;
 }
 
 export interface ServerOptions<E extends Env> {
   plugins?: Plugin<E>[];
-  basePath?: string
+  basePath?: string;
 }
 
 // http methods

@@ -13,25 +13,20 @@ type HandlerData<T> = [T, ParamIndexMap][];
 type StaticMap<T> = Record<string, Result<T>>;
 type Matcher<T> = [RegExp, HandlerData<T>[], StaticMap<T>];
 type HandlerWithMetadata<T> = [T, number]; // [handler, paramCount]
+type MethodMatcherMap<T> = Map<string, Matcher<T>>;
 
-const emptyParam: string[] = [];
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const nullMatcher: Matcher<any> = [/^$/, [], Object.create(null)];
+// Constant values
+const EMPTY_PARAM: string[] = [];
+const NULL_MATCHER: Matcher<any> = [/^$/, [], Object.create(null)];
+const WILDCARD_PATTERN = /\/\*$|([.\\+*[^\]$()])/g;
+const PARAM_PATTERN = /\/:/g;
+const WILDCARD_END = /\*$/;
 
-let wildcardRegExpCache: Record<string, RegExp> = Object.create(null);
-function buildWildcardRegExp(path: string): RegExp {
-  return (wildcardRegExpCache[path] ??= new RegExp(
-    path === "*"
-      ? ""
-      : `^${path.replace(/\/\*$|([.\\+*[^\]$()])/g, (_, metaChar) =>
-          metaChar ? `\\${metaChar}` : "(?:|/.*)"
-        )}$`
-  ));
-}
+// Optimized wildcard RegExp cache using Map for better performance
+const wildcardRegExpCache = new Map<string, RegExp>();
 
-function clearWildcardRegExpCache() {
-  wildcardRegExpCache = Object.create(null);
-}
+// Pre-compile commonly used RegExps
+const STATIC_PATH_CHECK = /\*|\/:/;
 
 function buildMatcherFromPreprocessedRoutes<T>(
   routes: [string, HandlerWithMetadata<T>[]][]
@@ -39,13 +34,13 @@ function buildMatcherFromPreprocessedRoutes<T>(
   const trie = new Trie();
   const handlerData: HandlerData<T>[] = [];
   if (routes.length === 0) {
-    return nullMatcher;
+    return NULL_MATCHER;
   }
 
   const routesWithStaticPathFlag = routes
     .map(
       (route) =>
-        [!/\*|\/:/.test(route[0]), ...route] as [
+        [!STATIC_PATH_CHECK.test(route[0]), ...route] as [
           boolean,
           string,
           HandlerWithMetadata<T>[]
@@ -61,7 +56,7 @@ function buildMatcherFromPreprocessedRoutes<T>(
     if (pathErrorCheckOnly) {
       staticMap[path] = [
         handlers.map(([h]) => [h, Object.create(null)]),
-        emptyParam,
+        EMPTY_PARAM,
       ];
     } else {
       j++;
@@ -112,173 +107,220 @@ function buildMatcherFromPreprocessedRoutes<T>(
   return [regexp, handlerMap, staticMap] as Matcher<T>;
 }
 
-function findMiddleware<T>(
-  middleware: Record<string, T[]> | undefined,
-  path: string
-): T[] | undefined {
-  if (!middleware) {
+class RegExpRouter<T> implements Router<T> {
+  readonly name: string = "RegExpRouter";
+  #middleware?: Map<string, Map<string, HandlerWithMetadata<T>[]>>;
+  #routes?: Map<string, Map<string, HandlerWithMetadata<T>[]>>;
+  #matcherCache: MethodMatcherMap<T>;
+  #compiledMatchers: boolean = false;
+
+  constructor() {
+    // Use Map instead of object for better performance with string keys
+    this.#middleware = new Map([[METHOD_NAME_ALL, new Map()]]);
+    this.#routes = new Map([[METHOD_NAME_ALL, new Map()]]);
+    this.#matcherCache = new Map();
+  }
+
+  // Optimized wildcard RegExp builder
+  static #buildWildcardRegExp(path: string): RegExp {
+    let regexp = wildcardRegExpCache.get(path);
+    if (!regexp) {
+      regexp = new RegExp(
+        path === "*"
+          ? ""
+          : `^${path.replace(WILDCARD_PATTERN, (_, metaChar) =>
+              metaChar ? `\\${metaChar}` : "(?:|/.*)"
+            )}$`
+      );
+      wildcardRegExpCache.set(path, regexp);
+    }
+    return regexp;
+  }
+
+  // Optimized middleware finder
+  static #findMiddleware<T>(
+    middleware: Map<string, HandlerWithMetadata<T>[]> | undefined,
+    path: string
+  ): HandlerWithMetadata<T>[] | undefined {
+    if (!middleware) return undefined;
+
+    // Sort keys by length once and cache
+    const sortedKeys = [...middleware.keys()].sort((a, b) => b.length - a.length);
+    for (const k of sortedKeys) {
+      if (RegExpRouter.#buildWildcardRegExp(k).test(path)) {
+        return [...middleware.get(k)!];
+      }
+    }
     return undefined;
   }
 
-  for (const k of Object.keys(middleware).sort((a, b) => b.length - a.length)) {
-    if (buildWildcardRegExp(k).test(path)) {
-      return [...middleware[k]];
-    }
-  }
-
-  return undefined;
-}
-
-export class RegExpRouter<T> implements Router<T> {
-  name: string = "RegExpRouter";
-  middleware?: Record<string, Record<string, HandlerWithMetadata<T>[]>>;
-  routes?: Record<string, Record<string, HandlerWithMetadata<T>[]>>;
-
-  constructor() {
-    this.middleware = { [METHOD_NAME_ALL]: Object.create(null) };
-    this.routes = { [METHOD_NAME_ALL]: Object.create(null) };
-  }
-
-  add(method: string, path: string, handler: T) {
-    const { middleware, routes } = this;
-
-    if (!middleware || !routes) {
+  add(method: string, path: string, handler: T): void {
+    if (this.#compiledMatchers) {
       throw new Error(MESSAGE_MATCHER_IS_ALREADY_BUILT);
     }
 
-    if (!middleware[method]) {
-      [middleware, routes].forEach((handlerMap) => {
-        handlerMap[method] = Object.create(null);
-        Object.keys(handlerMap[METHOD_NAME_ALL]).forEach((p) => {
-          handlerMap[method][p] = [...handlerMap[METHOD_NAME_ALL][p]];
-        });
-      });
-    }
+    const middleware = this.#middleware!;
+    const routes = this.#routes!;
 
-    if (path === "/*") {
-      path = "*";
-    }
-
-    const paramCount = (path.match(/\/:/g) || []).length;
-
-    if (/\*$/.test(path)) {
-      const re = buildWildcardRegExp(path);
-      if (method === METHOD_NAME_ALL) {
-        Object.keys(middleware).forEach((m) => {
-          middleware[m][path] ||=
-            findMiddleware(middleware[m], path) ||
-            findMiddleware(middleware[METHOD_NAME_ALL], path) ||
-            [];
-        });
-      } else {
-        middleware[method][path] ||=
-          findMiddleware(middleware[method], path) ||
-          findMiddleware(middleware[METHOD_NAME_ALL], path) ||
-          [];
+    // Initialize method maps if they don't exist
+    if (!middleware.has(method)) {
+      for (const handlerMap of [middleware, routes]) {
+        const methodMap = new Map();
+        const allMethodHandlers = handlerMap.get(METHOD_NAME_ALL)!;
+        
+        // Copy all method handlers
+        for (const [p, handlers] of allMethodHandlers) {
+          methodMap.set(p, [...handlers]);
+        }
+        
+        handlerMap.set(method, methodMap);
       }
-      Object.keys(middleware).forEach((m) => {
-        if (method === METHOD_NAME_ALL || method === m) {
-          Object.keys(middleware[m]).forEach((p) => {
-            re.test(p) && middleware[m][p].push([handler, paramCount]);
-          });
-        }
-      });
+    }
 
-      Object.keys(routes).forEach((m) => {
-        if (method === METHOD_NAME_ALL || method === m) {
-          Object.keys(routes[m]).forEach(
-            (p) => re.test(p) && routes[m][p].push([handler, paramCount])
-          );
-        }
-      });
+    // Normalize path
+    path = path === "/*" ? "*" : path;
+    const paramCount = (path.match(PARAM_PATTERN) || []).length;
 
+    if (WILDCARD_END.test(path)) {
+      this.#addWildcardRoute(method, path, handler, paramCount);
       return;
     }
 
-    const paths = checkOptionalParameter(path) || [path];
-    for (let i = 0, len = paths.length; i < len; i++) {
-      const path = paths[i];
+    this.#addStaticRoute(method, path, handler, paramCount);
+  }
 
-      Object.keys(routes).forEach((m) => {
-        if (method === METHOD_NAME_ALL || method === m) {
-          routes[m][path] ||= [
-            ...(findMiddleware(middleware[m], path) ||
-              findMiddleware(middleware[METHOD_NAME_ALL], path) ||
-              []),
-          ];
-          routes[m][path].push([handler, paramCount - len + i + 1]);
+  // Separated wildcard route addition for clarity and optimization
+  #addWildcardRoute(method: string, path: string, handler: T, paramCount: number): void {
+    const re = RegExpRouter.#buildWildcardRegExp(path);
+    const middleware = this.#middleware!;
+    const routes = this.#routes!;
+
+    // Handle middleware for all methods if needed
+    if (method === METHOD_NAME_ALL) {
+      for (const [m, handlers] of middleware) {
+        if (!handlers.has(path)) {
+          handlers.set(
+            path,
+            RegExpRouter.#findMiddleware(handlers, path) ||
+              RegExpRouter.#findMiddleware(middleware.get(METHOD_NAME_ALL), path) ||
+              []
+          );
         }
-      });
+      }
+    } else {
+      const methodMiddleware = middleware.get(method)!;
+      if (!methodMiddleware.has(path)) {
+        methodMiddleware.set(
+          path,
+          RegExpRouter.#findMiddleware(methodMiddleware, path) ||
+            RegExpRouter.#findMiddleware(middleware.get(METHOD_NAME_ALL), path) ||
+            []
+        );
+      }
+    }
+
+    // Add handler to matching routes
+    for (const [m, methodRoutes] of routes) {
+      if (method === METHOD_NAME_ALL || method === m) {
+        for (const [p, handlers] of methodRoutes) {
+          if (re.test(p)) {
+            handlers.push([handler, paramCount]);
+          }
+        }
+      }
+    }
+  }
+
+  // Separated static route addition
+  #addStaticRoute(method: string, path: string, handler: T, paramCount: number): void {
+    const paths = checkOptionalParameter(path) || [path];
+    const routes = this.#routes!;
+    const middleware = this.#middleware!;
+
+    for (let i = 0; i < paths.length; i++) {
+      const currentPath = paths[i];
+      
+      for (const [m, methodRoutes] of routes) {
+        if (method === METHOD_NAME_ALL || method === m) {
+          if (!methodRoutes.has(currentPath)) {
+            methodRoutes.set(
+              currentPath,
+              [
+                ...(RegExpRouter.#findMiddleware(middleware.get(m), currentPath) ||
+                  RegExpRouter.#findMiddleware(middleware.get(METHOD_NAME_ALL), currentPath) ||
+                  []),
+              ]
+            );
+          }
+          methodRoutes.get(currentPath)!.push([handler, paramCount - paths.length + i + 1]);
+        }
+      }
     }
   }
 
   match(method: string, path: string): Result<T> {
-    clearWildcardRegExpCache(); // no longer used.
+    if (!this.#compiledMatchers) {
+      this.#buildAllMatchers();
+      this.#compiledMatchers = true;
+    }
 
-    const matchers = this.buildAllMatchers();
+    const matcher = this.#matcherCache.get(method) || this.#matcherCache.get(METHOD_NAME_ALL);
+    if (!matcher) return [[], EMPTY_PARAM];
 
-    this.match = (method, path) => {
-      const matcher = (matchers[method] ||
-        matchers[METHOD_NAME_ALL]) as Matcher<T>;
+    // Check static routes first
+    const staticMatch = matcher[2][path];
+    if (staticMatch) return staticMatch;
 
-      const staticMatch = matcher[2][path];
-      if (staticMatch) {
-        return staticMatch;
-      }
+    // Then check dynamic routes
+    const match = path.match(matcher[0]);
+    if (!match) return [[], EMPTY_PARAM];
 
-      const match = path.match(matcher[0]);
-      if (!match) {
-        return [[], emptyParam];
-      }
-
-      const index = match.indexOf("", 1);
-      return [matcher[1][index], match];
-    };
-
-    return this.match(method, path);
+    const index = match.indexOf("", 1);
+    return [matcher[1][index], match];
   }
 
-  private buildAllMatchers(): Record<string, Matcher<T> | null> {
-    const matchers: Record<string, Matcher<T> | null> = Object.create(null);
+  
 
-    [...Object.keys(this.routes!), ...Object.keys(this.middleware!)].forEach(
-      (method) => {
-        matchers[method] ||= this.buildMatcher(method);
+  // Optimized matcher building
+  #buildAllMatchers(): void {
+    const methodsToProcess = new Set([
+      ...this.#routes!.keys(),
+      ...this.#middleware!.keys(),
+    ]);
+
+    for (const method of methodsToProcess) {
+      if (!this.#matcherCache.has(method)) {
+        const matcher = this.#buildMatcher(method);
+        if (matcher) {
+          this.#matcherCache.set(method, matcher);
+        }
       }
-    );
+    }
 
-    // Release cache
-    this.middleware = this.routes = undefined;
-
-    return matchers;
+    // Clear references to allow garbage collection
+    this.#middleware = undefined;
+    this.#routes = undefined;
   }
 
-  private buildMatcher(method: string): Matcher<T> | null {
+  #buildMatcher(method: string): Matcher<T> | null {
     const routes: [string, HandlerWithMetadata<T>[]][] = [];
-
     let hasOwnRoute = method === METHOD_NAME_ALL;
 
-    [this.middleware!, this.routes!].forEach((r) => {
-      const ownRoute = r[method]
-        ? Object.keys(r[method]).map((path) => [path, r[method][path]])
-        : [];
-      if (ownRoute.length !== 0) {
-        hasOwnRoute ||= true;
-        routes.push(...(ownRoute as [string, HandlerWithMetadata<T>[]][]));
+    for (const handlerMap of [this.#middleware!, this.#routes!]) {
+      const methodHandlers = handlerMap.get(method);
+      if (methodHandlers?.size) {
+        hasOwnRoute = true;
+        routes.push(...Array.from(methodHandlers.entries()));
       } else if (method !== METHOD_NAME_ALL) {
-        routes.push(
-          ...(Object.keys(r[METHOD_NAME_ALL]).map((path) => [
-            path,
-            r[METHOD_NAME_ALL][path],
-          ]) as [string, HandlerWithMetadata<T>[]][])
-        );
+        const allMethodHandlers = handlerMap.get(METHOD_NAME_ALL);
+        if (allMethodHandlers?.size) {
+          routes.push(...Array.from(allMethodHandlers.entries()));
+        }
       }
-    });
-
-    if (!hasOwnRoute) {
-      return null;
-    } else {
-      return buildMatcherFromPreprocessedRoutes(routes);
     }
+
+    return hasOwnRoute ? buildMatcherFromPreprocessedRoutes(routes) : null;
   }
 }
+
+export { RegExpRouter };

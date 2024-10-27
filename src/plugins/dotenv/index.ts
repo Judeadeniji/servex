@@ -1,5 +1,5 @@
 import Dotenv, { type DotenvOptions } from "../../dotenv";
-import packageJson from "../../../package.json";
+import packageJson from "../../../package.json" with { type: "json" }
 import type { Env, Plugin, PluginContext } from "../../types";
 
 interface E2 extends Env {

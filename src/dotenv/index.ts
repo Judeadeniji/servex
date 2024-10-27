@@ -1,9 +1,9 @@
-import fs from "fs";
-import path from "path";
-import os from "os";
-import crypto from "crypto";
+import fs from "node:fs";
+import path from "node:path";
+import os from "node:os";
+import crypto from "node:crypto";
 
-import packageJson from "../../package.json" assert { type: "json" };
+import packageJson from "../../package.json" with { type: "json" };
 
 const version = packageJson.version;
 
