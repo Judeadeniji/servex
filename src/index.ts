@@ -298,6 +298,20 @@ class ServeX<E extends Env = Env, P extends string = "/"> {
     this.routes.push(r);
   };
 
+  use = (arg0: string | Handler<E>, ...handlers: Handler<E>[]) => {
+    let path = "/";
+    if (typeof arg0 === "string") {
+      path = arg0;
+    } else {
+      handlers.unshift(arg0);
+    }
+    handlers.forEach(handler => {
+      this.addRoute("ALL", path, handler);
+    });
+    
+    return this;
+  }
+
   on = (...args: Parameters<EventManager["on"]>) => this.#events.on(...args);
 }
 
