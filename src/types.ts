@@ -20,7 +20,7 @@ export declare namespace ServeXInterface {
 export type Env = ServeXInterface.Env;
 
 export type RequestContext<E extends Env> = {
-  parsedBody: any;
+  routeId: string;
   params: Record<string, string>;
   query: URLSearchParams;
   globals: Map<keyof E["Globals"], E["Globals"][keyof E["Globals"]]>;

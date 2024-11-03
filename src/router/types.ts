@@ -208,3 +208,5 @@ export interface RouterRoute<E extends Env> {
   method: string
   handler: Handler<E>
 }
+
+export type RouteHandlerPair<E extends Env> = [Handler<E>, RouterRoute<E>];

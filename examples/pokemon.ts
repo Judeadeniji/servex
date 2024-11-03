@@ -1,27 +1,29 @@
 import { createServer } from "../src";
-import { context, params, request } from "../src/hooks";
 import { HttpException } from "../src/http-exception";
-import type { Env, MiddlewareHandler } from "../src/types";
+import { FsRouter } from "../src/router/fs-router/fs-router";
+import type { Env, Handler, HTTPMethod, Plugin } from "../src/types";
 
 
 // Create the server with routes and middlewares
-const server = createServer();
+const server = createServer({
+  plugins: [fsPlugin()]
+});
 
 
 // ----------------------
 //  Little Hacks
 // ----------------------
-const sysConsoleLog = console.log;
-console.log = () => {}
-function log(...args: Parameters<typeof console.log>) {
-  const stack = new Error().stack || '';
-  const caller = stack.split('\n')[2].trim();
-  sysConsoleLog(`[${new Date().toISOString()}] ${caller}:\n`, ...args);
-}
+// const sysConsoleLog = console.log;
+// console.log = () => {}
+// function log(...args: Parameters<typeof console.log>) {
+//   const stack = new Error().stack || '';
+//   const caller = stack.split('\n')[2].trim();
+//   sysConsoleLog(`[${new Date().toISOString()}] ${caller}:\n`, ...args);
+// }
 
-if (log !== sysConsoleLog) {
-  console.log = log
-}
+// if (log !== sysConsoleLog) {
+//   console.log = log
+// }
 
 // ----------------------
 // Define Types and Interfaces
@@ -69,14 +71,29 @@ let nextBattleId = 1;
 // ----------------------
 // Middleware Definitions
 // ----------------------
+function fsPlugin<E extends Env>(): Plugin<E> {
+  const fr = new FsRouter({
+    routesDir: `${__dirname}/routes`,
+    generateTypes: true,
+    dev: true,
+    tsConfigPath: `${process.cwd()}/tsconfig.json`
+  });
+  
 
-// Logger Middleware
-const loggerMiddleware: MiddlewareHandler<Env> = async (_, next) => {
-  const c = context();
-  console.log(`[${new Date().toISOString()}] ${c.req.method} ${c.req.url}`);
-  await next();
-  console.log("Response sent");
-};
+  return {
+    name: "fs-plugin",
+     async onInit(pluginContext) {
+      await fr.initialize();
+      
+      fr.getRoutes().forEach(route => {
+        console.log(route)
+        pluginContext.server[route.method.toLowerCase() as HTTPMethod](route.path, route.handler as Handler<E>)
+      })
+    },
+  }
+}
+ 
+
 
 // ----------------------
 // Helper Functions
@@ -143,7 +160,7 @@ const resolveBattle = (battle: Battle): Battle => {
 
 // Route to get a single Pokémon by ID
 server.get("/:id", (c) => {
-  const idParam = params("id");
+  const idParam = c.params("id")
   if (!idParam) {
     throw new HttpException(400, "ID parameter is required");
   }
@@ -168,8 +185,7 @@ server.get(
 
 // Route to add a new Pokémon
 server.get("/pokemons", async (c) => {
-  const req = request();
-  
+  const req = c.req;  
   const body = await req.json<{
     name: string;
     type: string;
@@ -224,7 +240,7 @@ server.get("/pokemons", async (c) => {
 
 // Route to delete a Pokémon by ID
 server.get("/pokemons/:id", (c) => {
-  const idParam = params("id");
+  const idParam = c.params("id");
   if (!idParam) {
     throw new HttpException(400, "ID parameter is required");
   }
@@ -252,7 +268,7 @@ server.get("/skills", (c) => {
 
 // Route to add a new skill
 server.post("/skills", async (c) => {
-  const req = request();
+  const req = c.req;
   const body = await req.json<{
     name: string;
     damage: number;
@@ -284,8 +300,8 @@ server.post("/skills", async (c) => {
 // ----- Battle Routes -----
 
 // Route to get a single battle by ID
-server.get(":id", (c) => {
-  const idParam = params("id");
+server.get("/:id", (c) => {
+  const idParam = c.params("id");
   if (!idParam) {
     throw new HttpException(400, "ID parameter is required");
   }
@@ -307,7 +323,7 @@ server.get("/battles", (c) => {
 
 // Route to create a new battle
 server.post("/battles", async (c) => {
-  const req = request();
+  const req = c.req;
   const body = await req.json<{
     pokemon1Id: number;
     pokemon2Id: number;
@@ -361,13 +377,9 @@ server.get("/leaderboard", (c) => {
 // ----------------------
 // Server Setup
 // ----------------------
-
-export default server.fetch
-
 // Start the server on port 3000
-// serve({
-//   port: 3000,
-//   fetch: server.fetch,
-// });
+export default {
+  fetch: server.fetch
+}
 
-console.log("Pokémon Server is running on http://localhost:3000");
+// console.log("Pokémon Server is running on http://localhost:3000");

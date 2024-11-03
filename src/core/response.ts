@@ -1,6 +1,6 @@
 import { notFoundHandler } from "../basic-handlers";
 import type { Context } from "../context";
-import type { RouterRoute, Params, ParamIndexMap } from "../router/types";
+import type { RouterRoute, Params, ParamIndexMap, Result, RouteHandlerPair } from "../router/types";
 import type { Env, Handler, RequestHandler } from "../types";
 
 /**
@@ -27,13 +27,14 @@ function handleErrorsGracefully(
  */
 export async function executeHandlers<E extends Env>(
   context: Context<E>,
-  handlers: [[Handler<E>, RouterRoute<E>], Params][] | [[Handler<E>, RouterRoute<E>], ParamIndexMap][],
+  handlers: Handler<E>[],
   defaultHandler = notFoundHandler as unknown as RequestHandler<E, string>
 ): Promise<Response> {
   let response: Response | undefined;
   
   for (let i = 0; i < handlers.length; i++) {
-    const [[handler], params] = handlers[i];
+    const handler = handlers[i];
+
     let nextCalled = false;
 
     try {

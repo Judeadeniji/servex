@@ -1,6 +1,15 @@
 import type { Context } from "../../../src/context";
-import type { Env } from "../../../src/types";
+import type { Env, MiddlewareHandler } from "../../../src/types";
 
-export function POST(c: Context<Env, "/:id">) {
-    return c.text("Hi Post")
+export function GET(c: Context<Env, "/users/:id">) {
+    return c.html(`${c.params("id")}: is ${c.query("isWanking") === "true" ? "a wanker" : "not a wanker"}`)
+}
+
+export const middlewares = {
+    get: [
+        async(c, next) => {
+            console.log(c)
+            await next()
+        }
+    ] as MiddlewareHandler<object>[]
 }

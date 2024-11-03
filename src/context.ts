@@ -57,13 +57,13 @@ export class Context<
   constructor(
     request: Request,
     variables: E["Variables"],
-    ctx: RequestContext<E>
+    private ctx: RequestContext<E>
   ) {
     this.#rawRequest = request;
     this.#variables = variables;
     this.#params = ctx.params;
     this.#query = ctx.query;
-    this.#body = ctx.parsedBody;
+    this.#body = ctx.routeId;
     this.#globals = ctx.globals;
 
     const l = (key: keyof E["Bindings"]) => {
@@ -78,6 +78,10 @@ export class Context<
     };
 
     this.locals = l
+  }
+
+  get routeId() {
+    return this.ctx.routeId;
   }
 
   globals(key: keyof E["Globals"]) {

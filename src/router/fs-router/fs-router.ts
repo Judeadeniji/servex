@@ -1,15 +1,22 @@
+/**
+ * @module FsRouter
+ */
+
+import process from "node:process";
 import { promises as fs } from "node:fs";
 import { join, parse, relative } from "node:path";
 import ts from "typescript";
 import type { HTTPMethod } from "../../types";
 import type { RouteConfig, RouteDefinition } from "./types";
 import { METHOD_NAME_ALL_LOWERCASE, METHODS } from "../types";
+import { mergePath } from "../utils";
 
 export class FsRouter {
   private routes: {
     method: string;
     path: string;
     handler: unknown;
+    middlewares?: unknown[];
     params: { name: string }[];
     fullPath: string;
   }[] = [];
@@ -21,7 +28,7 @@ export class FsRouter {
       extensions: [".js", ".jsx", ".tsx", ".ts"],
       generateTypes: false,
       dev: false,
-      tsConfigPath: "tsconfig.json",
+      tsConfigPath: mergePath(process.cwd(), "tsconfig.json"),
       ...config,
     };
 
@@ -58,7 +65,7 @@ export class FsRouter {
 
   async initialize(): Promise<void> {
     await this.scanRoutes(this.config.routesDir);
-    if (this.config.generateTypes) {
+    if (this.config.generateTypes && this.config.dev) {
       await this.generateTypeDefinitions();
     }
   }
@@ -84,21 +91,20 @@ export class FsRouter {
     }
   }
 
-  private async processRouteFile(
-    fullPath: string
-  ){
+  private async processRouteFile(fullPath: string) {
     try {
       const relativePath = relative(this.config.routesDir, fullPath);
       const routePath = this.filePathToRoutePath(relativePath);
       // replace `$` with `:`
       const normalizedPath = routePath.replace(/\$/g, ":");
-      const exports = await this.getMethodAndHandlers(fullPath);
+      const { middlewares = {}, ...handlers } = await this.getExports(fullPath);
       const params = this.getRouteParamTypes(routePath);
 
-      return Object.entries(exports).map(([method, handler]) => ({
+      return Object.entries(handlers).map(([method, handler]) => ({
         method: method.toUpperCase(),
         path: normalizedPath,
         handler,
+        middlewares: middlewares[method.toLowerCase() as HTTPMethod],
         fullPath,
         params,
       }));
@@ -108,11 +114,13 @@ export class FsRouter {
     }
   }
 
-  private async getMethodAndHandlers(
-    filePath: string
-  ): Promise<RouteDefinition["exports"]> {
+  private async getExports(filePath: string) {
     const exports = await import(filePath);
-    return exports as RouteDefinition["exports"];
+    return exports as RouteDefinition["exports"] & {
+      middlewares: {
+        [k in keyof RouteDefinition["exports"]]: unknown[];
+      };
+    };
   }
 
   private filePathToRoutePath(filePath: string): string {
@@ -148,7 +156,10 @@ export class FsRouter {
       >;
 
       const methodTypes = Object.entries(types).map(([method, node]) => {
-        const type = this.getDetailedSymbolType(node, this.program!.getTypeChecker());
+        const type = this.getDetailedSymbolType(
+          node,
+          this.program!.getTypeChecker()
+        );
         return ts.factory.createPropertySignature(
           undefined,
           ts.factory.createStringLiteral(method),
@@ -177,7 +188,7 @@ export class FsRouter {
               )
             )
           ),
-          ...methodTypes
+          ...methodTypes,
         ])
       );
     });
@@ -209,7 +220,7 @@ export class FsRouter {
   }
 
   private getRouteParamTypes(routePath: string) {
-    const params:{ name: string }[] = [];
+    const params: { name: string }[] = [];
     const dynamicSegments = routePath.match(/\$\w+/g) || [];
 
     dynamicSegments.forEach((segment) => {
@@ -286,6 +297,7 @@ export class FsRouter {
     method: string;
     path: string;
     handler: unknown;
+    middlewares?: unknown[];
   }> {
     return this.routes;
   }

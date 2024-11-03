@@ -1,4 +1,4 @@
-import process from "node:process"
+import process from "node:process";
 
 import type {
   Env,
@@ -15,6 +15,7 @@ import { RegExpRouter } from "./router/reg-exp-router/router";
 import {
   METHOD_NAME_ALL_LOWERCASE,
   METHODS,
+  type RouteHandlerPair,
   type RouterRoute,
 } from "./router/types";
 import { mergePath } from "./router/utils";
@@ -32,7 +33,6 @@ export class ServeXRequest extends Request {
     }
     return this.#parsedUrl;
   }
-
 
   // Helper to get cache key
   getCacheKey(): string {
@@ -116,9 +116,9 @@ class EventManager {
   async emit(event: string, ...data: any[]): Promise<void> {
     const handlers = this.#events.get(event);
     if (!handlers) return;
-    
+
     // Use Promise.all for parallel execution of handlers
-    await Promise.all([...handlers].map(handler => handler(...data)));
+    await Promise.all([...handlers].map((handler) => handler(...data)));
   }
 }
 
@@ -136,7 +136,7 @@ class Queue {
     if (this.head === this.tail) return undefined;
     const fn = this.items[this.head];
     delete this.items[this.head++];
-    
+
     // Reset indices when queue is empty
     if (this.head === this.tail) {
       this.head = this.tail = 0;
@@ -171,8 +171,6 @@ class Queue {
   }
 }
 
-
-type RouteHandlerPair<E extends Env> = [Handler<E>, RouterRoute<E>];
 class ServeX<E extends Env = Env, P extends string = "/"> {
   private scope: Scope<E, RouteHandlerPair<E>>;
   #pluginManager: ServeXPluginManager<E>;
@@ -201,10 +199,10 @@ class ServeX<E extends Env = Env, P extends string = "/"> {
     this._basePath = basePath;
     this.scope = createScope(this.#router);
     this.#pluginManager = new ServeXPluginManager(this, plugins);
-    
+
     // Initialize method handlers
     this.#initMethodHandlers();
-    
+
     // Initialize plugins
     this.#initPlugins();
   }
@@ -217,7 +215,7 @@ class ServeX<E extends Env = Env, P extends string = "/"> {
         } else {
           this.addRoute(method, this.#path, args1);
         }
-        args.forEach(handler => {
+        args.forEach((handler) => {
           if (typeof handler !== "string") {
             this.addRoute(method, this.#path, handler);
           }
@@ -226,7 +224,7 @@ class ServeX<E extends Env = Env, P extends string = "/"> {
       };
     };
 
-    ALL_METHODS.forEach(method => {
+    ALL_METHODS.forEach((method) => {
       this[method] = methodHandler(method);
     });
   }
@@ -237,15 +235,19 @@ class ServeX<E extends Env = Env, P extends string = "/"> {
     this.#pluginResolved = true;
   }
 
-  private dispatch = async (scope: Scope<E, RouteHandlerPair<E>>, request: Request, globals: Map<any, any>) => {
-    if (!this.#pluginResolved) return new Promise<Response>((resolve) => {
-      this.#queue.enqueue(() => {
-        this.dispatch(scope, request, globals).then(resolve);
+  private dispatch = async (
+    scope: Scope<E, RouteHandlerPair<E>>,
+    request: Request,
+    globals: Map<any, any>
+  ) => {
+    if (!this.#pluginResolved)
+      return new Promise<Response>((resolve) => {
+        this.#queue.enqueue(() => {
+          this._dispatch(scope, request, globals).then(resolve);
+        });
       });
-    });
     return await this._dispatch(scope, request, globals);
   };
-
 
   private _dispatch = async (
     scope: Scope<E, RouteHandlerPair<E>>,
@@ -255,11 +257,29 @@ class ServeX<E extends Env = Env, P extends string = "/"> {
     const { method, url } = request;
     const { pathname, searchParams } = new URL(url);
     // Match using method and pathname separately
-    const [handlers] = scope.router.match(method, pathname);
+    const matchedRoute = scope.router.match(method, pathname);
+    const handlers: Handler<E>[] = [];
+    const params: Record<string, string> = {};
+    let routeId: string =  '';
+
+    const [h, stash = []] = matchedRoute;
+
+    for (let i = 0; i < h.length; i++) {
+      const [[handler, r], p] = h[i];
+      routeId = r.path;
+      
+      for (const param in p) {
+        if (!params[param]) {
+          params[param] = stash[p[param] as number]
+        }
+      }
+
+      handlers.push(handler);
+    }
 
     const requestContext: RequestContext<E> = {
-      parsedBody: null,
-      params: {},
+      routeId,
+      params,
       query: searchParams,
       globals,
       path: pathname,
@@ -268,6 +288,7 @@ class ServeX<E extends Env = Env, P extends string = "/"> {
     // Emit a server:request event
     // await this.#events.emit("server:request", requestContext, request);
     const ctx = new Context<E>(request, this.#__env__(), requestContext);
+
     const response = await executeHandlers<E>(ctx, handlers);
     // Emit a server:response event
     // await this.#events.emit("server:response", requestContext, response);
@@ -305,12 +326,12 @@ class ServeX<E extends Env = Env, P extends string = "/"> {
     } else {
       handlers.unshift(arg0);
     }
-    handlers.forEach(handler => {
+    handlers.forEach((handler) => {
       this.addRoute("ALL", path, handler);
     });
-    
+
     return this;
-  }
+  };
 
   on = (...args: Parameters<EventManager["on"]>) => this.#events.on(...args);
 }

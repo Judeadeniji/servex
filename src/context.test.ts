@@ -21,7 +21,7 @@ describe('Context', () => {
         ctx = {
             params: { id: '123' },
             query: new URLSearchParams('q=test'),
-            parsedBody: undefined,
+            routeId: undefined,
             globals: new Map(),
         };
         context = new Context(request, variables, ctx as RequestContext<any>);

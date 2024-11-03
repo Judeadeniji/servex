@@ -1,4 +1,4 @@
-import type { HTTPMethod } from "../../types";
+import type { HTTPMethod, MiddlewareHandler } from "../../types";
 
 export interface RouteConfig {
   /** Base directory to scan for routes */
@@ -15,8 +15,9 @@ export interface RouteConfig {
 
 export interface RouteDefinition {
   path: string;
+  middlewares: MiddlewareHandler<object>[];
   exports: {
-    [key in [HTTPMethod][number]]?: unknown
+    [key in [HTTPMethod][number]]?: unknown;
   };
   filePath: string;
   sourceFile: string;

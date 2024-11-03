@@ -9,7 +9,6 @@ function fsPlugin(): Plugin<E> {
     routesDir: `${__dirname}/routes`,
     generateTypes: true,
     dev: true,
-    tsConfigPath: `${process.cwd()}/tsconfig.json`
   });
   
 
@@ -19,8 +18,7 @@ function fsPlugin(): Plugin<E> {
       await fr.initialize();
       
       fr.getRoutes().forEach(route => {
-        console.log(route)
-        pluginContext.server[route.method.toLowerCase() as HTTPMethod](route.path, route.handler as Handler<E>)
+        pluginContext.server[route.method.toLowerCase() as HTTPMethod](route.path, ...(route.middlewares || [])as Handler<E>[], route.handler as Handler<E>)
       })
     },
   }
@@ -39,8 +37,11 @@ const app = createServer<E>({
   plugins: [devTools(), dotenv(), fsPlugin()],
 });
 
-app.get("/hi/:name", async (ctx) => {
-  return ctx.json({ date: ctx.globals("date"), key: ctx.env().KEY, name: ctx.params("name"),  hi: "there"  });
+app.get("/hi/:name", async (ctx, next) => {
+  console.log("Middleware 1")
+  await next()
+}, async (ctx) => {
+  return ctx.text(`Hi, ${ctx.params("name")}\n`);
 });
 
 // app.request("http://localhost:3000/hi").then(v => v.text()).then(console.log)
