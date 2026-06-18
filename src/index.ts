@@ -150,7 +150,7 @@ async function baseFetch(
   return response!;
 }
 
-export class ServeXRouterImpl<S = {}> implements ServeXRouter<S> {
+export class ServeXRouterImpl<E extends Env = Env, S = {}> implements ServeXRouter<E, S> {
     constructor(protected routerAdapter: RouterAdapter<ServerRoute[]>) {}
 
     use(path: string | MiddlewareHandler<Context>, ...middlewares: MiddlewareHandler<Context>[]) {
@@ -189,7 +189,7 @@ export class ServeXRouterImpl<S = {}> implements ServeXRouter<S> {
     }
 }
 
-export class ServeXApp<S = {}> extends ServeXRouterImpl<S> {
+export class ServeXApp<E extends Env = Env, S = {}> extends ServeXRouterImpl<E, S> {
     public hooks: import("./types").Hooks = {
         onRequest: [],
         onBeforeHandle: [],
@@ -236,7 +236,7 @@ export class ServeXApp<S = {}> extends ServeXRouterImpl<S> {
     }
 }
 
-export function createServer(options: ServerOptions<string, string> = {}) {
+export function createServer<E extends Env = Env>(options: ServerOptions<string, string> = {}) {
   const { router = RouterType.RADIX, middlewares = [] } = options;
   const thisScope = createScope(
     new RouterAdapter({
@@ -244,5 +244,5 @@ export function createServer(options: ServerOptions<string, string> = {}) {
     })
   ) as Scope<ServerRoute[], ServerRoute[]>;
 
-  return new ServeXApp<{}>(thisScope, middlewares) as ServeXRouter<{}> & ServeXApp<{}>;
+  return new ServeXApp<E, {}>(thisScope, middlewares) as ServeXRouter<E, {}> & ServeXApp<E, {}>;
 }

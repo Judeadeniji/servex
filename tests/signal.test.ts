@@ -46,12 +46,12 @@ describe("Signal Context", () => {
     const app = createServer();
     
     app.use("*", async (c, next) => {
-      c.signalCtx = withValue(c.signalCtx, "user", { id: 42 });
+      c.routine = withValue(c.routine, "user", { id: 42 });
       await next();
     });
 
     app.get("/user", (c) => {
-      const user = c.signalCtx.value<{ id: number }>("user");
+      const user = c.routine.value<{ id: number }>("user");
       return c.json(user!);
     });
 
@@ -61,14 +61,14 @@ describe("Signal Context", () => {
     expect(await res.json()).toEqual({ id: 42 });
   });
 
-  it("should cancel signalCtx when request aborts", async () => {
+  it("should cancel routine when request aborts", async () => {
     const app = createServer();
     let isCancelled = false;
 
     app.get("/long", async (c) => {
       // Simulate long polling
       await new Promise((r) => setTimeout(r, 20));
-      isCancelled = c.signalCtx.done;
+      isCancelled = c.routine.done;
       return c.text("Done");
     });
 

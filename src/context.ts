@@ -24,28 +24,29 @@ export class Context<
   #body: any;
   #response: Response = new Response();
   #status: StatusCode = 200;
+  #variables: Map<string, any> = new Map();
   debug = false;
 
-  #signalCtx: SignalContext;
+  #routine: SignalContext;
 
   constructor(request: Request, env: E["Bindings"], ctx: RequestContext) {
     this.#rawRequest = request;
     this.#env = env;
     this.#params = ctx.params;
 
-    const [signalCtx, cancel] = withCancel(background());
-    this.#signalCtx = signalCtx;
+    const [routine, cancel] = withCancel(background());
+    this.#routine = routine;
     if (request.signal) {
       request.signal.addEventListener("abort", () => cancel(), { once: true });
     }
   }
 
-  get signalCtx() {
-    return this.#signalCtx;
+  get routine() {
+    return this.#routine;
   }
 
-  set signalCtx(ctx: SignalContext) {
-    this.#signalCtx = ctx;
+  set routine(ctx: SignalContext) {
+    this.#routine = ctx;
   }
 
   setHeaders(headers: { [key: string]: string | string[] }) {
@@ -112,6 +113,24 @@ export class Context<
   setParams(params: Record<string, string>) {
     this.#params = params;
     return this;
+  }
+
+  /**
+   * Set a variable in the context state. Useful for sharing typed data across middlewares.
+   */
+  set<Key extends keyof E["Variables"]>(key: Key, value: E["Variables"][Key]): void;
+  set(key: string, value: unknown): void;
+  set(key: string, value: unknown): void {
+    this.#variables.set(key, value);
+  }
+
+  /**
+   * Get a variable from the context state.
+   */
+  get<Key extends keyof E["Variables"]>(key: Key): E["Variables"][Key];
+  get<T>(key: string): T;
+  get(key: string): unknown {
+    return this.#variables.get(key);
   }
 
   /**

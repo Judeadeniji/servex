@@ -52,42 +52,42 @@ export interface Hooks {
 export type ExtractResponseType<T> = T extends (...args: any[]) => infer R | Promise<infer R> ? R : never;
 export type Last<T extends any[]> = T extends readonly [...any, infer L] ? L : never;
 
-export interface ServeXRouter<S = {}> {
+export interface ServeXRouter<E extends Env = Env, S = {}> {
   use(path: string | MiddlewareHandler<Context>, ...middlewares: MiddlewareHandler<Context>[]): this;
-  get<P extends string, R>(path: P, handler: (ctx: Context<Env, P>, next: NextFunction) => R | Promise<R>): ServeXRouter<S & { [K in P]: { GET: R } }>;
-  get<P extends string, R>(path: P, m1: Handler, handler: (ctx: Context<Env, P>, next: NextFunction) => R | Promise<R>): ServeXRouter<S & { [K in P]: { GET: R } }>;
-  get<P extends string, R>(path: P, m1: Handler, m2: Handler, handler: (ctx: Context<Env, P>, next: NextFunction) => R | Promise<R>): ServeXRouter<S & { [K in P]: { GET: R } }>;
-  get<P extends string, R>(path: P, ...handlers: Handler[]): ServeXRouter<S & { [K in P]: { GET: R } }>;
+  get<P extends string, R>(path: P, handler: (ctx: Context<E, P>, next: NextFunction) => R | Promise<R>): ServeXRouter<E, S & { [K in P]: { GET: R } }>;
+  get<P extends string, R>(path: P, m1: Handler, handler: (ctx: Context<E, P>, next: NextFunction) => R | Promise<R>): ServeXRouter<E, S & { [K in P]: { GET: R } }>;
+  get<P extends string, R>(path: P, m1: Handler, m2: Handler, handler: (ctx: Context<E, P>, next: NextFunction) => R | Promise<R>): ServeXRouter<E, S & { [K in P]: { GET: R } }>;
+  get<P extends string, R>(path: P, ...handlers: Handler[]): ServeXRouter<E, S & { [K in P]: { GET: R } }>;
 
-  post<P extends string, R>(path: P, handler: (ctx: Context<Env, P>, next: NextFunction) => R | Promise<R>): ServeXRouter<S & { [K in P]: { POST: R } }>;
-  post<P extends string, R>(path: P, m1: Handler, handler: (ctx: Context<Env, P>, next: NextFunction) => R | Promise<R>): ServeXRouter<S & { [K in P]: { POST: R } }>;
-  post<P extends string, R>(path: P, m1: Handler, m2: Handler, handler: (ctx: Context<Env, P>, next: NextFunction) => R | Promise<R>): ServeXRouter<S & { [K in P]: { POST: R } }>;
-  post<P extends string, R>(path: P, ...handlers: Handler[]): ServeXRouter<S & { [K in P]: { POST: R } }>;
+  post<P extends string, R>(path: P, handler: (ctx: Context<E, P>, next: NextFunction) => R | Promise<R>): ServeXRouter<E, S & { [K in P]: { POST: R } }>;
+  post<P extends string, R>(path: P, m1: Handler, handler: (ctx: Context<E, P>, next: NextFunction) => R | Promise<R>): ServeXRouter<E, S & { [K in P]: { POST: R } }>;
+  post<P extends string, R>(path: P, m1: Handler, m2: Handler, handler: (ctx: Context<E, P>, next: NextFunction) => R | Promise<R>): ServeXRouter<E, S & { [K in P]: { POST: R } }>;
+  post<P extends string, R>(path: P, ...handlers: Handler[]): ServeXRouter<E, S & { [K in P]: { POST: R } }>;
 
-  put<P extends string, R>(path: P, handler: (ctx: Context<Env, P>, next: NextFunction) => R | Promise<R>): ServeXRouter<S & { [K in P]: { PUT: R } }>;
-  put<P extends string, R>(path: P, m1: Handler, handler: (ctx: Context<Env, P>, next: NextFunction) => R | Promise<R>): ServeXRouter<S & { [K in P]: { PUT: R } }>;
-  put<P extends string, R>(path: P, ...handlers: Handler[]): ServeXRouter<S & { [K in P]: { PUT: R } }>;
+  put<P extends string, R>(path: P, handler: (ctx: Context<E, P>, next: NextFunction) => R | Promise<R>): ServeXRouter<E, S & { [K in P]: { PUT: R } }>;
+  put<P extends string, R>(path: P, m1: Handler, handler: (ctx: Context<E, P>, next: NextFunction) => R | Promise<R>): ServeXRouter<E, S & { [K in P]: { PUT: R } }>;
+  put<P extends string, R>(path: P, ...handlers: Handler[]): ServeXRouter<E, S & { [K in P]: { PUT: R } }>;
 
-  delete<P extends string, R>(path: P, handler: (ctx: Context<Env, P>, next: NextFunction) => R | Promise<R>): ServeXRouter<S & { [K in P]: { DELETE: R } }>;
-  delete<P extends string, R>(path: P, m1: Handler, handler: (ctx: Context<Env, P>, next: NextFunction) => R | Promise<R>): ServeXRouter<S & { [K in P]: { DELETE: R } }>;
-  delete<P extends string, R>(path: P, ...handlers: Handler[]): ServeXRouter<S & { [K in P]: { DELETE: R } }>;
+  delete<P extends string, R>(path: P, handler: (ctx: Context<E, P>, next: NextFunction) => R | Promise<R>): ServeXRouter<E, S & { [K in P]: { DELETE: R } }>;
+  delete<P extends string, R>(path: P, m1: Handler, handler: (ctx: Context<E, P>, next: NextFunction) => R | Promise<R>): ServeXRouter<E, S & { [K in P]: { DELETE: R } }>;
+  delete<P extends string, R>(path: P, ...handlers: Handler[]): ServeXRouter<E, S & { [K in P]: { DELETE: R } }>;
 
-  patch<P extends string, R>(path: P, handler: (ctx: Context<Env, P>, next: NextFunction) => R | Promise<R>): ServeXRouter<S & { [K in P]: { PATCH: R } }>;
-  patch<P extends string, R>(path: P, m1: Handler, handler: (ctx: Context<Env, P>, next: NextFunction) => R | Promise<R>): ServeXRouter<S & { [K in P]: { PATCH: R } }>;
-  patch<P extends string, R>(path: P, ...handlers: Handler[]): ServeXRouter<S & { [K in P]: { PATCH: R } }>;
+  patch<P extends string, R>(path: P, handler: (ctx: Context<E, P>, next: NextFunction) => R | Promise<R>): ServeXRouter<E, S & { [K in P]: { PATCH: R } }>;
+  patch<P extends string, R>(path: P, m1: Handler, handler: (ctx: Context<E, P>, next: NextFunction) => R | Promise<R>): ServeXRouter<E, S & { [K in P]: { PATCH: R } }>;
+  patch<P extends string, R>(path: P, ...handlers: Handler[]): ServeXRouter<E, S & { [K in P]: { PATCH: R } }>;
 
-  options<P extends string, R>(path: P, handler: (ctx: Context<Env, P>, next: NextFunction) => R | Promise<R>): ServeXRouter<S & { [K in P]: { OPTIONS: R } }>;
-  options<P extends string, R>(path: P, m1: Handler, handler: (ctx: Context<Env, P>, next: NextFunction) => R | Promise<R>): ServeXRouter<S & { [K in P]: { OPTIONS: R } }>;
-  options<P extends string, R>(path: P, ...handlers: Handler[]): ServeXRouter<S & { [K in P]: { OPTIONS: R } }>;
+  options<P extends string, R>(path: P, handler: (ctx: Context<E, P>, next: NextFunction) => R | Promise<R>): ServeXRouter<E, S & { [K in P]: { OPTIONS: R } }>;
+  options<P extends string, R>(path: P, m1: Handler, handler: (ctx: Context<E, P>, next: NextFunction) => R | Promise<R>): ServeXRouter<E, S & { [K in P]: { OPTIONS: R } }>;
+  options<P extends string, R>(path: P, ...handlers: Handler[]): ServeXRouter<E, S & { [K in P]: { OPTIONS: R } }>;
 
-  head<P extends string, R>(path: P, handler: (ctx: Context<Env, P>, next: NextFunction) => R | Promise<R>): ServeXRouter<S & { [K in P]: { HEAD: R } }>;
-  head<P extends string, R>(path: P, m1: Handler, handler: (ctx: Context<Env, P>, next: NextFunction) => R | Promise<R>): ServeXRouter<S & { [K in P]: { HEAD: R } }>;
-  head<P extends string, R>(path: P, ...handlers: Handler[]): ServeXRouter<S & { [K in P]: { HEAD: R } }>;
+  head<P extends string, R>(path: P, handler: (ctx: Context<E, P>, next: NextFunction) => R | Promise<R>): ServeXRouter<E, S & { [K in P]: { HEAD: R } }>;
+  head<P extends string, R>(path: P, m1: Handler, handler: (ctx: Context<E, P>, next: NextFunction) => R | Promise<R>): ServeXRouter<E, S & { [K in P]: { HEAD: R } }>;
+  head<P extends string, R>(path: P, ...handlers: Handler[]): ServeXRouter<E, S & { [K in P]: { HEAD: R } }>;
 
-  all<P extends string, R>(path: P, handler: (ctx: Context<Env, P>, next: NextFunction) => R | Promise<R>): ServeXRouter<S & { [K in P]: { ALL: R } }>;
-  all<P extends string, R>(path: P, m1: Handler, handler: (ctx: Context<Env, P>, next: NextFunction) => R | Promise<R>): ServeXRouter<S & { [K in P]: { ALL: R } }>;
-  all<P extends string, R>(path: P, ...handlers: Handler[]): ServeXRouter<S & { [K in P]: { ALL: R } }>;
-  route<P extends string, ChildSchema = {}>(path: P, fn: (r: ServeXRouter) => ServeXRouter<ChildSchema> | void): ServeXRouter<S & { [K in P]: ChildSchema }>;
+  all<P extends string, R>(path: P, handler: (ctx: Context<E, P>, next: NextFunction) => R | Promise<R>): ServeXRouter<E, S & { [K in P]: { ALL: R } }>;
+  all<P extends string, R>(path: P, m1: Handler, handler: (ctx: Context<E, P>, next: NextFunction) => R | Promise<R>): ServeXRouter<E, S & { [K in P]: { ALL: R } }>;
+  all<P extends string, R>(path: P, ...handlers: Handler[]): ServeXRouter<E, S & { [K in P]: { ALL: R } }>;
+  route<P extends string, ChildSchema = {}>(path: P, fn: (r: ServeXRouter<E>) => ServeXRouter<E, ChildSchema> | void): ServeXRouter<E, S & { [K in P]: ChildSchema }>;
 }
 
 // http methods

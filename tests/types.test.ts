@@ -4,7 +4,7 @@ import type { TypedResponse, ServeXRouter } from "../src/types";
 import type { Expect, Equal } from "type-testing";
 
 // Helper: extract the schema `S` from a ServeXRouter<S>
-type InferSchema<T> = T extends ServeXRouter<infer S> ? S : never;
+type InferSchema<T> = T extends ServeXRouter<any, infer S> ? S : never;
 
 // ─── 1. Basic Type Schema Extraction ─────────────────────────────────────────
 
