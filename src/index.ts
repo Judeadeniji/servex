@@ -19,6 +19,8 @@ import {
 export class ServeXRequest extends Request {}
 
 
+// Pre-allocated methods array for 405 detection (avoids allocation per 404)
+const ALL_METHODS: Method[] = ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"];
 
 async function baseFetch(
   scope: Scope<any[], ServerRoute[]>,
@@ -27,75 +29,125 @@ async function baseFetch(
   pathname: string,
   middlewares: Handler<Context>[],
   hooks: import("./types").Hooks
-) {
+): Promise<Response> {
   const context = new Context(request, Bun.env as Record<string, string | undefined>, { params: {} });
   scope.context = context;
   setScope(scope);
 
-    // 1. onRequest Hook
-    for (let i = 0; i < hooks.onRequest.length; i++) {
-      const res = await hooks.onRequest[i](context);
-      if (res instanceof Response) return res;
-    }
+  let response: Response | undefined;
 
-    // Match using method and pathname separately
-    let route = scope.router.match(method, pathname);
-  if (!route || !route.matched) {
-    // Check if the path exists with a different method for 405
-    const methods: Method[] = ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"];
-    let is405 = false;
-    for (const m of methods) {
-      if (m !== method) {
-        const anyMethodRoute = scope.router.match(m, pathname);
-        if (anyMethodRoute && anyMethodRoute.matched) {
-            is405 = true;
-            break;
-        }
+  try {
+    // ── 1. onRequest ──────────────────────────────────────────────────────────
+    const onReqLen = hooks.onRequest.length;
+    if (onReqLen > 0) {
+      for (let i = 0; i < onReqLen; i++) {
+        const r = await hooks.onRequest[i](context);
+        if (r instanceof Response) return r; // short-circuit before routing
       }
     }
-    if (is405) {
-      return new Response("Method Not Allowed", { status: 405 });
-    } else {
-      let response = await executeHandlers(context, middlewares);
-      if (!response) response = new Response("Not Found", { status: 404 });
+
+    // ── Route matching ────────────────────────────────────────────────────────
+    const route = scope.router.match(method, pathname);
+
+    if (!route || !route.matched) {
+      // 405 detection: only iterate other methods if route exists for any of them
+      let is405 = false;
+      for (let i = 0; i < ALL_METHODS.length; i++) {
+        if (ALL_METHODS[i] !== method) {
+          const r = scope.router.match(ALL_METHODS[i], pathname);
+          if (r && r.matched) { is405 = true; break; }
+        }
+      }
       
-      // onAfterHandle for 404/405
-      for (let i = 0; i < hooks.onAfterHandle.length; i++) {
-        const afterRes = await hooks.onAfterHandle[i](context, response);
-        if (afterRes instanceof Response) response = afterRes;
+      if (is405) {
+        return new Response("Method Not Allowed", { status: 405 });
+      }
+
+      // 404 path: execute global middlewares
+      response = await executeHandlers(context, middlewares);
+      if (!response) response = new Response("Not Found", { status: 404 });
+
+      // 3. onAfterHandle for 404
+      const onAfterLen = hooks.onAfterHandle.length;
+      if (onAfterLen > 0) {
+        for (let i = 0; i < onAfterLen; i++) {
+          const r = await hooks.onAfterHandle[i](context, response);
+          if (r instanceof Response) response = r;
+        }
       }
       return response;
     }
+
+    context.setParams(route.params);
+
+    // ── 2. onBeforeHandle ─────────────────────────────────────────────────────
+    const onBeforeLen = hooks.onBeforeHandle.length;
+    if (onBeforeLen > 0) {
+      for (let i = 0; i < onBeforeLen; i++) {
+        const r = await hooks.onBeforeHandle[i](context);
+        if (r instanceof Response) return r;
+      }
+    }
+
+    // ── Execute handler chain ─────────────────────────────────────────────────
+    // Build a flat combined array only once; avoid concat() allocation by
+    // pre-calculating the total length and filling manually.
+    const routeMids = route.middlewares;
+    const routeData = route.data;
+    const rmLen = routeMids.length;
+    const mwLen = middlewares.length;
+    const rdLen = routeData.length;
+    const total = rmLen + mwLen + rdLen;
+
+    let handlers: Handler<Context>[];
+    if (total === rdLen) {
+      // Fast path: no route-level middlewares and no global middlewares
+      handlers = routeData;
+    } else {
+      handlers = new Array(total);
+      let h = 0;
+      for (let i = 0; i < rmLen; i++) handlers[h++] = routeMids[i];
+      for (let i = 0; i < mwLen; i++) handlers[h++] = middlewares[i];
+      for (let i = 0; i < rdLen; i++) handlers[h++] = routeData[i];
+    }
+
+    response = await executeHandlers(context, handlers);
+    if (!response) response = new Response("Not Found", { status: 404 });
+
+    // ── 3. onAfterHandle ──────────────────────────────────────────────────────
+    const onAfterLen = hooks.onAfterHandle.length;
+    if (onAfterLen > 0) {
+      for (let i = 0; i < onAfterLen; i++) {
+        const r = await hooks.onAfterHandle[i](context, response);
+        if (r instanceof Response) response = r;
+      }
+    }
+
+  } catch (error) {
+    // ── onError hooks ─────────────────────────────────────────────────────────
+    const onErrLen = hooks.onError.length;
+    if (onErrLen > 0) {
+      for (let i = 0; i < onErrLen; i++) {
+        const r = await hooks.onError[i](error as Error, context);
+        if (r instanceof Response) { response = r; break; }
+      }
+    }
+    if (!response) {
+      console.error("Unhandled error:", error);
+      response = new Response("Internal Server Error", { status: 500 });
+    }
+  } finally {
+    // ── onResponse hooks ─────────────────────────────────────────────────────
+    const onResLen = hooks.onResponse.length;
+    if (onResLen > 0) {
+      for (let i = 0; i < onResLen; i++) {
+        await hooks.onResponse[i](context);
+      }
+    }
+    disposeScope();
   }
 
-  context.setParams(route.params); // Update params for matched route
-
-  // 2. onBeforeHandle Hook
-  for (let i = 0; i < hooks.onBeforeHandle.length; i++) {
-    const res = await hooks.onBeforeHandle[i](context);
-    if (res instanceof Response) return res;
-  }
-
-  const routeMids = route.middlewares;
-  const routeData = route.data;
-  const totalHandlers = routeMids.length + middlewares.length + routeData.length;
-  const handlers = new Array(totalHandlers);
-  
-  let hIdx = 0;
-  for (let i = 0; i < routeMids.length; i++) handlers[hIdx++] = routeMids[i];
-  for (let i = 0; i < middlewares.length; i++) handlers[hIdx++] = middlewares[i];
-  for (let i = 0; i < routeData.length; i++) handlers[hIdx++] = routeData[i];
-
-  let response = await executeHandlers(context, handlers);
-  if (!response) response = new Response("Not Found", { status: 404 });
-
-  // 3. onAfterHandle Hook
-  for (let i = 0; i < hooks.onAfterHandle.length; i++) {
-    const afterRes = await hooks.onAfterHandle[i](context, response);
-    if (afterRes instanceof Response) response = afterRes;
-  }
-
-  return response;
+  return response!;
 }
 
 export class ServeXRouterImpl<S = {}> implements ServeXRouter<S> {
@@ -176,35 +228,7 @@ export class ServeXApp<S = {}> extends ServeXRouterImpl<S> {
         }
         const method = request.method as Method;
 
-        let response: Response;
-        try {
-            response = await baseFetch(this.scope, request, method, pathname, this.middlewares, this.hooks);
-        } catch (error) {
-            let handled = false;
-            if (this.scope.context) {
-              for (let i = 0; i < this.hooks.onError.length; i++) {
-                  const errRes = await this.hooks.onError[i](error as Error, this.scope.context);
-                  if (errRes instanceof Response) {
-                      response = errRes;
-                      handled = true;
-                      break;
-                  }
-              }
-            }
-            if (!handled) {
-                console.error("Error handling request:", error);
-                response = new Response("Internal Server Error", { status: 500 });
-            }
-        } finally {
-            if (this.scope.context && response!) {
-              for (let i = 0; i < this.hooks.onResponse.length; i++) {
-                // Ignore return values on onResponse
-                await this.hooks.onResponse[i](this.scope.context);
-              }
-            }
-            disposeScope();
-        }
-        return response!;
+        return baseFetch(this.scope, request, method, pathname, this.middlewares, this.hooks);
     }
 
     async request(input: RequestInfo, init?: RequestInit): Promise<Response> {

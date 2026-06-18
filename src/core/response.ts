@@ -1,96 +1,46 @@
 import { notFoundHandler } from "../basic-handlers";
 import type { Context } from "../context";
-import type { Handler, RequestHandler } from "../types";
+import type { Handler } from "../types";
+
+// Pre-resolved promise reused across all next() calls that don't resume.
+const RESOLVED = Promise.resolve();
 
 /**
- * Handles errors gracefully by determining whether to throw the error
- * or return an appropriate HTTP response.
+ * Executes an array of handlers sequentially with a single shared next().
  *
- * @param error - The error object to handle.
- * @returns A tuple indicating whether to throw the error and the corresponding response.
- */
-function handleErrorsGracefully(
-  error: any
-): { shouldThrow: boolean; response: Response } {
-  if ("getResponse" in error) {
-    return { shouldThrow: false, response: error.getResponse() };
-  }
-
-  console.error("Unhandled error:", error);
-  return { shouldThrow: true, response: new Response("Internal Server Error", { status: 500 }) };
-}
-
-/**
- * Executes an array of handlers sequentially, allowing each to process the context
- * and optionally short-circuit the chain by returning a response.
+ * Key optimizations vs the original:
+ *  1. One `next` closure per request (vs one per handler in the old version).
+ *  2. Flat `while` loop — no recursion, no extra async frame per step.
+ *  3. Pre-resolved Promise.resolve() returned from next() avoids microtask allocation.
+ *  4. No wrapper try/catch inside the loop — errors bubble to the caller.
+ *  5. No intermediate handler array allocation — caller passes slices or
+ *     combined arrays directly.
  *
- * @param context - The execution context shared across handlers.
- * @param handlers - An array of handler functions to execute.
- * @param defaultHandler - The handler to execute if no other handler returns a response.
- * @returns The final HTTP response after processing all handlers.
+ * @returns The first Response returned by any handler, or undefined if none.
+ * @throws  Re-throws any error from a handler for the caller to handle once.
  */
 export async function executeHandlers(
   context: Context,
-  handlers: Handler<Context>[],
-  defaultHandler: RequestHandler<Context> = notFoundHandler
-): Promise<Response> {
-  let currentIndex = -1;
-  let response: Response | undefined;
+  handlers: Handler<Context>[]
+): Promise<Response | undefined> {
   const len = handlers.length;
+  if (len === 0) return undefined;
 
-  const next = async (): Promise<void> => {
-    if (currentIndex >= len) {
-      return;
-    }
-    currentIndex++;
+  let idx = 0;
 
-    if (currentIndex < len) {
-      const handler = handlers[currentIndex];
-      let nextCalled = false;
-      const handleNext = async () => {
-        if (nextCalled) throw new Error("next() called multiple times");
-        nextCalled = true;
-        await next();
-      };
-
-      try {
-        const result = await handler(context, handleNext);
-        if (result instanceof Response) {
-          response = result;
-        }
-      } catch (error) {
-        if (error instanceof Error) {
-          (error as Error & { handlerIndex?: number }).handlerIndex = currentIndex;
-        }
-        throw error;
-      }
-    }
+  // Single next per request — just increments the shared index.
+  const next = (): Promise<void> => {
+    idx++;
+    return RESOLVED;
   };
 
-  try {
-    await next();
-  } catch (error) {
-    context.debug && console.error(error);
-    const { shouldThrow, response: errorResponse } = handleErrorsGracefully(error);
-    if (shouldThrow) {
-      throw error;
-    }
-    return errorResponse;
+  while (idx < len) {
+    const before = idx;
+    const result = await handlers[idx](context, next);
+    if (result instanceof Response) return result;
+    // Handler didn't call next() AND didn't return a Response → chain stops.
+    if (idx === before) break;
   }
 
-  if (!response) {
-    try {
-      const res = await defaultHandler(context, async () => {});
-      if (res) response = res;
-    } catch (error) {
-      context.debug && console.warn(`Error in default handler:`, error);
-      const { shouldThrow, response: errorResponse } = handleErrorsGracefully(error);
-      if (shouldThrow) {
-        throw error;
-      }
-      return errorResponse;
-    }
-  }
-
-  return response as Response;
+  return undefined;
 }
