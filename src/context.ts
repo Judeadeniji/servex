@@ -1,9 +1,9 @@
-// ./context.ts
 import * as ck from "./cookie";
 import type { StatusCode } from "./http-status";
 import type { Env, HeaderRecord, JSONValue } from "./types";
 import type { ExtractUrl } from "./router/types";
 import { STATUS_CODES } from "node:http";
+import { background, withCancel, type Context as SignalContext } from "./core/signal";
 
 function parseHeaders(headers: Headers): HeaderRecord {
   const result: HeaderRecord = {};
@@ -38,12 +38,28 @@ export class Context<
   #status: StatusCode = 200;
   debug = false;
 
+  #signalCtx: SignalContext;
+
   constructor(request: Request, env: E["Bindings"], ctx: RequestContext) {
     this.#rawRequest = request;
     this.#env = env;
     this.#params = ctx.params;
     this.#query = ctx.query;
     this.#body = ctx.parsedBody;
+
+    const [signalCtx, cancel] = withCancel(background());
+    this.#signalCtx = signalCtx;
+    if (request.signal) {
+      request.signal.addEventListener("abort", () => cancel(), { once: true });
+    }
+  }
+
+  get signalCtx() {
+    return this.#signalCtx;
+  }
+
+  set signalCtx(ctx: SignalContext) {
+    this.#signalCtx = ctx;
   }
 
   setHeaders(headers: { [key: string]: string | string[] }) {
@@ -181,18 +197,21 @@ export class Context<
     status: StatusCode = 200,
     _headers: HeaderRecord = {}
   ): Response {
+    const preResponseHeaders = parseHeaders(this.#response.headers);
     const responseHeaders: HeadersInit = {
+      ...preResponseHeaders,
       "Content-Type": "text/plain; charset=UTF-8",
       ..._headers,
     };
 
     this.#status = status;
     const headers = new Headers(responseHeaders);
-    return new Response(text, {
+    this.#response = new Response(text, {
       status,
       headers,
       statusText: STATUS_CODES[status],
     });
+    return this.#response;
   }
 
   /**
@@ -206,18 +225,21 @@ export class Context<
     status: StatusCode = 200,
     _headers: HeaderRecord = {}
   ): Response {
+    const preResponseHeaders = parseHeaders(this.#response.headers);
     const responseHeaders: HeadersInit = {
+      ...preResponseHeaders,
       "Content-Type": "text/html; charset=UTF-8",
       ..._headers,
     };
 
     this.#status = status;
     const headers = new Headers(responseHeaders);
-    return new Response(html, {
+    this.#response = new Response(html, {
       status,
       headers,
       statusText: STATUS_CODES[status],
     });
+    return this.#response;
   }
 
   /**
@@ -226,13 +248,16 @@ export class Context<
    * @param status - Optional HTTP status code (default: 302).
    */
   redirect(location: string, status: StatusCode = 302): Response {
+    const preResponseHeaders = parseHeaders(this.#response.headers);
     this.#status = status;
-    return new Response(null, {
+    this.#response = new Response(null, {
       status,
       headers: {
+        ...preResponseHeaders,
         Location: location,
       },
     });
+    return this.#response;
   }
 
   /**

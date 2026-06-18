@@ -8,7 +8,7 @@ import {
   type Route,
   type SegmentType,
 } from "./base";
-import type { DynamicSegmentsRemoved, RouteMatch } from "./types";
+import type { DynamicSegmentsRemoved, RouteMatch, ExtractUrl } from "./types";
 import type { Context } from "../context";
 import type { MiddlewareHandler } from "../types";
 
@@ -189,6 +189,28 @@ export class RadixRouteTrie<Routes extends Route[]> implements IRouter<Routes> {
     return this;
   }
 
+  private buildMatchResult(
+    node: RadixSegmentNode,
+    method: HTTPMethod,
+    url: string,
+    matchedRoute: string,
+    params: ExtractUrl<Routes[number]["path"]>["params"] & Record<string, string>,
+    searchParams: string,
+    hash: string
+  ): MatchedRoute<Routes, boolean> {
+    return {
+      matched: true,
+      method,
+      route: url as Routes[number]["path"],
+      matched_route: matchedRoute,
+      params: params,
+      searchParams: new URLSearchParams(searchParams),
+      hash: hash || null,
+      data: node.data[method] as Routes[number]["data"],
+      middlewares: new Set(this.collectMiddlewares(node)),
+    };
+  }
+
   /**
    * Matches a given route against the Radix Tree.
    * @param method - The HTTP method.
@@ -202,7 +224,7 @@ export class RadixRouteTrie<Routes extends Route[]> implements IRouter<Routes> {
     const { path, searchParams, hash } = this.extractParams(url);
     const sanitizedPath = this.sanitizeRoute(path);
     const segments = sanitizedPath === "/" ? [""] : sanitizedPath.split("/");
-    const params: Record<string, string> = {};
+    const params = {} as ExtractUrl<Routes[number]["path"]>["params"] & Record<string, string>;
     let currentNode = this.root;
     let matchedRoute = "";
     let methodUpper = method.toUpperCase() as HTTPMethod;
@@ -226,17 +248,15 @@ export class RadixRouteTrie<Routes extends Route[]> implements IRouter<Routes> {
             const paramName =
               child.value.length > 1 ? child.value.slice(1) : String(i);
             params[paramName] = remainingSegments;
-            return {
-              matched: true,
-              method: method,
-              route: url,
-              matched_route: matchedRoute,
-              params: params as any,
-              searchParams: new URLSearchParams(searchParams),
-              hash: hash || null,
-              data: child.data[methodUpper],
-              middlewares: new Set(this.collectMiddlewares(child)),
-            };
+            return this.buildMatchResult(
+              child,
+              method,
+              url,
+              matchedRoute,
+              params,
+              searchParams,
+              hash
+            );
           }
           // Wildcard exists but doesn't have the required method
           continue;
@@ -266,17 +286,15 @@ export class RadixRouteTrie<Routes extends Route[]> implements IRouter<Routes> {
     }
 
     if (currentNode.isEndOfRoute && currentNode.data[methodUpper]) {
-      return {
-        matched: true,
-        method: method,
-        route: url,
-        matched_route: matchedRoute,
-        params: params as any,
-        searchParams: new URLSearchParams(searchParams),
-        hash: hash || null,
-        data: currentNode.data[methodUpper],
-        middlewares: new Set(this.collectMiddlewares(currentNode)),
-      };
+      return this.buildMatchResult(
+        currentNode,
+        method,
+        url,
+        matchedRoute,
+        params,
+        searchParams,
+        hash
+      );
     }
 
     // Method not allowed for the matched route

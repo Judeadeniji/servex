@@ -127,6 +127,7 @@ export class RadixSegmentNode<T = unknown> {
   insertChild(segment: string, type: SegmentType = "static"): RadixSegmentNode {
     if (!this.children.has(segment)) {
       const child = new RadixSegmentNode(segment, type);
+      child.previousRadixSegment = this;
       this.children.set(segment, child);
     }
     return this.children.get(segment)!;

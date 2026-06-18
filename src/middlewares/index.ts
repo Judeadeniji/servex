@@ -1,12 +1,10 @@
-// middleware.ts
-
 import { executeHandlers } from "../core/response";
-import type { Middleware, Context, NextFunction, Handler } from "../types";
+import type { MiddlewareHandler, Context, NextFunction, Handler } from "../types";
 
 export class MiddlewareManager<T extends Context> {
-  private middlewares: Middleware<T>[] = [];
+  private middlewares: MiddlewareHandler<T>[] = [];
 
-  use(middleware: Middleware<T>) {
+  use(middleware: MiddlewareHandler<T>) {
     this.middlewares.push(middleware);
   }
 

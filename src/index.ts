@@ -2,9 +2,10 @@ import type {
   Handler,
   Method,
   MiddlewareHandler,
-  Route,
   ServerOptions,
   ServerRoute,
+  ServeXRouter,
+  Env,
 } from "./types";
 import { Context } from "./context";
 import { parseRequestBody } from "./core/request";
@@ -18,21 +19,7 @@ import {
 
 export class ServeXRequest extends Request {}
 
-function processRoutesAndChildren(
-  routes: Route<any, any>[], // I don't need type safety here
-  scope: Scope<ServerRoute[], ServerRoute[]>,
-  options: RouterAdapterOptions<ServerRoute[]>,
-  parent = ""
-) {
-  for (const route of routes) {
-    const { children, path } = route(scope, parent);
-    const childScope = createScope(new RouterAdapter<ServerRoute[]>(options));
-    childScope.parent = scope;
-    if (children) {
-      processRoutesAndChildren(children, childScope, path);
-    }
-  }
-}
+
 
 async function baseFetch(
   scope: Scope<any[], ServerRoute[]>,
@@ -45,22 +32,34 @@ async function baseFetch(
   let route = scope.router.match(method, pathname);
   if (!route || !route.matched) {
     // Check if the path exists with a different method for 405
-    const anyMethodRoute = scope.router.match("ALL", pathname);
-    if (anyMethodRoute && anyMethodRoute.matched) {
-      route = anyMethodRoute;
-      // return new Response("Method Not Allowed", { status: 405 });
-    } else return await executeHandlers(new Context(request, process.env, {
-      parsedBody: await parseRequestBody(request.clone()),
-      params: {},
-      query: new URLSearchParams(),
-    }), middlewares);
+    const methods: Method[] = ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"];
+    let is405 = false;
+    for (const m of methods) {
+      if (m !== method) {
+        const anyMethodRoute = scope.router.match(m, pathname);
+        if (anyMethodRoute && anyMethodRoute.matched) {
+            is405 = true;
+            break;
+        }
+      }
+    }
+    if (is405) {
+      return new Response("Method Not Allowed", { status: 405 });
+    } else {
+      const response = await executeHandlers(new Context(request, process.env, {
+        parsedBody: await parseRequestBody(request.clone()),
+        params: {},
+        query: new URL(request.url).searchParams,
+      }), middlewares);
+      return response || new Response("Not Found", { status: 404 });
+    }
   }
 
   const parsedBody = await parseRequestBody(request.clone());
   const context = new Context(request, process.env, {
     parsedBody,
     params: route.params,
-    query: route.searchParams,
+    query: new URL(request.url).searchParams,
   });
 
   scope.context = context;
@@ -72,58 +71,81 @@ async function baseFetch(
     ...route.data,
   ]);
 
-  // If no handler returned a response, return 204 No Content
-  return response || new Response(null, { status: 204 });
+  // If no handler returned a response, return 404 Not Found
+  return response || new Response("Not Found", { status: 404 });
 }
 
-export function createServer(options: ServerOptions<any, any>) {
-  const { router = RouterType.RADIX, routes, middlewares = [] } = options;
+export class ServeXRouterImpl implements ServeXRouter {
+    constructor(protected routerAdapter: RouterAdapter<ServerRoute[]>) {}
+
+    use(path: string | MiddlewareHandler<Context>, ...middlewares: MiddlewareHandler<Context>[]) {
+        if (typeof path === "string") {
+            this.routerAdapter.pushMiddlewares(path, middlewares);
+            return this;
+        }
+        this.routerAdapter.pushMiddlewares("*", [path, ...middlewares]);
+        return this;
+    }
+
+    private add(method: Method, path: string, handlers: Handler<Context>[]) {
+        this.routerAdapter.addRoute({
+            method,
+            path,
+            data: handlers
+        });
+        return this;
+    }
+
+    get<P extends string>(path: P, ...handlers: Handler<Context<Env, P>>[]) { return this.add("GET", path, handlers as any); }
+    post<P extends string>(path: P, ...handlers: Handler<Context<Env, P>>[]) { return this.add("POST", path, handlers as any); }
+    put<P extends string>(path: P, ...handlers: Handler<Context<Env, P>>[]) { return this.add("PUT", path, handlers as any); }
+    delete<P extends string>(path: P, ...handlers: Handler<Context<Env, P>>[]) { return this.add("DELETE", path, handlers as any); }
+    patch<P extends string>(path: P, ...handlers: Handler<Context<Env, P>>[]) { return this.add("PATCH", path, handlers as any); }
+    options<P extends string>(path: P, ...handlers: Handler<Context<Env, P>>[]) { return this.add("OPTIONS", path, handlers as any); }
+    head<P extends string>(path: P, ...handlers: Handler<Context<Env, P>>[]) { return this.add("HEAD", path, handlers as any); }
+    all<P extends string>(path: P, ...handlers: Handler<Context<Env, P>>[]) { return this.add("ALL", path, handlers as any); }
+
+    route(path: string, fn: (r: ServeXRouter) => void) {
+        const childRouter = new RouterAdapter<ServerRoute[]>({ type: RouterType.RADIX });
+        const childServeXRouter = new ServeXRouterImpl(childRouter);
+        fn(childServeXRouter);
+        this.routerAdapter.addSubTrie(path, childRouter as any);
+        return this;
+    }
+}
+
+export class ServeXApp extends ServeXRouterImpl {
+    constructor(private scope: Scope<ServerRoute[], ServerRoute[]>, private middlewares: Handler<Context>[]) {
+        super(scope.router as RouterAdapter<ServerRoute[]>);
+    }
+
+    async fetch(request: Request): Promise<Response> {
+        const url = new URL(request.url);
+        const method = request.method.toUpperCase() as Method;
+        const pathname = url.pathname;
+
+        try {
+            return await baseFetch(this.scope, request, method, pathname, this.middlewares);
+        } catch (error) {
+            console.error("Error handling request:", error);
+            return new Response("Internal Server Error", { status: 500 });
+        } finally {
+            disposeScope();
+        }
+    }
+
+    async request(input: RequestInfo, init?: RequestInit): Promise<Response> {
+        return this.fetch(new ServeXRequest(input, init));
+    }
+}
+
+export function createServer(options: ServerOptions<any, any> = {}) {
+  const { router = RouterType.RADIX, middlewares = [] } = options;
   const thisScope = createScope(
     new RouterAdapter({
       type: router,
     })
   ) as Scope<ServerRoute[], ServerRoute[]>;
 
-  processRoutesAndChildren(routes, thisScope, {
-    type: router,
-  });
-
-  console.log(thisScope.router.routes.map((r) => `${r.method} ${r.path}`));
-
-  return {
-    async fetch(request: Request): Promise<Response> {
-      const url = new URL(request.url);
-      const method = request.method.toUpperCase() as Method;
-      const pathname = url.pathname;
-
-      try {
-        return baseFetch.call(this, thisScope, request, method, pathname, middlewares);
-      } catch (error) {
-        console.error("Error handling request:", error);
-        return new Response("Internal Server Error", { status: 500 });
-      } finally {
-        disposeScope();
-      }
-    },
-
-    async request(input: RequestInfo, init?: RequestInit): Promise<Response> {
-      return this.fetch(new ServeXRequest(input, init));
-    },
-
-    use(
-      path: string | MiddlewareHandler<Context>,
-      ...middlewares: MiddlewareHandler<Context>[]
-    ) {
-      const router = thisScope.router;
-      if (typeof path === "string") {
-        router.pushMiddlewares(path, middlewares);
-        return this;
-      }
-      const handlers = [path, ...middlewares];
-      // Add middleware to all routes
-      router.pushMiddlewares("*", handlers);
-
-      return this;
-    },
-  };
+  return new ServeXApp(thisScope, middlewares);
 }

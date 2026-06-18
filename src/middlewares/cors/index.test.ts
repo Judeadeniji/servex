@@ -1,29 +1,11 @@
 import { describe, it, expect } from "bun:test";
 import { createServer } from "../..";
 import { RouterType } from "../../router/adapter";
-import { route } from "../../router";
 import { cors } from ".";
 
-
 describe("CORS via middleware", () => {
-  const genRoute = route("GET /api/abc", async (c) => {
-    return c.json({ success: true });
-  }, {
-    middlewares: [
-      cors({
-        origin: "*",
-        exposeHeaders: ["X-Pam"]
-      })
-    ]
-  });
-
-  const api2Route = route("GET /api2/abc", async (c) => {
-    return c.json({ success: true });
-  });
-
   const server = createServer({
     router: RouterType.RADIX,
-    routes: [genRoute, api2Route],
   });
 
   server.use(async (c, n) => {
@@ -36,6 +18,17 @@ describe("CORS via middleware", () => {
     console.log("Middleware 2");
     await n();
     console.log("Middleware 2 after");
+  });
+
+  server.get("/api/abc", cors({
+    origin: "*",
+    exposeHeaders: ["X-Pam"]
+  }), async (c) => {
+    return c.json({ success: true });
+  });
+
+  server.get("/api2/abc", async (c) => {
+    return c.json({ success: true });
   });
 
   it("should GET default", async () => {

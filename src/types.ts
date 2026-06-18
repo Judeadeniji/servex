@@ -19,15 +19,7 @@ export type ServerRoute = {
   data: Handler<Context>[];
 };
 
-export type Route<P extends string, P1 extends string> = <C extends Context<Env, P>>(
-  scope: Scope<ServerRoute[]>,
-  parent?: P1
-) => {
-  method: Method;
-  path: P;
-  handlers: Handler<C>[];
-  children?: Route<string, string>[]
-};
+
 
 export type Handler<C extends Context> = RequestHandler<C> | MiddlewareHandler<C>
 
@@ -45,8 +37,21 @@ export type MiddlewareHandler<C extends Context> = (
 
 export interface ServerOptions<P extends string = '', P1 extends string = ''> {
   router?: RouterType
-  routes: Route<P, P1>[];
+
   middlewares?: MiddlewareHandler<Context>[];
+}
+
+export interface ServeXRouter {
+  use(path: string | MiddlewareHandler<Context>, ...middlewares: MiddlewareHandler<Context>[]): this;
+  get<P extends string>(path: P, ...handlers: Handler<Context<Env, P>>[]): this;
+  post<P extends string>(path: P, ...handlers: Handler<Context<Env, P>>[]): this;
+  put<P extends string>(path: P, ...handlers: Handler<Context<Env, P>>[]): this;
+  delete<P extends string>(path: P, ...handlers: Handler<Context<Env, P>>[]): this;
+  patch<P extends string>(path: P, ...handlers: Handler<Context<Env, P>>[]): this;
+  options<P extends string>(path: P, ...handlers: Handler<Context<Env, P>>[]): this;
+  head<P extends string>(path: P, ...handlers: Handler<Context<Env, P>>[]): this;
+  all<P extends string>(path: P, ...handlers: Handler<Context<Env, P>>[]): this;
+  route(path: string, fn: (r: ServeXRouter) => void): this;
 }
 
 // http methods

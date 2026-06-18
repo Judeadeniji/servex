@@ -30,7 +30,11 @@ type PathParams<Path extends string> = Path extends `${string}:${infer Param}/${
   ? { [K in Param]: string } & PathParams<Rest>
   : Path extends `${string}:${infer Param}`
     ? { [K in Param]: string }
-    : {};
+    : Path extends `${string}*${infer Param}/${infer Rest}`
+      ? { [K in Param]: string } & PathParams<Rest>
+      : Path extends `${string}*${infer Param}`
+        ? { [K in Param]: string }
+        : {};
 
 // Extract query parameters
 type QueryParams<Query extends string> = Query extends `${infer Param}=${string}${infer Rest}`
