@@ -2,7 +2,7 @@ import { Context } from "./context";
 import type { StatusCode } from "./http-status";
 import type { RouterType } from "./router/adapter";
 import type { MergePaths } from "./router/types";
-import type { Scope } from "./scope";
+
 
 type Bindings = object;
 type Variables = object;
@@ -88,6 +88,7 @@ export interface ServeXRouter<E extends Env = Env, S = {}> {
   all<P extends string, R>(path: P, m1: Handler, handler: (ctx: Context<E, P>, next: NextFunction) => R | Promise<R>): ServeXRouter<E, S & { [K in P]: { ALL: R } }>;
   all<P extends string, R>(path: P, ...handlers: Handler[]): ServeXRouter<E, S & { [K in P]: { ALL: R } }>;
   route<P extends string, ChildSchema = {}>(path: P, fn: (r: ServeXRouter<E>) => ServeXRouter<E, ChildSchema> | void): ServeXRouter<E, S & { [K in P]: ChildSchema }>;
+  route<P extends string, ChildSchema = {}>(path: P, app: ServeXRouter<any, ChildSchema>): ServeXRouter<E, S & { [K in P]: ChildSchema }>;
 }
 
 // http methods

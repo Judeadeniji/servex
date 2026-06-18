@@ -23,6 +23,15 @@ describe("RouterAdapter", () => {
     expect(matched?.params.heroName).toBe("spiderman");
   });
   
+  it("should initialize with Sonic router and match routes correctly", () => {
+    const adapter = new RouterAdapter({ type: RouterType.SONIC });
+    adapter.addRoute({ method: "GET", path: "/test", data: "testData" });
+
+    const match = adapter.match("GET", "/test");
+    expect(match).not.toBeNull();
+    expect(match?.data).toBe("testData");
+  });
+
   it("should switch to Radix router and retain routes", () => {
     const router = new RouterAdapter({
       type: RouterType.TRIE,

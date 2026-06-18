@@ -174,6 +174,34 @@ export class Context<
   }
 
   /**
+   * Retrieves all values for a given query parameter or all query parameters as a record.
+   * @example
+   * // URL: /search?tags=action&tags=comedy
+   * // c.queries("tags") => ["action", "comedy"]
+   * // c.queries() => { tags: ["action", "comedy"] }
+   */
+  queries(): Record<string, string[]>;
+  queries(q: string): string[] | null;
+  queries(q?: string): string[] | null | Record<string, string[]> {
+    if (!this.#query) {
+      this.query(); // ensure parsed
+    }
+    if (q) {
+      const all = this.#query!.getAll(q);
+      return all.length > 0 ? all : null;
+    }
+    
+    const result: Record<string, string[]> = {};
+    for (const [key, value] of this.#query!.entries()) {
+      if (!result[key]) {
+        result[key] = [];
+      }
+      result[key].push(value);
+    }
+    return result;
+  }
+
+  /**
    * Parses and returns the request body as form data.
    */
   async formData(): Promise<FormData> {

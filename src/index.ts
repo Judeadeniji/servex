@@ -14,6 +14,9 @@ import {
   RouterType,
   type RouterAdapterOptions,
 } from "./router/adapter";
+import { compileHandlerChain } from "./compiler";
+
+// Remove global cache
 
 export class ServeXRequest extends Request {}
 
@@ -28,6 +31,7 @@ export async function baseFetch(
   pathname: string,
   middlewares: Handler<Context>[],
   hooks: import("./types").Hooks,
+  compiledCache: Map<string, (context: Context) => Promise<Response | undefined>>,
   envBindings?: any,
   executionCtx?: any
 ): Promise<Response> {
@@ -94,28 +98,23 @@ export async function baseFetch(
     }
 
     // ── Execute handler chain ─────────────────────────────────────────────────
-    // Build a flat combined array only once; avoid concat() allocation by
-    // pre-calculating the total length and filling manually.
     const routeMids = route.middlewares;
-    const routeData = route.data;
-    const rmLen = routeMids.length;
-    const mwLen = middlewares.length;
-    const rdLen = routeData.length;
-    const total = rmLen + mwLen + rdLen;
+    const routeData = route.data
 
-    let handlers: Handler<Context>[];
-    if (total === rdLen) {
-      // Fast path: no route-level middlewares and no global middlewares
-      handlers = routeData;
-    } else {
-      handlers = new Array(total);
-      let h = 0;
-      for (let i = 0; i < rmLen; i++) handlers[h++] = routeMids[i];
-      for (let i = 0; i < mwLen; i++) handlers[h++] = middlewares[i];
-      for (let i = 0; i < rdLen; i++) handlers[h++] = routeData[i];
+    let result: Response | undefined = undefined;
+
+    // ── 3. Execute handlers ───────────────────────────────────────────────────
+    const cacheKey = `${method}:${route.matched_route}`;
+    let executor = compiledCache.get(cacheKey);
+    
+    if (!executor) {
+      const handlers = [...middlewares, ...routeMids, ...routeData];
+      executor = compileHandlerChain(handlers);
+      compiledCache.set(cacheKey, executor!);
     }
 
-    response = await executeHandlers(context, handlers);
+    result = await executor!(context);
+    response = result;
     if (!response) response = new Response("Not Found", { status: 404 });
 
     // ── 3. onAfterHandle ──────────────────────────────────────────────────────
@@ -202,10 +201,15 @@ export class ServeXRouterImpl<E extends Env = Env, S = {}> implements ServeXRout
     head(path: string, ...handlers: any[]) { return this.add("HEAD", path, handlers); }
     all(path: string, ...handlers: any[]) { return this.add("ALL", path, handlers); }
 
-    route(path: string, fn: any) {
-        const childRouter = new RouterAdapter<ServerRoute[]>({ type: RouterType.RADIX });
+    route(path: string, fnOrApp: any) {
+        if (fnOrApp instanceof ServeXRouterImpl) {
+            this.routerAdapter.addSubTrie(path, fnOrApp.routerAdapter);
+            return this as any;
+        }
+
+        const childRouter = new RouterAdapter<ServerRoute[]>({ type: this.routerAdapter.type });
         const childServeXRouter = new ServeXRouterImpl(childRouter);
-        fn(childServeXRouter);
+        fnOrApp(childServeXRouter);
         this.routerAdapter.addSubTrie(path, childRouter);
         return this as any;
     }
@@ -219,6 +223,7 @@ export class ServeXApp<E extends Env = Env, S = {}> extends ServeXRouterImpl<E, 
         onError: [],
         onResponse: []
     };
+    public compiledCache = new Map<string, (context: Context) => Promise<Response | undefined>>();
 
     constructor(router: RouterAdapter<ServerRoute[]>, private middlewares: Handler<Context>[]) {
         super(router);
@@ -250,7 +255,7 @@ export class ServeXApp<E extends Env = Env, S = {}> extends ServeXRouterImpl<E, 
         }
         const method = request.method as Method;
 
-        return baseFetch(this.routerAdapter, request, method, pathname, this.middlewares, this.hooks, env, executionCtx);
+        return baseFetch(this.routerAdapter, request, method, pathname, this.middlewares, this.hooks, this.compiledCache, env, executionCtx);
     }
 
     async request(input: RequestInfo, init?: RequestInit): Promise<Response> {
@@ -259,7 +264,7 @@ export class ServeXApp<E extends Env = Env, S = {}> extends ServeXRouterImpl<E, 
 }
 
 export function createServer<E extends Env = Env>(options: ServerOptions<string, string> = {}) {
-  const { router = RouterType.RADIX, middlewares = [] } = options;
+  const { router = RouterType.SONIC, middlewares = [] } = options;
   const routerAdapter = new RouterAdapter<ServerRoute[]>({
     type: router,
   });

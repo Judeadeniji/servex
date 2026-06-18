@@ -30,6 +30,7 @@ async function runBenchmarks() {
   // 1. ROUTER MATCHING
   const radixRouter = new RouterAdapter({ type: RouterType.RADIX });
   const trieRouter = new RouterAdapter({ type: RouterType.TRIE });
+  const sonicRouter = new RouterAdapter({ type: RouterType.SONIC });
   
   radixRouter.addRoute({ method: "GET", path: "/static/path/to/resource", data: [] });
   radixRouter.addRoute({ method: "GET", path: "/dynamic/path/:id", data: [] });
@@ -39,11 +40,18 @@ async function runBenchmarks() {
   trieRouter.addRoute({ method: "GET", path: "/dynamic/path/:id", data: [] });
   trieRouter.addRoute({ method: "GET", path: "/wildcard/*path", data: [] });
 
+  sonicRouter.addRoute({ method: "GET", path: "/static/path/to/resource", data: [] });
+  sonicRouter.addRoute({ method: "GET", path: "/dynamic/path/:id", data: [] });
+  sonicRouter.addRoute({ method: "GET", path: "/wildcard/*path", data: [] });
+
   await benchmark("RadixRouter: Static Match", () => {
     radixRouter.match("GET", "/static/path/to/resource");
   });
   await benchmark("TrieRouter: Static Match", () => {
     trieRouter.match("GET", "/static/path/to/resource");
+  });
+  await benchmark("SonicRouter: Static Match", () => {
+    sonicRouter.match("GET", "/static/path/to/resource");
   });
   await benchmark("RadixRouter: Dynamic Match", () => {
     radixRouter.match("GET", "/dynamic/path/12345");
@@ -51,8 +59,14 @@ async function runBenchmarks() {
   await benchmark("TrieRouter: Dynamic Match", () => {
     trieRouter.match("GET", "/dynamic/path/12345");
   });
+  await benchmark("SonicRouter: Dynamic Match", () => {
+    sonicRouter.match("GET", "/dynamic/path/12345");
+  });
   await benchmark("RadixRouter: Wildcard Match", () => {
     radixRouter.match("GET", "/wildcard/nested/folder/file.txt");
+  });
+  await benchmark("SonicRouter: Wildcard Match", () => {
+    sonicRouter.match("GET", "/wildcard/nested/folder/file.txt");
   });
 
   // 2. MIDDLEWARE CHAINING
@@ -103,6 +117,11 @@ async function runBenchmarks() {
   const ctxInstance = new Context(ctxReq, {}, { params: {} });
   await benchmark("Context: Response Creation (JSON)", () => {
     ctxInstance.json({ test: true }, 200, { "X-Test": "yes" });
+  }, 10_000);
+
+  await benchmark("Context: set/get State", () => {
+    ctxInstance.set("userId", 123);
+    ctxInstance.get("userId");
   }, 10_000);
 
   // 4. HOOKS
@@ -182,6 +201,16 @@ async function runBenchmarks() {
   errorHookApp.get("/", (_c) => { throw new Error("boom"); });
   await benchmark("Hooks: onError (throw + catch)", async () => {
     await errorHookApp.fetch(new Request("http://localhost/"));
+  }, 10_000);
+
+  // deferred tasks
+  const deferApp = createServer();
+  deferApp.get("/", (c) => {
+    c.defer(() => { /* background task */ });
+    return c.text("ok");
+  });
+  await benchmark("Hooks: Deferred Tasks (1x)", async () => {
+    await deferApp.fetch(new Request("http://localhost/"));
   }, 10_000);
 
   console.log("=========================================================================");

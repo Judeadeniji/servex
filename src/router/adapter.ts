@@ -28,9 +28,11 @@ export interface RouterAdapterOptions<Routes extends Route[] = Route[]> {
  */
 export class RouterAdapter<Routes extends Route[] = Route[]> implements IRouter<Routes> {
   private router: IRouter<Routes>;
+  public readonly type: RouterType;
 
   constructor(options: RouterAdapterOptions<Routes>) {
     const { type, routes = [] } = options;
+    this.type = type;
 
     switch (type) {
       case RouterType.SONIC:

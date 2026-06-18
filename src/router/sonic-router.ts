@@ -33,6 +33,8 @@ export class SonicRouter<Routes extends Route[] = Route[]> implements IRouter<Ro
   
   private isDirty: Record<string, boolean> = {};
 
+  private pathMiddlewares: { path: string, middlewares: MiddlewareHandler<Context>[] }[] = [];
+
   constructor() {}
 
   get routes(): Route<Routes[number]["data"]>[] {
@@ -53,6 +55,12 @@ export class SonicRouter<Routes extends Route[] = Route[]> implements IRouter<Ro
       paramsKeys: [],
       middlewares: [],
     };
+
+    for (const pm of this.pathMiddlewares) {
+      if (pm.path === "*" || pm.path === "" || sanitizedPath.startsWith(pm.path)) {
+        node.middlewares.push(...pm.middlewares);
+      }
+    }
 
     if (isDynamic) {
       if (!this.dynamicRoutes[method]) this.dynamicRoutes[method] = [];
@@ -93,13 +101,13 @@ export class SonicRouter<Routes extends Route[] = Route[]> implements IRouter<Ro
       for (let j = 0; j < segments.length; j++) {
         const seg = segments[j];
         if (seg.startsWith(":")) {
-          pattern += "/([^/]+)";
+          pattern += (j === 0 ? "([^/]+)" : "/([^/]+)");
           paramsCount++;
         } else if (seg.startsWith("*")) {
-          pattern += "/(.*)";
+          pattern += (j === 0 ? "(.*)" : "/(.*)");
           paramsCount++;
         } else {
-          pattern += (seg === "" && j === 0 ? "" : "/" + seg);
+          pattern += (j === 0 ? seg : "/" + seg);
         }
       }
 
@@ -189,6 +197,8 @@ export class SonicRouter<Routes extends Route[] = Route[]> implements IRouter<Ro
 
   pushMiddlewares<C extends Context>(path: string, middlewares: MiddlewareHandler<C>[]): void {
     const sanitized = this.sanitizeRoute(path);
+    this.pathMiddlewares.push({ path: sanitized, middlewares: middlewares as any });
+
     if (sanitized === "*" || sanitized === "") {
       for (const method in this.staticRoutes) {
         for (const p in this.staticRoutes[method]) {
