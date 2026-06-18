@@ -80,7 +80,8 @@ export async function executeHandlers(
 
   if (!response) {
     try {
-      response = await defaultHandler(context, async () => {});
+      const res = await defaultHandler(context, async () => {});
+      if (res) response = res;
     } catch (error) {
       context.debug && console.warn(`Error in default handler:`, error);
       const { shouldThrow, response: errorResponse } = handleErrorsGracefully(error);
@@ -91,5 +92,5 @@ export async function executeHandlers(
     }
   }
 
-  return response;
+  return response as Response;
 }
