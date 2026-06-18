@@ -105,6 +105,85 @@ async function runBenchmarks() {
     ctxInstance.json({ test: true }, 200, { "X-Test": "yes" });
   }, 10_000);
 
+  // 4. HOOKS
+  // Baseline: no hooks
+  const noHookApp = createServer();
+  noHookApp.get("/", (c) => c.text("ok"));
+  await benchmark("Hooks: Baseline (no hooks)", async () => {
+    await noHookApp.fetch(new Request("http://localhost/"));
+  }, 10_000);
+
+  // onRequest only
+  const onRequestApp = createServer();
+  onRequestApp.onRequest((_c) => {});
+  onRequestApp.get("/", (c) => c.text("ok"));
+  await benchmark("Hooks: onRequest (1x)", async () => {
+    await onRequestApp.fetch(new Request("http://localhost/"));
+  }, 10_000);
+
+  // onBeforeHandle only
+  const onBeforeApp = createServer();
+  onBeforeApp.onBeforeHandle((_c) => {});
+  onBeforeApp.get("/", (c) => c.text("ok"));
+  await benchmark("Hooks: onBeforeHandle (1x)", async () => {
+    await onBeforeApp.fetch(new Request("http://localhost/"));
+  }, 10_000);
+
+  // onAfterHandle only
+  const onAfterApp = createServer();
+  onAfterApp.onAfterHandle((_c, _res) => {});
+  onAfterApp.get("/", (c) => c.text("ok"));
+  await benchmark("Hooks: onAfterHandle (1x)", async () => {
+    await onAfterApp.fetch(new Request("http://localhost/"));
+  }, 10_000);
+
+  // onResponse only
+  const onResponseApp = createServer();
+  onResponseApp.onResponse((_c) => {});
+  onResponseApp.get("/", (c) => c.text("ok"));
+  await benchmark("Hooks: onResponse (1x)", async () => {
+    await onResponseApp.fetch(new Request("http://localhost/"));
+  }, 10_000);
+
+  // All hooks stacked (1 handler each)
+  const allHooksApp = createServer();
+  allHooksApp.onRequest((_c) => {});
+  allHooksApp.onBeforeHandle((_c) => {});
+  allHooksApp.onAfterHandle((_c, _res) => {});
+  allHooksApp.onError((_err, _c) => {});
+  allHooksApp.onResponse((_c) => {});
+  allHooksApp.get("/", (c) => c.text("ok"));
+  await benchmark("Hooks: All 5 hooks (1x each)", async () => {
+    await allHooksApp.fetch(new Request("http://localhost/"));
+  }, 10_000);
+
+  // 3x each hook stacked
+  const thickHooksApp = createServer();
+  for (let i = 0; i < 3; i++) thickHooksApp.onRequest((_c) => {});
+  for (let i = 0; i < 3; i++) thickHooksApp.onBeforeHandle((_c) => {});
+  for (let i = 0; i < 3; i++) thickHooksApp.onAfterHandle((_c, _res) => {});
+  for (let i = 0; i < 3; i++) thickHooksApp.onResponse((_c) => {});
+  thickHooksApp.get("/", (c) => c.text("ok"));
+  await benchmark("Hooks: All 4 hooks (3x each)", async () => {
+    await thickHooksApp.fetch(new Request("http://localhost/"));
+  }, 10_000);
+
+  // onRequest short-circuit (returns early before handler)
+  const shortCircuitApp = createServer();
+  shortCircuitApp.onRequest((_c) => new Response("blocked", { status: 403 }));
+  shortCircuitApp.get("/", (c) => c.text("ok"));
+  await benchmark("Hooks: onRequest short-circuit", async () => {
+    await shortCircuitApp.fetch(new Request("http://localhost/"));
+  }, 10_000);
+
+  // onError hook hit (handler throws)
+  const errorHookApp = createServer();
+  errorHookApp.onError((_err, c) => c.text("caught", 500));
+  errorHookApp.get("/", (_c) => { throw new Error("boom"); });
+  await benchmark("Hooks: onError (throw + catch)", async () => {
+    await errorHookApp.fetch(new Request("http://localhost/"));
+  }, 10_000);
+
   console.log("=========================================================================");
 }
 

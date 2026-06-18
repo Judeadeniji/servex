@@ -2,26 +2,14 @@ import * as ck from "./cookie";
 import type { StatusCode } from "./http-status";
 import type { Env, HeaderRecord, JSONValue } from "./types";
 import type { ExtractUrl } from "./router/types";
-import { STATUS_CODES } from "node:http";
 import { background, withCancel, type Context as SignalContext } from "./core/signal";
-
-function parseHeaders(headers: Headers): HeaderRecord {
-  const result: HeaderRecord = {};
-  headers.forEach((value, key) => {
-    result[key] = value!;
-  });
-
-  return result;
-}
 
 interface ServeXRequest extends Request {
   json<T = JSONValue>(): Promise<T>;
 }
 
 type RequestContext = {
-  parsedBody: any;
   params: Record<string, string>;
-  query: URLSearchParams;
 };
 
 export class Context<
@@ -32,7 +20,7 @@ export class Context<
   #rawRequest: ServeXRequest;
   #env: E["Bindings"];
   #params: Record<string, string>;
-  #query: URLSearchParams;
+  #query?: URLSearchParams;
   #body: any;
   #response: Response = new Response();
   #status: StatusCode = 200;
@@ -44,8 +32,6 @@ export class Context<
     this.#rawRequest = request;
     this.#env = env;
     this.#params = ctx.params;
-    this.#query = ctx.query;
-    this.#body = ctx.parsedBody;
 
     const [signalCtx, cancel] = withCancel(background());
     this.#signalCtx = signalCtx;
@@ -116,10 +102,16 @@ export class Context<
    * // URL: /heroes/spiderman
    * // params: { heroName: "spiderman" }
    */
-  params<K extends keyof I["params"]>(
-    k?: K
-  ): K extends string ? string | undefined : Record<string, string> {
-    return (typeof k === "string" ? this.#params[k] : this.#params) as any;
+  params(): Record<string, string>;
+  params<K extends keyof I["params"]>(k: K): string;
+  params(k: string): string | undefined;
+  params(k?: string | keyof I["params"]): Record<string, string> | string | undefined {
+    return typeof k === "string" ? this.#params[k as string] : this.#params;
+  }
+
+  setParams(params: Record<string, string>) {
+    this.#params = params;
+    return this;
   }
 
   /**
@@ -128,10 +120,18 @@ export class Context<
    * // URL: /search?q=spiderman
    * // query: URLSearchParams("q=spiderman")
    */
-  query<K extends string>(
-    q?: K
-  ): K extends string ? string | null : URLSearchParams {
-    return (q ? this.#query.get(q) : this.#query) as any;
+  query(): URLSearchParams;
+  query(q: string): string | null;
+  query(q?: string): string | null | URLSearchParams {
+    if (!this.#query) {
+      const searchIndex = this.#rawRequest.url.indexOf("?");
+      if (searchIndex !== -1) {
+        this.#query = new URLSearchParams(this.#rawRequest.url.slice(searchIndex));
+      } else {
+        this.#query = new URLSearchParams();
+      }
+    }
+    return q ? this.#query.get(q) : this.#query;
   }
 
   /**
@@ -161,29 +161,22 @@ export class Context<
    * @param status - Optional HTTP status code (default: 200).
    * @param headers - Optional headers to include in the response.
    */
-  json<T extends Record<any, any>>(
+  json<T extends Record<any, any> | Array<any>, U extends StatusCode = 200>(
     object: T,
-    status: StatusCode = 200,
+    status?: U,
     _headers: HeaderRecord = {}
-  ): Response {
+  ): Response & import("./types").TypedResponse<T, U, "json"> {
     const body = JSON.stringify(object);
-    const preResponseHeaders = parseHeaders(this.#response.headers);
-    const responseHeaders: HeadersInit = {
-      ...preResponseHeaders,
-      "Content-Type": "application/json; charset=UTF-8",
-      ..._headers,
-    };
+    const headers = this.#response.headers;
+    headers.set("Content-Type", "application/json; charset=UTF-8");
+    for (const key in _headers) {
+      const val = _headers[key];
+      headers.set(key, Array.isArray(val) ? val.join(",") : val);
+    }
 
-    const headers = new Headers(responseHeaders);
-
-    this.#status = status;
-    this.#response = new Response(body, {
-      status,
-      headers,
-      statusText: STATUS_CODES[status],
-    });
-
-    return this.#response;
+    this.#status = status ?? 200;
+    this.#response = new Response(body, { status: status ?? 200, headers });
+    return this.#response as Response & import("./types").TypedResponse<T, U, "json">;
   }
 
   /**
@@ -192,26 +185,21 @@ export class Context<
    * @param status - Optional HTTP status code (default: 200).
    * @param headers - Optional headers to include in the response.
    */
-  text(
-    text: string,
-    status: StatusCode = 200,
+  text<T extends string, U extends StatusCode = 200>(
+    text: T,
+    status?: U,
     _headers: HeaderRecord = {}
-  ): Response {
-    const preResponseHeaders = parseHeaders(this.#response.headers);
-    const responseHeaders: HeadersInit = {
-      ...preResponseHeaders,
-      "Content-Type": "text/plain; charset=UTF-8",
-      ..._headers,
-    };
+  ): Response & import("./types").TypedResponse<T, U, "text"> {
+    const headers = this.#response.headers;
+    headers.set("Content-Type", "text/plain; charset=UTF-8");
+    for (const key in _headers) {
+      const val = _headers[key];
+      headers.set(key, Array.isArray(val) ? val.join(",") : val);
+    }
 
-    this.#status = status;
-    const headers = new Headers(responseHeaders);
-    this.#response = new Response(text, {
-      status,
-      headers,
-      statusText: STATUS_CODES[status],
-    });
-    return this.#response;
+    this.#status = status ?? 200;
+    this.#response = new Response(text, { status: status ?? 200, headers });
+    return this.#response as Response & import("./types").TypedResponse<T, U, "text">;
   }
 
   /**
@@ -220,26 +208,21 @@ export class Context<
    * @param status - Optional HTTP status code (default: 200).
    * @param headers - Optional headers to include in the response.
    */
-  html(
-    html: string,
-    status: StatusCode = 200,
+  html<T extends string, U extends StatusCode = StatusCode>(
+    html: T,
+    status?: U,
     _headers: HeaderRecord = {}
-  ): Response {
-    const preResponseHeaders = parseHeaders(this.#response.headers);
-    const responseHeaders: HeadersInit = {
-      ...preResponseHeaders,
-      "Content-Type": "text/html; charset=UTF-8",
-      ..._headers,
-    };
+  ): Response & import("./types").TypedResponse<T, U, "html"> {
+    const headers = this.#response.headers;
+    headers.set("Content-Type", "text/html; charset=UTF-8");
+    for (const key in _headers) {
+      const val = _headers[key];
+      headers.set(key, Array.isArray(val) ? val.join(",") : val);
+    }
 
-    this.#status = status;
-    const headers = new Headers(responseHeaders);
-    this.#response = new Response(html, {
-      status,
-      headers,
-      statusText: STATUS_CODES[status],
-    });
-    return this.#response;
+    this.#status = status ?? 200;
+    this.#response = new Response(html, { status: status ?? 200, headers });
+    return this.#response as Response & import("./types").TypedResponse<T, U, "html">;
   }
 
   /**
@@ -248,15 +231,10 @@ export class Context<
    * @param status - Optional HTTP status code (default: 302).
    */
   redirect(location: string, status: StatusCode = 302): Response {
-    const preResponseHeaders = parseHeaders(this.#response.headers);
+    const headers = this.#response.headers;
+    headers.set("Location", location);
     this.#status = status;
-    this.#response = new Response(null, {
-      status,
-      headers: {
-        ...preResponseHeaders,
-        Location: location,
-      },
-    });
+    this.#response = new Response(null, { status, headers });
     return this.#response;
   }
 
@@ -271,21 +249,17 @@ export class Context<
     status: StatusCode = 200,
     _headers: HeaderRecord = {}
   ): Response {
-    const preResponseHeaders = parseHeaders(this.#response.headers);
-    const responseHeaders = {
-      "Content-Type": "text/plain; charset=UTF-8",
-      "Transfer-Encoding": "chunked",
-      ...preResponseHeaders,
-      ..._headers,
-    } as HeadersInit;
+    const headers = this.#response.headers;
+    headers.set("Content-Type", "text/plain; charset=UTF-8");
+    headers.set("Transfer-Encoding", "chunked");
+    for (const key in _headers) {
+      const val = _headers[key];
+      headers.set(key, Array.isArray(val) ? val.join(",") : val);
+    }
 
     this.#status = status;
-    const headers = new Headers(responseHeaders);
-    return new Response(stream, {
-      status,
-      headers,
-      statusText: STATUS_CODES[status],
-    });
+    this.#response = new Response(stream, { status, headers });
+    return this.#response;
   }
 
   get status() {

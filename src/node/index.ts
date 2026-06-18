@@ -59,7 +59,7 @@ function reqToRequest(
         }
 
         const request = new Request(url, {
-          body,
+          body: body ? (body.buffer as ArrayBuffer).slice(body.byteOffset, body.byteOffset + body.byteLength) : null,
           headers,
           method: req.headers[":method"] as string,
         });
@@ -81,7 +81,7 @@ function reqToRequest(
           : Buffer.concat(chunks);
         const url = new URL(req.url!, `http://${req.headers.host}`);
         const request = new Request(url, {
-          body,
+          body: body ? (body.buffer as ArrayBuffer).slice(body.byteOffset, body.byteOffset + body.byteLength) : null,
           headers: req.headers as HeadersInit,
           method: req.method,
         });
