@@ -3,6 +3,7 @@ import type { Context, MiddlewareHandler } from "../types";
 import type { HTTPMethod, IRouter, MatchedRoute, Route } from "./base";
 import { RadixRouteTrie } from "./radix-router";
 import { TrieRouter } from "./trie-router";
+import { SonicRouter } from "./sonic-router";
 import type { DynamicSegmentsRemoved, RouteMatch } from "./types";
 
 /**
@@ -11,6 +12,7 @@ import type { DynamicSegmentsRemoved, RouteMatch } from "./types";
 export enum RouterType {
   TRIE = "TRIE",
   RADIX = "RADIX",
+  SONIC = "SONIC",
 }
 
 /**
@@ -31,6 +33,9 @@ export class RouterAdapter<Routes extends Route[] = Route[]> implements IRouter<
     const { type, routes = [] } = options;
 
     switch (type) {
+      case RouterType.SONIC:
+        this.router = new SonicRouter<Routes>();
+        break;
       case RouterType.RADIX:
         this.router = new RadixRouteTrie<Routes>();
         break;

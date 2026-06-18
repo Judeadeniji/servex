@@ -200,9 +200,7 @@ export class RadixRouteTrie<Routes extends Route[]> implements IRouter<Routes> {
     method: HTTPMethod,
     url: string,
     matchedRoute: string,
-    params: ExtractUrl<Routes[number]["path"]>["params"] & Record<string, string>,
-    searchParams: string,
-    hash: string
+    params: ExtractUrl<Routes[number]["path"]>["params"] & Record<string, string>
   ): MatchedRoute<Routes, boolean> {
     return {
       matched: true,
@@ -210,8 +208,6 @@ export class RadixRouteTrie<Routes extends Route[]> implements IRouter<Routes> {
       route: url as Routes[number]["path"],
       matched_route: matchedRoute,
       params: params,
-      searchParams: new URLSearchParams(searchParams),
-      hash: hash || null,
       data: node.data[method] as Routes[number]["data"],
       middlewares: this.collectMiddlewares(node),
     };
@@ -259,7 +255,7 @@ export class RadixRouteTrie<Routes extends Route[]> implements IRouter<Routes> {
             const remainingSegments = segments.slice(i).join("/");
             const paramName = child.value.length > 1 ? child.value.slice(1) : String(i);
             params[paramName] = remainingSegments;
-            return this.buildMatchResult(child, method, url as string, matchedRoute, params, "", "");
+            return this.buildMatchResult(child, method, url as string, matchedRoute, params);
           }
           wildcardMatched = true;
           currentNode = child;
@@ -271,7 +267,7 @@ export class RadixRouteTrie<Routes extends Route[]> implements IRouter<Routes> {
     }
 
     if (currentNode.isEndOfRoute && currentNode.data[methodUpper]) {
-      return this.buildMatchResult(currentNode, method, url as string, matchedRoute, params, "", "");
+      return this.buildMatchResult(currentNode, method, url as string, matchedRoute, params);
     }
 
     return null;
@@ -303,23 +299,5 @@ export class RadixRouteTrie<Routes extends Route[]> implements IRouter<Routes> {
    */
   private isWildcard(segment: string): boolean {
     return segment === "*" || segment.startsWith("*");
-  }
-
-  /**
-   * Extracts the path, search parameters, and hash from a URL.
-   * @param url - The URL to extract from.
-   * @returns An object containing the path, search parameters, and hash.
-   */
-  private extractParams(url: string): {
-    path: string;
-    searchParams: string;
-    hash: string;
-  } {
-    const urlObj = new URL(url, "http://localhost"); // Base URL is required
-    return {
-      path: urlObj.pathname,
-      searchParams: urlObj.search,
-      hash: urlObj.hash.slice(1),
-    };
   }
 }

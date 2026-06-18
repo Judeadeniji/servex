@@ -48,21 +48,6 @@ export type MatchedRoute<Routes extends Route[] = Route[], M = boolean> = {
    */
   params: ExtractUrl<Routes[number]["path"]>["params"] & Record<string, string>;
   /**
-   * @property searchParams - The search parameters extracted from the route
-   * @description This is the search parameters extracted from the route
-   * @example
-   * // Given the route "/search"
-   * // and the url "/search?q=spiderman"
-   * // searchParams will be URLSearchParams("q=spiderman")
-   * // route will be "/search?q=spiderman"
-   */
-  searchParams: URLSearchParams;
-
-  /**
-   * @property hash - The hash extracted from the route
-   */
-  hash: null | string;
-  /**
    * @property data - The data associated with the route
    * @description This is the data associated with the route
    */

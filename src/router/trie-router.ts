@@ -288,20 +288,10 @@ export class TrieRouter<Routes extends Route[]> implements IRouter<Routes> {
       route: _route,
       matched_route: "",
       params: {} as Extract<MatchedRoute<Routes, Matched>["params"], Record<string, string>>,
-      searchParams: new URLSearchParams(),
       data: null!,
-      hash: null,
       middlewares: [], // Initialize middleware array
     };
 
-    {
-      const lastSegment = segments[segments.length - 1];
-      const { hash, searchParams } = this.extractParams(route); // extracts searchparams if any
-      // slice of the hash or search params, then replace the last segment
-      segments[segments.length - 1] = lastSegment.split("?")[0].split("#")[0];
-      matched_route.searchParams = new URLSearchParams(searchParams);
-      matched_route.hash = hash;
-    }
     return this.matchAll<RoutePath, Matched>(
       matched_route,
       segments,
@@ -474,35 +464,5 @@ export class TrieRouter<Routes extends Route[]> implements IRouter<Routes> {
   private sanitizeRoute(r: string) {
     if (r === "/") return r;
     return encodeURI(r.replace(/^\/|\/$/g, "")); // Remove leading and trailing slashes
-  }
-
-  /**
-   * Extracts hash and search parameters from the route
-   * @param r
-   */
-  extractParams(r: string) {
-    // Regex to match the hash and search parameters
-    const hashRegex = /#(.*)/;
-    const searchRegex = /\?(.*?)(#|$)/;
-
-    // Extract the hash
-    const hashMatch = r.match(hashRegex);
-    const hash = hashMatch ? hashMatch[1] : "";
-
-    // Extract the search parameters
-    const searchMatch = r.match(searchRegex);
-    const searchParams: Record<string, string> = {};
-
-    if (!searchMatch) return { hash, searchParams };
-    const queryString = searchMatch[1];
-    const params = queryString.split("&");
-
-    for (const param of params) {
-      const [key, value] = param.split("=").map(decodeURIComponent);
-
-      searchParams[key] = value;
-    }
-
-    return { hash, searchParams };
   }
 }
