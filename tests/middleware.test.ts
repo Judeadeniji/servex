@@ -1,5 +1,7 @@
 import { describe, it, expect } from "bun:test";
 import { createServer } from "../src/index";
+import type { Handler } from "../src/types";
+import type { Context } from "../src/context";
 
 describe("Middleware", () => {
   it("should execute global middleware", async () => {
@@ -21,7 +23,7 @@ describe("Middleware", () => {
   it("should execute route-specific middleware", async () => {
     const app = createServer();
     
-    const authMiddleware = async (c: any, next: any) => {
+    const authMiddleware: Handler<Context<any, any>> = async (c, next) => {
       if (c.req.headers.get("Authorization") !== "Bearer token") {
         return c.text("Unauthorized", 401);
       }

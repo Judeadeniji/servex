@@ -25,9 +25,10 @@
   },
   "homepage": "https://github.com/judeadeniji/servex#readme",
   "devDependencies": {
-    "@types/bun": "latest"
+    "@types/bun": "latest",
+    "type-testing": "^0.2.0"
   },
   "peerDependencies": {
-    "typescript": "^5.0.0"
+    "typescript": "^6.0.3"
   }
 }
