@@ -96,20 +96,26 @@ export class RadixRouteTrie<Routes extends Route[]> implements IRouter<Routes> {
     applyMiddlewareToSegment(this.root);
   }
 
-  private collectMiddlewares(
-    node: RadixSegmentNode,
-  ) {
-    const stack: MiddlewareHandler<Context>[] = [];
+  private collectMiddlewares(node: RadixSegmentNode) {
+    const arrays: MiddlewareHandler<Context>[][] = [];
     let current: RadixSegmentNode | null = node;
+    let size = 0;
     while (current) {
       if (current.middlewares.length > 0) {
-        stack.push(...current.middlewares);
+        arrays.push(current.middlewares);
+        size += current.middlewares.length;
       }
-
-      current = current.previousRadixSegment
+      current = current.previousRadixSegment;
     }
-    // Middlewares should be executed from root to leaf, so reverse the stack
-    return stack;
+    const result = new Array<MiddlewareHandler<Context>>(size);
+    let idx = 0;
+    for (let i = arrays.length - 1; i >= 0; i--) {
+      const arr = arrays[i];
+      for (let j = 0; j < arr.length; j++) {
+        result[idx++] = arr[j];
+      }
+    }
+    return result;
   }
 
   /**
@@ -207,23 +213,20 @@ export class RadixRouteTrie<Routes extends Route[]> implements IRouter<Routes> {
       searchParams: new URLSearchParams(searchParams),
       hash: hash || null,
       data: node.data[method] as Routes[number]["data"],
-      middlewares: new Set(this.collectMiddlewares(node)),
+      middlewares: this.collectMiddlewares(node),
     };
   }
 
-  /**
-   * Matches a given route against the Radix Tree.
-   * @param method - The HTTP method.
-   * @param url - The URL to match.
-   * @returns The matched route or null if no match is found.
-   */
   match<
     RoutePath extends DynamicSegmentsRemoved<Routes[number]["path"]>,
     Matched = RouteMatch<Routes[number]["path"], RoutePath>
   >(method: HTTPMethod, url: RoutePath): MatchedRoute<Routes, boolean> | null {
-    const { path, searchParams, hash } = this.extractParams(url);
-    const sanitizedPath = this.sanitizeRoute(path);
-    const segments = sanitizedPath === "/" ? [""] : sanitizedPath.split("/");
+    let sanitizedPath = url as unknown as string;
+    if (sanitizedPath.charCodeAt(0) === 47) sanitizedPath = sanitizedPath.slice(1);
+    if (sanitizedPath.length > 0 && sanitizedPath.charCodeAt(sanitizedPath.length - 1) === 47) {
+      sanitizedPath = sanitizedPath.slice(0, -1);
+    }
+    const segments = sanitizedPath === "" ? [""] : sanitizedPath.split("/");
     const params = {} as ExtractUrl<Routes[number]["path"]>["params"] & Record<string, string>;
     let currentNode = this.root;
     let matchedRoute = "";
@@ -231,73 +234,46 @@ export class RadixRouteTrie<Routes extends Route[]> implements IRouter<Routes> {
 
     for (let i = 0; i < segments.length; i++) {
       const segment = segments[i];
-      let matched = false;
 
-      // Order children by type: wildcard > static > dynamic
-      const orderedChildren = orderTrieSegmentByType(currentNode.children) as [
-        string,
-        RadixSegmentNode<Routes[number]["data"]>
-      ][];
+      const staticChild = currentNode.children.get(segment);
+      if (staticChild && staticChild.type === "static") {
+        matchedRoute += `/${staticChild.value}`;
+        currentNode = staticChild;
+        continue;
+      }
 
-      for (const [key, child] of orderedChildren) {
+      const dynamicChild = currentNode.children.get("*");
+      if (dynamicChild && dynamicChild.type === "dynamic") {
+        const paramName = dynamicChild.paramsKeys[0];
+        params[paramName] = segment;
+        matchedRoute += `/${segment}`;
+        currentNode = dynamicChild;
+        continue;
+      }
+
+      let wildcardMatched = false;
+      for (const child of currentNode.children.values()) {
         if (child.type === "wildcard") {
           matchedRoute += `/${child.value}`;
           if (child.isEndOfRoute && child.data[methodUpper]) {
-            // Capture remaining segments as wildcard params
             const remainingSegments = segments.slice(i).join("/");
-            const paramName =
-              child.value.length > 1 ? child.value.slice(1) : String(i);
+            const paramName = child.value.length > 1 ? child.value.slice(1) : String(i);
             params[paramName] = remainingSegments;
-            return this.buildMatchResult(
-              child,
-              method,
-              url,
-              matchedRoute,
-              params,
-              searchParams,
-              hash
-            );
+            return this.buildMatchResult(child, method, url as string, matchedRoute, params, "", "");
           }
-          // Wildcard exists but doesn't have the required method
-          continue;
-        }
-
-        if (child.type === "static" && child.value === segment) {
-          matchedRoute += `/${child.value}`;
+          wildcardMatched = true;
           currentNode = child;
-          matched = true;
-          break;
-        }
-
-        if (child.type === "dynamic") {
-          const paramName = child.paramsKeys[0];
-          params[paramName] = segment;
-          matchedRoute += `/${segment}`;
-          currentNode = child;
-          matched = true;
           break;
         }
       }
 
-      if (!matched) {
-        // No matching child found
-        return null;
-      }
+      if (!wildcardMatched) return null;
     }
 
     if (currentNode.isEndOfRoute && currentNode.data[methodUpper]) {
-      return this.buildMatchResult(
-        currentNode,
-        method,
-        url,
-        matchedRoute,
-        params,
-        searchParams,
-        hash
-      );
+      return this.buildMatchResult(currentNode, method, url as string, matchedRoute, params, "", "");
     }
 
-    // Method not allowed for the matched route
     return null;
   }
 

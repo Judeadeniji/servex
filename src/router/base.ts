@@ -68,7 +68,7 @@ export type MatchedRoute<Routes extends Route[] = Route[], M = boolean> = {
    */
   data: Routes[number]["data"];
 
-  middlewares: Set<MiddlewareHandler<Context>>; 
+  middlewares: MiddlewareHandler<Context>[]; 
 };
 
 /**

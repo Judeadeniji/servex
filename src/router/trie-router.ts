@@ -287,11 +287,11 @@ export class TrieRouter<Routes extends Route[]> implements IRouter<Routes> {
       method: method,
       route: _route,
       matched_route: "",
-      params: {} as any,
+      params: {} as Extract<MatchedRoute<Routes, Matched>["params"], Record<string, string>>,
       searchParams: new URLSearchParams(),
       data: null!,
       hash: null,
-      middlewares: new Set, // Initialize middleware array
+      middlewares: [], // Initialize middleware array
     };
 
     {
@@ -435,7 +435,7 @@ export class TrieRouter<Routes extends Route[]> implements IRouter<Routes> {
 
   private collectMiddlewares(
     node: TrieSegmentNode,
-    middlewares: Set<MiddlewareHandler<Context>>
+    middlewares: MiddlewareHandler<Context>[]
   ) {
     const stack: MiddlewareHandler<Context>[] = [];
     let current: TrieSegmentNode | null = node;
@@ -446,7 +446,7 @@ export class TrieRouter<Routes extends Route[]> implements IRouter<Routes> {
       current = current.prevTrieSegment;
     }
     // Middlewares should be executed from root to leaf, so reverse the stack
-    stack.reverse().forEach((middleware) => middlewares.add(middleware));
+    stack.reverse().forEach((middleware) => middlewares.push(middleware));
   }
 
   private isDynamicSegment(seg: string) {
