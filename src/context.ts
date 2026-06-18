@@ -28,17 +28,37 @@ export class Context<
   debug = false;
 
   #routine: SignalContext;
+  #executionCtx?: any;
+  #deferred?: Array<() => Promise<any> | any>;
 
-  constructor(request: Request, env: E["Bindings"], ctx: RequestContext) {
+  constructor(request: Request, env: E["Bindings"], ctx: RequestContext, executionCtx?: any) {
     this.#rawRequest = request;
     this.#env = env;
     this.#params = ctx.params;
 
     const [routine, cancel] = withCancel(background());
     this.#routine = routine;
+    this.#executionCtx = executionCtx;
     if (request.signal) {
       request.signal.addEventListener("abort", () => cancel(), { once: true });
     }
+  }
+
+  /**
+   * Defer a background task to run after the response has been sent to the client.
+   * On Cloudflare Workers/Edge, this automatically maps to `executionCtx.waitUntil()`.
+   */
+  defer(task: () => Promise<any> | any) {
+    if (!this.#deferred) this.#deferred = [];
+    this.#deferred.push(task);
+  }
+
+  get deferred() {
+    return this.#deferred;
+  }
+
+  get executionCtx() {
+    return this.#executionCtx;
   }
 
   get routine() {

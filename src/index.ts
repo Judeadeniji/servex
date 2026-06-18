@@ -8,7 +8,7 @@ import type {
   Env,
 } from "./types";
 import { Context } from "./context";
-import { createScope, disposeScope, setScope, type Scope } from "./scope";
+import { createScope, type Scope } from "./scope";
 import { executeHandlers } from "./core/response";
 import {
   RouterAdapter,
@@ -22,17 +22,22 @@ export class ServeXRequest extends Request {}
 // Pre-allocated methods array for 405 detection (avoids allocation per 404)
 const ALL_METHODS: Method[] = ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"];
 
-async function baseFetch(
-  scope: Scope<any[], ServerRoute[]>,
+export async function baseFetch(
+  scope: Scope<any, any>,
   request: Request,
   method: Method,
   pathname: string,
   middlewares: Handler<Context>[],
-  hooks: import("./types").Hooks
+  hooks: import("./types").Hooks,
+  envBindings?: any,
+  executionCtx?: any
 ): Promise<Response> {
-  const context = new Context(request, Bun.env as Record<string, string | undefined>, { params: {} });
-  scope.context = context;
-  setScope(scope);
+  const context = new Context(
+    request, 
+    envBindings ?? ((typeof process !== "undefined" ? process.env : {}) as any), 
+    { params: {} }, 
+    executionCtx
+  );
 
   let response: Response | undefined;
 
@@ -137,14 +142,32 @@ async function baseFetch(
       response = new Response("Internal Server Error", { status: 500 });
     }
   } finally {
-    // ── onResponse hooks ─────────────────────────────────────────────────────
-    const onResLen = hooks.onResponse.length;
-    if (onResLen > 0) {
-      for (let i = 0; i < onResLen; i++) {
-        await hooks.onResponse[i](context);
+    // ── Post-Response Processing ─────────────────────────────────────────────
+    const postProcess = async () => {
+      try {
+        const onResLen = hooks.onResponse.length;
+        if (onResLen > 0) {
+          for (let i = 0; i < onResLen; i++) {
+            await hooks.onResponse[i](context);
+          }
+        }
+
+        const deferred = context.deferred;
+        if (deferred) {
+          for (let i = 0; i < deferred.length; i++) {
+            await deferred[i]();
+          }
+        }
+      } catch (e) {
+        console.error("ServeX background task error:", e);
       }
+    };
+
+    if (executionCtx && typeof executionCtx.waitUntil === "function") {
+      executionCtx.waitUntil(postProcess());
+    } else {
+      Promise.resolve(postProcess()).catch(console.error);
     }
-    disposeScope();
   }
 
   return response!;
@@ -208,7 +231,7 @@ export class ServeXApp<E extends Env = Env, S = {}> extends ServeXRouterImpl<E, 
     onError(handler: import("./types").ErrorHook<Context>) { this.hooks.onError.push(handler); return this; }
     onResponse(handler: import("./types").HookHandler<Context>) { this.hooks.onResponse.push(handler); return this; }
 
-    async fetch(request: Request): Promise<Response> {
+    async fetch(request: Request, env?: any, executionCtx?: any): Promise<Response> {
         const url = request.url;
         let pathname = url;
         const schemeIdx = url.indexOf("://");
@@ -228,7 +251,7 @@ export class ServeXApp<E extends Env = Env, S = {}> extends ServeXRouterImpl<E, 
         }
         const method = request.method as Method;
 
-        return baseFetch(this.scope, request, method, pathname, this.middlewares, this.hooks);
+        return baseFetch(this.scope, request, method, pathname, this.middlewares, this.hooks, env, executionCtx);
     }
 
     async request(input: RequestInfo, init?: RequestInit): Promise<Response> {
