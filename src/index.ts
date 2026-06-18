@@ -8,7 +8,6 @@ import type {
   Env,
 } from "./types";
 import { Context } from "./context";
-import { createScope, type Scope } from "./scope";
 import { executeHandlers } from "./core/response";
 import {
   RouterAdapter,
@@ -23,7 +22,7 @@ export class ServeXRequest extends Request {}
 const ALL_METHODS: Method[] = ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"];
 
 export async function baseFetch(
-  scope: Scope<any, any>,
+  router: RouterAdapter<ServerRoute[]>,
   request: Request,
   method: Method,
   pathname: string,
@@ -52,14 +51,14 @@ export async function baseFetch(
     }
 
     // ── Route matching ────────────────────────────────────────────────────────
-    const route = scope.router.match(method, pathname);
+    const route = router.match(method, pathname);
 
     if (!route || !route.matched) {
       // 405 detection: only iterate other methods if route exists for any of them
       let is405 = false;
       for (let i = 0; i < ALL_METHODS.length; i++) {
         if (ALL_METHODS[i] !== method) {
-          const r = scope.router.match(ALL_METHODS[i], pathname);
+          const r = router.match(ALL_METHODS[i], pathname);
           if (r && r.matched) { is405 = true; break; }
         }
       }
@@ -221,8 +220,8 @@ export class ServeXApp<E extends Env = Env, S = {}> extends ServeXRouterImpl<E, 
         onResponse: []
     };
 
-    constructor(private scope: Scope<ServerRoute[], ServerRoute[]>, private middlewares: Handler<Context>[]) {
-        super(scope.router as RouterAdapter<ServerRoute[]>);
+    constructor(router: RouterAdapter<ServerRoute[]>, private middlewares: Handler<Context>[]) {
+        super(router);
     }
 
     onRequest(handler: import("./types").HookHandler<Context>) { this.hooks.onRequest.push(handler); return this; }
@@ -251,7 +250,7 @@ export class ServeXApp<E extends Env = Env, S = {}> extends ServeXRouterImpl<E, 
         }
         const method = request.method as Method;
 
-        return baseFetch(this.scope, request, method, pathname, this.middlewares, this.hooks, env, executionCtx);
+        return baseFetch(this.routerAdapter, request, method, pathname, this.middlewares, this.hooks, env, executionCtx);
     }
 
     async request(input: RequestInfo, init?: RequestInit): Promise<Response> {
@@ -261,11 +260,9 @@ export class ServeXApp<E extends Env = Env, S = {}> extends ServeXRouterImpl<E, 
 
 export function createServer<E extends Env = Env>(options: ServerOptions<string, string> = {}) {
   const { router = RouterType.RADIX, middlewares = [] } = options;
-  const thisScope = createScope(
-    new RouterAdapter({
-      type: router,
-    })
-  ) as Scope<ServerRoute[], ServerRoute[]>;
+  const routerAdapter = new RouterAdapter<ServerRoute[]>({
+    type: router,
+  });
 
-  return new ServeXApp<E, {}>(thisScope, middlewares) as ServeXRouter<E, {}> & ServeXApp<E, {}>;
+  return new ServeXApp<E, {}>(routerAdapter, middlewares) as ServeXRouter<E, {}> & ServeXApp<E, {}>;
 }
