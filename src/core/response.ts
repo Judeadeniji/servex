@@ -34,46 +34,41 @@ export async function executeHandlers(
   handlers: Handler<Context>[],
   defaultHandler: RequestHandler<Context> = notFoundHandler
 ): Promise<Response> {
-  let currentIndex = 0;
-  let response!: Response;
+  let currentIndex = -1;
+  let response: Response | undefined;
+  const len = handlers.length;
 
-  /**
-   * Recursively invokes handlers in the chain.
-   *
-   * @param index - The current handler index to execute.
-   */
-  const invokeHandler = async (index: number): Promise<void> => {
-    if (index >= handlers.length) {
+  const next = async (): Promise<void> => {
+    if (currentIndex >= len) {
       return;
     }
+    currentIndex++;
 
-    const handler = handlers[index];
-    let nextCalled = false;
-
-    try {
+    if (currentIndex < len) {
+      const handler = handlers[currentIndex];
+      let nextCalled = false;
       const handleNext = async () => {
-        if (nextCalled) {
-          throw new Error("next() called multiple times");
-        }
+        if (nextCalled) throw new Error("next() called multiple times");
         nextCalled = true;
-        await invokeHandler(index + 1);
+        await next();
       };
-      const result = await handler(context, handleNext);
 
-      if (result instanceof Response) {
-        response = result;
+      try {
+        const result = await handler(context, handleNext);
+        if (result instanceof Response) {
+          response = result;
+        }
+      } catch (error) {
+        if (error instanceof Error) {
+          (error as Error & { handlerIndex?: number }).handlerIndex = currentIndex;
+        }
+        throw error;
       }
-    } catch (error) {
-      // Attach the current handler index to the error for better debugging
-      if (error instanceof Error) {
-        (error as any).handlerIndex = index;
-      }
-      throw error;
     }
   };
 
   try {
-    await invokeHandler(currentIndex);
+    await next();
   } catch (error) {
     context.debug && console.error(error);
     const { shouldThrow, response: errorResponse } = handleErrorsGracefully(error);
@@ -84,11 +79,8 @@ export async function executeHandlers(
   }
 
   if (!response) {
-    // Execute the default handler if no response has been set
     try {
-      response = await defaultHandler(context, async () => {
-        // Default handler typically does not call next()
-      });
+      response = await defaultHandler(context, async () => {});
     } catch (error) {
       context.debug && console.warn(`Error in default handler:`, error);
       const { shouldThrow, response: errorResponse } = handleErrorsGracefully(error);

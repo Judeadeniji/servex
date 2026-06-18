@@ -162,13 +162,12 @@ class TimeoutContextImpl extends ChildContext {
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
-const _bg = new BgContext();
-
 /**
  * The root of every context tree.
  * Never cancels, holds no values, has no deadline.
- */
+*/
 export function background(): Context {
+  const _bg = new BgContext();
   return _bg;
 }
 
