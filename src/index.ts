@@ -429,3 +429,5 @@ export function normalisePath(path: string): string {
   const withLeading = path.startsWith("/") ? path : `/${path}`;
   return withLeading.endsWith("/") ? withLeading.slice(0, -1) : withLeading;
 }
+
+export * from "./storage";
