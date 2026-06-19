@@ -16,8 +16,8 @@ export interface BasicAuthOptions {
    * A custom verification function.
    * If provided, `username` and `password` options are ignored.
    */
-  verifyUser?: (username: string, password: string, c: Context) => boolean | Promise<boolean>;
-  
+verifyUser?: (c: Context, credentials: { username: string; password: string }) => boolean | Promise<boolean>;
+
   /**
    * The realm name to display in the browser's login prompt.
    * @default "Secure Area"
@@ -83,7 +83,7 @@ export const basicAuth = (options: BasicAuthOptions) => {
       let authorized = false;
 
       if (options.verifyUser) {
-        authorized = await options.verifyUser(reqUsername, reqPassword, c);
+        authorized = await options.verifyUser(c, { username: reqUsername, password: reqPassword });
       } else {
         const userMatch = timingSafeEqual(reqUsername, options.username!);
         const passMatch = timingSafeEqual(reqPassword, options.password!);

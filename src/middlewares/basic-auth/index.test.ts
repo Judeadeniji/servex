@@ -50,7 +50,7 @@ describe("Middleware: Basic Auth", () => {
   it("should allow request using custom verifyUser function", async () => {
     const app = createServer();
     app.use(basicAuth({
-      verifyUser: async (user, pass) => user === "super" && pass === "secret"
+      verifyUser: async (c, { username, password }) => username === "super" && password === "secret"
     }));
     app.get("/", (c) => c.text("Authorized"));
 
