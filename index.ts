@@ -1,4 +1,4 @@
-export { createServer, type ServeXRequest, ServeXApp, ServeXRouterImpl } from "./src";
+export { createServer, type ServeXRequest, ServeXApp, ServeXRouterImpl, normalisePath } from "./src";
 export { HttpException, type HttpExceptionOptions, type HttpExceptionBody, HTTP_ERROR_NAMES } from "./src/http-exception";
 export {
   // Named error classes

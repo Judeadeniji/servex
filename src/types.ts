@@ -34,8 +34,18 @@ export type MiddlewareHandler<C extends Context> = Handler<C>;
 
 
 export interface ServerOptions<P extends string = '', P1 extends string = ''> {
-  router?: RouterType
+  router?: RouterType;
   middlewares?: MiddlewareHandler<Context>[];
+  /**
+   * A common URL prefix that is stripped from every incoming request's
+   * pathname before routing. Useful when the app is mounted at a sub-path
+   * (e.g. behind a reverse-proxy or in a sub-directory).
+   *
+   * @example
+   * const app = createServer({ basePath: "/api/v1" });
+   * app.get("/users", handler); // matches  GET /api/v1/users
+   */
+  basePath?: string;
 }
 
 export type HookHandler<C extends Context> = (ctx: C) => void | Promise<void> | Response | Promise<Response>;

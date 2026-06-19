@@ -325,8 +325,19 @@ export class ServeXApp<E extends Env = Env, S = {}> extends ServeXRouterImpl<E, 
     };
     public compiledCache = new Map<string, (context: Context) => Promise<Response | undefined>>();
 
-    constructor(router: RouterAdapter<ServerRoute[]>, private middlewares: Handler<Context>[]) {
+    /**
+     * The normalised base path this app is scoped to.
+     * Always starts with `/`, never ends with `/` (except for the root "/").
+     */
+    public readonly basePath: string;
+
+    constructor(
+        router: RouterAdapter<ServerRoute[]>,
+        private middlewares: Handler<Context>[],
+        basePath: string = "/"
+    ) {
         super(router);
+        this.basePath = normalisePath(basePath);
     }
 
     onRequest(handler: import("./types").HookHandler<Context>) { this.hooks.onRequest.push(handler); return this; }
@@ -339,12 +350,25 @@ export class ServeXApp<E extends Env = Env, S = {}> extends ServeXRouterImpl<E, 
         const url = request.url;
         const queryIndex = url.indexOf("?", 8);
         let pathIdx = url.indexOf("/", 8);
-        
+
         let pathname: string;
         if (pathIdx === -1) {
             pathname = "/";
         } else {
             pathname = url.substring(pathIdx, queryIndex === -1 ? url.length : queryIndex);
+        }
+
+        // ── Base path stripping ───────────────────────────────────────────────
+        if (this.basePath !== "/") {
+            if (!pathname.startsWith(this.basePath)) {
+                // Request is outside this app's base path — return 404 immediately.
+                return new Response(
+                    JSON.stringify({ statusCode: 404, error: "Not Found", message: "Not Found" }),
+                    { status: 404, headers: { "Content-Type": "application/json; charset=UTF-8" } }
+                );
+            }
+            // Strip the prefix; ensure the remaining path starts with "/".
+            pathname = pathname.slice(this.basePath.length) || "/";
         }
 
         const method = request.method as Method;
@@ -358,10 +382,22 @@ export class ServeXApp<E extends Env = Env, S = {}> extends ServeXRouterImpl<E, 
 }
 
 export function createServer<E extends Env = Env>(options: ServerOptions<string, string> = {}) {
-  const { router = RouterType.SONIC, middlewares = [] } = options;
+  const { router = RouterType.SONIC, middlewares = [], basePath } = options;
   const routerAdapter = new RouterAdapter<ServerRoute[]>({
     type: router,
   });
 
-  return new ServeXApp<E, {}>(routerAdapter, middlewares) as ServeXRouter<E, {}> & ServeXApp<E, {}>;
+  return new ServeXApp<E, {}>(routerAdapter, middlewares, basePath) as ServeXRouter<E, {}> & ServeXApp<E, {}>;
+}
+
+/**
+ * Normalises a base path:
+ *  - Ensures it starts with "/".
+ *  - Strips any trailing slash (except for root "/").
+ * @internal
+ */
+export function normalisePath(path: string): string {
+  if (!path || path === "/") return "/";
+  const withLeading = path.startsWith("/") ? path : `/${path}`;
+  return withLeading.endsWith("/") ? withLeading.slice(0, -1) : withLeading;
 }
