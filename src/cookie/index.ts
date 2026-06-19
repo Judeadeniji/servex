@@ -48,12 +48,12 @@ function parse(string: string, options?: CookieParseOptions) {
     }
 
     const keyStartingIndex = startIndex(string, charIndex, eqIdx);
-    const keyEndingIndex = endIndex(string, charIndex, keyStartingIndex);
+    const keyEndingIndex = endIndex(string, charIndex, eqIdx);
     const key = string.slice(keyStartingIndex, keyEndingIndex);
 
     if (!Object.hasOwnProperty.call(cookies, key)) {
       let valueStartingIndex = startIndex(string, eqIdx + 1, endIdx);
-      let valueEndingIndex = endIndex(string, eqIdx + 1, valueStartingIndex);
+      let valueEndingIndex = endIndex(string, eqIdx + 1, endIdx);
 
       if (
         string.charCodeAt(valueStartingIndex) === 0x22 &&
@@ -69,6 +69,8 @@ function parse(string: string, options?: CookieParseOptions) {
 
     charIndex = endIdx + 1;
   }
+
+  return cookies;
 }
 
 function startIndex(string: string, start: number, end: number) {
@@ -105,7 +107,7 @@ function serialize(name: string, value: string, options?: CookieSerializeOptions
     let cookieString = `${name}=${_value}`;
     if (!options) return cookieString;
 
-    if (options.maxAge) {
+    if (options.maxAge !== undefined) {
         const maxAge = Math.floor(options.maxAge);
 
         if (!isFinite(maxAge)) {
@@ -147,8 +149,9 @@ function serialize(name: string, value: string, options?: CookieSerializeOptions
         cookieString += `; Path=${options.path}`;
     }
 
-    if (options.sameSite) {
-        switch (options.sameSite) {
+    if (options.sameSite !== undefined) {
+        const sameSite = typeof options.sameSite === "string" ? options.sameSite.toLowerCase() : options.sameSite;
+        switch (sameSite) {
             case true:
                 cookieString += "; SameSite";
                 break;
