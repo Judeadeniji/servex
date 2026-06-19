@@ -24,7 +24,72 @@ export class ServeXRequest extends Request {}
 // Pre-allocated methods array for 405 detection (avoids allocation per 404)
 const ALL_METHODS: Method[] = ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"];
 
-export async function baseFetch(
+export function baseFetch(
+  router: RouterAdapter<ServerRoute[]>,
+  request: Request,
+  method: Method,
+  pathname: string,
+  middlewares: Handler<Context>[],
+  hooks: import("./types").Hooks,
+  compiledCache: Map<string, (context: Context) => Promise<Response | undefined>>,
+  envBindings?: any,
+  executionCtx?: any
+): Response | Promise<Response> {
+  // ── Fast Path (No Hooks) ───────────────────────────────────────────────────
+  if (hooks.onRequest.length === 0 && hooks.onBeforeHandle.length === 0 && hooks.onAfterHandle.length === 0 && hooks.onError.length === 0) {
+    const route = router.match(method, pathname);
+    if (route && route.matched) {
+      let executor = route.store?.executor;
+      if (!executor) {
+        executor = compiledCache.get(method + route.matched_route);
+        if (!executor) {
+          const handlers = [...middlewares, ...route.middlewares, ...route.data];
+          executor = compileHandlerChain(handlers);
+          if (route.store) route.store.executor = executor;
+          compiledCache.set(method + route.matched_route, executor);
+        }
+      }
+      
+      const context = new Context(
+        request, 
+        envBindings ?? ((typeof process !== "undefined" ? process.env : {}) as any), 
+        { params: route.params }, 
+        executionCtx
+      );
+
+      const handleValue = (r: Response | undefined) => {
+        const res = r || new Response("Not Found", { status: 404 });
+        if (hooks.onResponse.length > 0 || context.deferred) {
+          if (executionCtx && typeof executionCtx.waitUntil === "function") {
+            executionCtx.waitUntil(executePostProcess(hooks, context));
+          } else {
+            executePostProcess(hooks, context);
+          }
+        }
+        return res;
+      };
+
+      try {
+        const res = executor(context);
+        if (res instanceof Promise) {
+          return res.then(handleValue).catch(error => {
+            console.error("Unhandled error:", error);
+            return handleValue(new Response("Internal Server Error", { status: 500 }));
+          });
+        }
+        return handleValue(res);
+      } catch (error) {
+        console.error("Unhandled error:", error);
+        return handleValue(new Response("Internal Server Error", { status: 500 }));
+      }
+    }
+  }
+
+  // ── Slow Path ──────────────────────────────────────────────────────────────
+  return baseFetchSlow(router, request, method, pathname, middlewares, hooks, compiledCache, envBindings, executionCtx);
+}
+
+async function baseFetchSlow(
   router: RouterAdapter<ServerRoute[]>,
   request: Request,
   method: Method,
@@ -35,19 +100,19 @@ export async function baseFetch(
   envBindings?: any,
   executionCtx?: any
 ): Promise<Response> {
-  const context = new Context(
-    request, 
-    envBindings ?? ((typeof process !== "undefined" ? process.env : {}) as any), 
-    { params: {} }, 
-    executionCtx
-  );
-
+  let context: Context | undefined = undefined;
   let response: Response | undefined;
 
   try {
     // ── 1. onRequest ──────────────────────────────────────────────────────────
     const onReqLen = hooks.onRequest.length;
     if (onReqLen > 0) {
+      context = new Context(
+        request, 
+        envBindings ?? ((typeof process !== "undefined" ? process.env : {}) as any), 
+        { params: {} }, 
+        executionCtx
+      );
       for (let i = 0; i < onReqLen; i++) {
         const r = await hooks.onRequest[i](context);
         if (r instanceof Response) return r; // short-circuit before routing
@@ -71,6 +136,14 @@ export async function baseFetch(
         return new Response("Method Not Allowed", { status: 405 });
       }
 
+      if (!context) {
+        context = new Context(
+          request, 
+          envBindings ?? ((typeof process !== "undefined" ? process.env : {}) as any), 
+          { params: {} }, 
+          executionCtx
+        );
+      }
       // 404 path: execute global middlewares
       response = await executeHandlers(context, middlewares);
       if (!response) response = new Response("Not Found", { status: 404 });
@@ -86,7 +159,16 @@ export async function baseFetch(
       return response;
     }
 
-    context.setParams(route.params);
+    if (!context) {
+      context = new Context(
+        request, 
+        envBindings ?? ((typeof process !== "undefined" ? process.env : {}) as any), 
+        { params: route.params }, 
+        executionCtx
+      );
+    } else {
+      context.setParams(route.params);
+    }
 
     // ── 2. onBeforeHandle ─────────────────────────────────────────────────────
     const onBeforeLen = hooks.onBeforeHandle.length;
@@ -104,13 +186,15 @@ export async function baseFetch(
     let result: Response | undefined = undefined;
 
     // ── 3. Execute handlers ───────────────────────────────────────────────────
-    const cacheKey = `${method}:${route.matched_route}`;
-    let executor = compiledCache.get(cacheKey);
-    
+    let executor = route.store?.executor;
     if (!executor) {
-      const handlers = [...middlewares, ...routeMids, ...routeData];
-      executor = compileHandlerChain(handlers);
-      compiledCache.set(cacheKey, executor!);
+      executor = compiledCache.get(method + route.matched_route);
+      if (!executor) {
+        const handlers = [...middlewares, ...routeMids, ...routeData];
+        executor = compileHandlerChain(handlers);
+        if (route.store) route.store.executor = executor;
+        compiledCache.set(method + route.matched_route, executor);
+      }
     }
 
     result = await executor!(context);
@@ -129,7 +213,7 @@ export async function baseFetch(
   } catch (error) {
     // ── onError hooks ─────────────────────────────────────────────────────────
     const onErrLen = hooks.onError.length;
-    if (onErrLen > 0) {
+    if (onErrLen > 0 && context) {
       for (let i = 0; i < onErrLen; i++) {
         const r = await hooks.onError[i](error as Error, context);
         if (r instanceof Response) { response = r; break; }
@@ -141,34 +225,37 @@ export async function baseFetch(
     }
   } finally {
     // ── Post-Response Processing ─────────────────────────────────────────────
-    const postProcess = async () => {
-      try {
-        const onResLen = hooks.onResponse.length;
-        if (onResLen > 0) {
-          for (let i = 0; i < onResLen; i++) {
-            await hooks.onResponse[i](context);
-          }
-        }
-
-        const deferred = context.deferred;
-        if (deferred) {
-          for (let i = 0; i < deferred.length; i++) {
-            await deferred[i]();
-          }
-        }
-      } catch (e) {
-        console.error("ServeX background task error:", e);
+    if (context && (hooks.onResponse.length > 0 || context.deferred)) {
+      if (executionCtx && typeof executionCtx.waitUntil === "function") {
+        executionCtx.waitUntil(executePostProcess(hooks, context));
+      } else {
+        // Run in background without awaiting
+        executePostProcess(hooks, context);
       }
-    };
-
-    if (executionCtx && typeof executionCtx.waitUntil === "function") {
-      executionCtx.waitUntil(postProcess());
-    } else {
-      Promise.resolve(postProcess()).catch(console.error);
     }
   }
 
   return response!;
+}
+
+async function executePostProcess(hooks: import("./types").Hooks, context: Context) {
+  try {
+    const onResLen = hooks.onResponse.length;
+    if (onResLen > 0) {
+      for (let i = 0; i < onResLen; i++) {
+        await hooks.onResponse[i](context);
+      }
+    }
+
+    const deferred = context.deferred;
+    if (deferred) {
+      for (let i = 0; i < deferred.length; i++) {
+        await deferred[i]();
+      }
+    }
+  } catch (e) {
+    console.error("ServeX background task error:", e);
+  }
 }
 
 export class ServeXRouterImpl<E extends Env = Env, S = {}> implements ServeXRouter<E, S> {
@@ -235,32 +322,26 @@ export class ServeXApp<E extends Env = Env, S = {}> extends ServeXRouterImpl<E, 
     onError(handler: import("./types").ErrorHook<Context>) { this.hooks.onError.push(handler); return this; }
     onResponse(handler: import("./types").HookHandler<Context>) { this.hooks.onResponse.push(handler); return this; }
 
-    async fetch(request: Request, env?: any, executionCtx?: any): Promise<Response> {
+    fetch = (request: Request, env?: any, executionCtx?: any): Promise<Response> | Response => {
         const url = request.url;
-        let pathname = url;
-        const schemeIdx = url.indexOf("://");
-        if (schemeIdx !== -1) {
-            const pathIdx = url.indexOf("/", schemeIdx + 3);
-            if (pathIdx !== -1) {
-                const searchIdx = url.indexOf("?", pathIdx);
-                pathname = searchIdx !== -1 ? url.substring(pathIdx, searchIdx) : url.substring(pathIdx);
-            } else {
-                pathname = "/";
-            }
+        const queryIndex = url.indexOf("?", 8);
+        let pathIdx = url.indexOf("/", 8);
+        
+        let pathname: string;
+        if (pathIdx === -1) {
+            pathname = "/";
         } else {
-            const searchIdx = url.indexOf("?");
-            if (searchIdx !== -1) {
-                pathname = url.substring(0, searchIdx);
-            }
+            pathname = url.substring(pathIdx, queryIndex === -1 ? url.length : queryIndex);
         }
+
         const method = request.method as Method;
 
         return baseFetch(this.routerAdapter, request, method, pathname, this.middlewares, this.hooks, this.compiledCache, env, executionCtx);
-    }
+    };
 
-    async request(input: RequestInfo, init?: RequestInit): Promise<Response> {
+    request = (input: RequestInfo, init?: RequestInit): Promise<Response> | Response => {
         return this.fetch(new ServeXRequest(input, init));
-    }
+    };
 }
 
 export function createServer<E extends Env = Env>(options: ServerOptions<string, string> = {}) {

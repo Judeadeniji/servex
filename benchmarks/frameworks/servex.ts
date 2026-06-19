@@ -5,5 +5,5 @@ app.get("/", (c) => c.text("Hello World"));
 
 export default {
   port: 3001,
-  fetch: app.fetch.bind(app)
+  fetch: app.fetch
 };

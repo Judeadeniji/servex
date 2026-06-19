@@ -53,7 +53,11 @@ export type MatchedRoute<Routes extends Route[] = Route[], M = boolean> = {
    */
   data: Routes[number]["data"];
 
-  middlewares: MiddlewareHandler<Context>[]; 
+  middlewares: MiddlewareHandler<Context>[];
+  /**
+   * @property store - A mutable reference object (usually the router node) used for caching JIT executors.
+   */
+  store?: any;
 };
 
 /**

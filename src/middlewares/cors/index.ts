@@ -42,7 +42,7 @@ export function cors<C extends Context>(
 
   return async function cors(ctx, next) {
     function set(key: string, value: string) {
-      ctx.res.headers.set(key, value);
+      ctx.header.set(key, value);
     }
 
     const allowOrigin = findAllowOrigin(

@@ -9,6 +9,7 @@ type SonicRouteNode = {
   data: any;
   paramsKeys: string[];
   middlewares: MiddlewareHandler<Context>[];
+  staticMatchResult?: any;
 };
 
 /**
@@ -137,7 +138,10 @@ export class SonicRouter<Routes extends Route[] = Route[]> implements IRouter<Ro
     // 1. Static fast path (O(1))
     if (this.staticRoutes[method] && this.staticRoutes[method][sanitized]) {
       const node = this.staticRoutes[method][sanitized];
-      return this.buildResult(node, method, url as string, sanitized, {});
+      if (!node.staticMatchResult) {
+        node.staticMatchResult = this.buildResult(node, method, url as string, sanitized, {});
+      }
+      return node.staticMatchResult;
     }
 
     // 2. Dynamic RegExp evaluation
@@ -178,7 +182,8 @@ export class SonicRouter<Routes extends Route[] = Route[]> implements IRouter<Ro
       matched_route: matchedRoute,
       params: params as any,
       data: node.data,
-      middlewares: node.middlewares
+      middlewares: node.middlewares,
+      store: node,
     };
   }
 

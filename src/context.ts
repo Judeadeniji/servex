@@ -22,26 +22,21 @@ export class Context<
   #params: Record<string, string>;
   #query?: URLSearchParams;
   #body: any;
-  #response: Response = new Response();
+  #response?: Response;
+  #headers?: Headers;
   #status: StatusCode = 200;
-  #variables: Map<string, any> = new Map();
+  #variables?: Map<string, any>;
   debug = false;
 
-  #routine: SignalContext;
-  #executionCtx?: any;
-  #deferred?: Array<() => Promise<any> | any>;
+  #routine?: SignalContext;
+  executionCtx?: any;
+  deferred?: Array<() => Promise<any> | any>;
 
   constructor(request: Request, env: E["Bindings"], ctx: RequestContext, executionCtx?: any) {
-    this.#rawRequest = request;
+    this.#rawRequest = request as ServeXRequest;
     this.#env = env;
-    this.#params = ctx.params;
-
-    const [routine, cancel] = withCancel(background());
-    this.#routine = routine;
-    this.#executionCtx = executionCtx;
-    if (request.signal) {
-      request.signal.addEventListener("abort", () => cancel(), { once: true });
-    }
+    this.#params = ctx?.params || {};
+    this.executionCtx = executionCtx;
   }
 
   /**
@@ -49,19 +44,22 @@ export class Context<
    * On Cloudflare Workers/Edge, this automatically maps to `executionCtx.waitUntil()`.
    */
   defer(task: () => Promise<any> | any) {
-    if (!this.#deferred) this.#deferred = [];
-    this.#deferred.push(task);
-  }
-
-  get deferred() {
-    return this.#deferred;
-  }
-
-  get executionCtx() {
-    return this.#executionCtx;
+    if (!this.deferred) this.deferred = [];
+    this.deferred.push(task);
   }
 
   get routine() {
+    if (!this.#routine) {
+      const [routine, cancel] = withCancel(background());
+      this.#routine = routine;
+      if (!this.#rawRequest.signal) this.routine;
+      if (this.#rawRequest.signal.aborted) {
+          cancel();
+      } else {
+          this.#rawRequest.signal.addEventListener("abort", () => cancel(), { once: true });
+      }
+      
+    }
     return this.#routine;
   }
 
@@ -73,10 +71,13 @@ export class Context<
     for (const name in headers) {
       if (Object.prototype.hasOwnProperty.call(headers, name)) {
         const value = headers[name];
-        this.#response.headers.append(
-          name,
-          Array.isArray(value) ? value.join(",") : value
-        );
+        if (Array.isArray(value)) {
+          for (let i = 0; i < value.length; i++) {
+            this.header.append(name, value[i]);
+          }
+        } else {
+          this.header.set(name, value);
+        }
       }
     }
     return this;
@@ -84,7 +85,7 @@ export class Context<
 
   setCookie(name: string, value: string, options?: ck.CookieSerializeOptions) {
     const ckStr = ck.serialize(name, value, options);
-    this.#response.headers.append("Set-Cookie", ckStr);
+    this.header.append("Set-Cookie", ckStr);
     return this;
   }
 
@@ -107,7 +108,17 @@ export class Context<
   }
 
   get res() {
+    if (!this.#response) {
+      this.#response = new Response(null, { headers: this.#headers });
+    }
     return this.#response;
+  }
+
+  get header() {
+    if (!this.#headers) {
+      this.#headers = new Headers();
+    }
+    return this.#headers;
   }
 
   /**
@@ -141,6 +152,7 @@ export class Context<
   set<Key extends keyof E["Variables"]>(key: Key, value: E["Variables"][Key]): void;
   set(key: string, value: unknown): void;
   set(key: string, value: unknown): void {
+    if (!this.#variables) this.#variables = new Map();
     this.#variables.set(key, value);
   }
 
@@ -150,7 +162,7 @@ export class Context<
   get<Key extends keyof E["Variables"]>(key: Key): E["Variables"][Key];
   get<T>(key: string): T;
   get(key: string): unknown {
-    return this.#variables.get(key);
+    return this.#variables?.get(key);
   }
 
   /**
@@ -231,19 +243,30 @@ export class Context<
   json<T extends Record<any, any> | Array<any>, U extends StatusCode = 200>(
     object: T,
     status?: U,
-    _headers: HeaderRecord = {}
+    _headers?: HeaderRecord
   ): Response & import("./types").TypedResponse<T, U, "json"> {
     const body = JSON.stringify(object);
-    const headers = this.#response.headers;
-    headers.set("Content-Type", "application/json; charset=UTF-8");
-    for (const key in _headers) {
-      const val = _headers[key];
-      headers.set(key, Array.isArray(val) ? val.join(",") : val);
+    this.#status = status ?? 200;
+
+    if (!this.#headers && !_headers && !this.#response) {
+      this.#response = new Response(body, {
+        status: this.#status,
+        headers: { "Content-Type": "application/json; charset=UTF-8" }
+      });
+      return this.#response as any;
     }
 
-    this.#status = status ?? 200;
-    this.#response = new Response(body, { status: status ?? 200, headers });
-    return this.#response as Response & import("./types").TypedResponse<T, U, "json">;
+    const headers = this.#headers || new Headers();
+    headers.set("Content-Type", "application/json; charset=UTF-8");
+    if (_headers) {
+      for (const key in _headers) {
+        const val = _headers[key];
+        headers.set(key, Array.isArray(val) ? val.join(",") : val);
+      }
+    }
+
+    this.#response = new Response(body, { status: this.#status, headers });
+    return this.#response as any;
   }
 
   /**
@@ -255,18 +278,29 @@ export class Context<
   text<T extends string, U extends StatusCode = 200>(
     text: T,
     status?: U,
-    _headers: HeaderRecord = {}
+    _headers?: HeaderRecord
   ): Response & import("./types").TypedResponse<T, U, "text"> {
-    const headers = this.#response.headers;
-    headers.set("Content-Type", "text/plain; charset=UTF-8");
-    for (const key in _headers) {
-      const val = _headers[key];
-      headers.set(key, Array.isArray(val) ? val.join(",") : val);
+    this.#status = status ?? 200;
+
+    if (!this.#headers && !_headers && !this.#response) {
+      this.#response = new Response(text, {
+        status: this.#status,
+        headers: { "Content-Type": "text/plain; charset=UTF-8" }
+      });
+      return this.#response as any;
     }
 
-    this.#status = status ?? 200;
-    this.#response = new Response(text, { status: status ?? 200, headers });
-    return this.#response as Response & import("./types").TypedResponse<T, U, "text">;
+    const headers = this.#headers || new Headers();
+    headers.set("Content-Type", "text/plain; charset=UTF-8");
+    if (_headers) {
+      for (const key in _headers) {
+        const val = _headers[key];
+        headers.set(key, Array.isArray(val) ? val.join(",") : val);
+      }
+    }
+
+    this.#response = new Response(text, { status: this.#status, headers });
+    return this.#response as any;
   }
 
   /**
@@ -278,18 +312,29 @@ export class Context<
   html<T extends string, U extends StatusCode = StatusCode>(
     html: T,
     status?: U,
-    _headers: HeaderRecord = {}
+    _headers?: HeaderRecord
   ): Response & import("./types").TypedResponse<T, U, "html"> {
-    const headers = this.#response.headers;
-    headers.set("Content-Type", "text/html; charset=UTF-8");
-    for (const key in _headers) {
-      const val = _headers[key];
-      headers.set(key, Array.isArray(val) ? val.join(",") : val);
+    this.#status = status ?? 200;
+
+    if (!this.#headers && !_headers && !this.#response) {
+      this.#response = new Response(html, {
+        status: this.#status,
+        headers: { "Content-Type": "text/html; charset=UTF-8" }
+      });
+      return this.#response as any;
     }
 
-    this.#status = status ?? 200;
-    this.#response = new Response(html, { status: status ?? 200, headers });
-    return this.#response as Response & import("./types").TypedResponse<T, U, "html">;
+    const headers = this.#headers || new Headers();
+    headers.set("Content-Type", "text/html; charset=UTF-8");
+    if (_headers) {
+      for (const key in _headers) {
+        const val = _headers[key];
+        headers.set(key, Array.isArray(val) ? val.join(",") : val);
+      }
+    }
+
+    this.#response = new Response(html, { status: this.#status, headers });
+    return this.#response as any;
   }
 
   /**
@@ -298,10 +343,20 @@ export class Context<
    * @param status - Optional HTTP status code (default: 302).
    */
   redirect(location: string, status: StatusCode = 302): Response {
-    const headers = this.#response.headers;
-    headers.set("Location", location);
     this.#status = status;
-    this.#response = new Response(null, { status, headers });
+
+    if (!this.#headers && !this.#response) {
+      this.#response = new Response(null, {
+        status: this.#status,
+        headers: { Location: location }
+      });
+      return this.#response;
+    }
+
+    const headers = this.#headers || new Headers();
+    headers.set("Location", location);
+
+    this.#response = new Response(null, { status: this.#status, headers });
     return this.#response;
   }
 
@@ -313,19 +368,30 @@ export class Context<
    */
   stream(
     stream: ReadableStream,
-    status: StatusCode = 200,
-    _headers: HeaderRecord = {}
+    status?: StatusCode,
+    _headers?: HeaderRecord
   ): Response {
-    const headers = this.#response.headers;
-    headers.set("Content-Type", "text/plain; charset=UTF-8");
-    headers.set("Transfer-Encoding", "chunked");
-    for (const key in _headers) {
-      const val = _headers[key];
-      headers.set(key, Array.isArray(val) ? val.join(",") : val);
+    this.#status = status ?? 200;
+
+    if (!this.#headers && !_headers && !this.#response) {
+      this.#response = new Response(stream, {
+        status: this.#status,
+        headers: { "Content-Type": "text/plain; charset=UTF-8", "Transfer-Encoding": "chunked" }
+      });
+      return this.#response;
     }
 
-    this.#status = status;
-    this.#response = new Response(stream, { status, headers });
+    const headers = this.#headers || new Headers();
+    headers.set("Content-Type", "text/plain; charset=UTF-8");
+    headers.set("Transfer-Encoding", "chunked");
+    if (_headers) {
+      for (const key in _headers) {
+        const val = _headers[key];
+        headers.set(key, Array.isArray(val) ? val.join(",") : val);
+      }
+    }
+
+    this.#response = new Response(stream, { status: this.#status, headers });
     return this.#response;
   }
 
