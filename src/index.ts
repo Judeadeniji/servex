@@ -9,6 +9,7 @@ import type {
 } from "./types";
 import { Context } from "./context";
 import { executeHandlers } from "./core/response";
+import { HttpException } from "./http-exception";
 import {
   RouterAdapter,
   RouterType,
@@ -69,18 +70,23 @@ export function baseFetch(
         return res;
       };
 
+      const resolveError = (error: unknown): Response => {
+        if (error instanceof HttpException) return error.getResponse();
+        console.error("Unhandled error:", error);
+        return new Response(
+          JSON.stringify({ statusCode: 500, error: "Internal Server Error", message: "An unexpected error occurred" }),
+          { status: 500, headers: { "Content-Type": "application/json; charset=UTF-8" } }
+        );
+      };
+
       try {
         const res = executor(context);
         if (res instanceof Promise) {
-          return res.then(handleValue).catch(error => {
-            console.error("Unhandled error:", error);
-            return handleValue(new Response("Internal Server Error", { status: 500 }));
-          });
+          return res.then(handleValue).catch(error => handleValue(resolveError(error)));
         }
         return handleValue(res);
       } catch (error) {
-        console.error("Unhandled error:", error);
-        return handleValue(new Response("Internal Server Error", { status: 500 }));
+        return handleValue(resolveError(error));
       }
     }
   }
@@ -220,8 +226,15 @@ async function baseFetchSlow(
       }
     }
     if (!response) {
-      console.error("Unhandled error:", error);
-      response = new Response("Internal Server Error", { status: 500 });
+      if (error instanceof HttpException) {
+        response = error.getResponse();
+      } else {
+        console.error("Unhandled error:", error);
+        response = new Response(
+          JSON.stringify({ statusCode: 500, error: "Internal Server Error", message: "An unexpected error occurred" }),
+          { status: 500, headers: { "Content-Type": "application/json; charset=UTF-8" } }
+        );
+      }
     }
   } finally {
     // ── Post-Response Processing ─────────────────────────────────────────────

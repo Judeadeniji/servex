@@ -2,6 +2,7 @@ import { Context } from "./context";
 import type { StatusCode } from "./http-status";
 import type { RouterType } from "./router/adapter";
 import type { MergePaths } from "./router/types";
+import type { HttpException } from "./http-exception";
 
 
 type Bindings = object;
@@ -39,7 +40,7 @@ export interface ServerOptions<P extends string = '', P1 extends string = ''> {
 
 export type HookHandler<C extends Context> = (ctx: C) => void | Promise<void> | Response | Promise<Response>;
 export type AfterHandleHook<C extends Context> = (ctx: C, response: Response) => void | Promise<void> | Response | Promise<Response>;
-export type ErrorHook<C extends Context> = (error: Error, ctx: C) => void | Promise<void> | Response | Promise<Response>;
+export type ErrorHook<C extends Context> = (error: HttpException | Error, ctx: C) => void | Promise<void> | Response | Promise<Response>;
 
 export interface Hooks {
   onRequest: HookHandler<Context>[];
