@@ -35,7 +35,8 @@ export function baseFetch(
   hooks: import("./types").Hooks,
   compiledCache: Map<string, (context: Context) => Promise<Response | undefined>>,
   envBindings?: any,
-  executionCtx?: any
+  executionCtx?: any,
+  debug: boolean = false
 ): Response | Promise<Response> {
   // ── Fast Path (No Hooks) ───────────────────────────────────────────────────
   if (hooks.onRequest.length === 0 && hooks.onBeforeHandle.length === 0 && hooks.onAfterHandle.length === 0 && hooks.onError.length === 0) {
@@ -56,7 +57,8 @@ export function baseFetch(
         request, 
         envBindings ?? ((typeof process !== "undefined" ? process.env : {}) as any), 
         { params: route.params }, 
-        executionCtx
+        executionCtx,
+        debug
       );
 
       const handleValue = (r: Response | undefined) => {
@@ -75,8 +77,15 @@ export function baseFetch(
       const resolveError = (error: unknown): Response => {
         if (error instanceof HttpException) return error.getResponse();
         console.error("Unhandled error:", error);
+        
+        const payload: any = { statusCode: 500, error: "Internal Server Error", message: "An unexpected error occurred" };
+        if (debug) {
+            payload.message = error instanceof Error ? error.message : String(error);
+            payload.stack = error instanceof Error ? error.stack : undefined;
+        }
+        
         return new Response(
-          JSON.stringify({ statusCode: 500, error: "Internal Server Error", message: "An unexpected error occurred" }),
+          JSON.stringify(payload),
           { status: 500, headers: { "Content-Type": "application/json; charset=UTF-8" } }
         );
       };
@@ -94,7 +103,7 @@ export function baseFetch(
   }
 
   // ── Slow Path ──────────────────────────────────────────────────────────────
-  return baseFetchSlow(router, request, method, pathname, middlewares, hooks, compiledCache, envBindings, executionCtx);
+  return baseFetchSlow(router, request, method, pathname, middlewares, hooks, compiledCache, envBindings, executionCtx, debug);
 }
 
 async function baseFetchSlow(
@@ -106,7 +115,8 @@ async function baseFetchSlow(
   hooks: import("./types").Hooks,
   compiledCache: Map<string, (context: Context) => Promise<Response | undefined>>,
   envBindings?: any,
-  executionCtx?: any
+  executionCtx?: any,
+  debug: boolean = false
 ): Promise<Response> {
   let context: Context | undefined = undefined;
   let response: Response | undefined;
@@ -119,7 +129,8 @@ async function baseFetchSlow(
         request, 
         envBindings ?? ((typeof process !== "undefined" ? process.env : {}) as any), 
         { params: {} }, 
-        executionCtx
+        executionCtx,
+        debug
       );
       for (let i = 0; i < onReqLen; i++) {
         const r = await hooks.onRequest[i](context);
@@ -149,7 +160,8 @@ async function baseFetchSlow(
           request, 
           envBindings ?? ((typeof process !== "undefined" ? process.env : {}) as any), 
           { params: {} }, 
-          executionCtx
+          executionCtx,
+          debug
         );
       }
       // 404 path: execute global middlewares
@@ -172,7 +184,8 @@ async function baseFetchSlow(
         request, 
         envBindings ?? ((typeof process !== "undefined" ? process.env : {}) as any), 
         { params: route.params }, 
-        executionCtx
+        executionCtx,
+        debug
       );
     } else {
       context.setParams(route.params);
@@ -232,8 +245,13 @@ async function baseFetchSlow(
         response = error.getResponse();
       } else {
         console.error("Unhandled error:", error);
+        const payload: any = { statusCode: 500, error: "Internal Server Error", message: "An unexpected error occurred" };
+        if (debug) {
+            payload.message = error instanceof Error ? error.message : String(error);
+            payload.stack = error instanceof Error ? error.stack : undefined;
+        }
         response = new Response(
-          JSON.stringify({ statusCode: 500, error: "Internal Server Error", message: "An unexpected error occurred" }),
+          JSON.stringify(payload),
           { status: 500, headers: { "Content-Type": "application/json; charset=UTF-8" } }
         );
       }
@@ -390,7 +408,8 @@ export class ServeXApp<E extends Env = Env, S = {}, B extends string = "/"> exte
     constructor(
         router: RouterAdapter<ServerRoute[]>,
         private middlewares: Handler<Context>[],
-        basePath: B = "/" as B
+        basePath: B = "/" as B,
+        public debug: boolean = false
     ) {
         super(router);
         // normalisePath at runtime; cast to B since the normalised form is the
@@ -444,7 +463,7 @@ export class ServeXApp<E extends Env = Env, S = {}, B extends string = "/"> exte
 
         const method = request.method as Method;
 
-        return baseFetch(this.routerAdapter, request, method, pathname, this.middlewares, this.hooks, this.compiledCache, env, executionCtx);
+        return baseFetch(this.routerAdapter, request, method, pathname, this.middlewares, this.hooks, this.compiledCache, env, executionCtx, this.debug);
     };
 
     request = (input: RequestInfo, init?: RequestInit): Promise<Response> | Response => {
@@ -455,7 +474,7 @@ export class ServeXApp<E extends Env = Env, S = {}, B extends string = "/"> exte
 export function createServer<E extends Env = Env, B extends string = "/">(
   options: ServerOptions<B> = {} as ServerOptions<B>
 ): ServeXRouter<E, {}, NormalisePath<B>> & ServeXApp<E, {}, NormalisePath<B>> {
-  const { router = RouterType.SONIC, middlewares = [], basePath } = options;
+  const { router = RouterType.SONIC, middlewares = [], basePath, debug = false } = options;
   const routerAdapter = new RouterAdapter<ServerRoute[]>({
     type: router,
   });
@@ -463,7 +482,8 @@ export function createServer<E extends Env = Env, B extends string = "/">(
   return new ServeXApp<E, {}, NormalisePath<B>>(
     routerAdapter,
     middlewares,
-    basePath as NormalisePath<B>
+    basePath as NormalisePath<B>,
+    debug
   ) as ServeXRouter<E, {}, NormalisePath<B>> & ServeXApp<E, {}, NormalisePath<B>>;
 }
 

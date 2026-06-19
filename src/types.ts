@@ -52,6 +52,12 @@ export interface ServerOptions<B extends string = "/"> {
    * //       schema S becomes { "/api/v1/users": { GET: ... } }
    */
   basePath?: B;
+  /**
+   * Enable debug mode. If true, full stack traces will be returned in 500 error responses,
+   * and the `context.debug` flag will be set to true for use in middlewares.
+   * Default: false
+   */
+  debug?: boolean;
 }
 
 export type HookHandler<C extends Context> = (ctx: C) => void | Promise<void> | Response | Promise<Response>;

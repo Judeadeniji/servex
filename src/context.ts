@@ -33,11 +33,12 @@ export class Context<
   deferred?: Array<() => Promise<any> | any>;
   finalResponse?: Response;
 
-  constructor(request: Request, env: E["Bindings"], ctx: RequestContext, executionCtx?: any) {
+  constructor(request: Request, env: E["Bindings"], ctx: RequestContext, executionCtx?: any, debug: boolean = false) {
     this.#rawRequest = request as ServeXRequest;
     this.#env = env;
     this.#params = ctx?.params || {};
     this.executionCtx = executionCtx;
+    this.debug = debug;
   }
 
   /**
