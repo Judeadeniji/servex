@@ -86,4 +86,43 @@ describe("Mounting WinterTC apps (Hono & Elysia)", () => {
     expect(capturedEnv).toEqual({ secret: "123" });
     expect(capturedCtx.waitUntil).toBeDefined();
   });
+
+  it("should allow ServeX to be mounted inside Hono using .route() or .mount()", async () => {
+    const servexApp = createServer();
+    servexApp.get("/", () => new Response("ServeX Root inside Hono"));
+    servexApp.get("/hello", () => new Response("ServeX Hello inside Hono"));
+
+    const hono = new Hono();
+    // Hono's mount expects a fetch function
+    hono.mount("/servex", servexApp.fetch);
+
+    // Exact mount path handled by ServeX
+    const resRoot = await hono.request("http://localhost/servex");
+    expect(resRoot.status).toBe(200);
+    expect(await resRoot.text()).toBe("ServeX Root inside Hono");
+
+    // Sub-path handled by ServeX
+    const resHello = await hono.request("http://localhost/servex/hello");
+    expect(resHello.status).toBe(200);
+    expect(await resHello.text()).toBe("ServeX Hello inside Hono");
+  });
+
+  it("should allow ServeX to be mounted inside Elysia using .mount()", async () => {
+    const servexApp = createServer();
+    servexApp.get("/", () => new Response("ServeX Root inside Elysia"));
+    servexApp.get("/hello", () => new Response("ServeX Hello inside Elysia"));
+
+    const elysia = new Elysia();
+    elysia.mount("/servex", servexApp.fetch);
+
+    // Exact mount path handled by ServeX
+    const resRoot = await elysia.handle(new Request("http://localhost/servex"));
+    expect(resRoot.status).toBe(200);
+    expect(await resRoot.text()).toBe("ServeX Root inside Elysia");
+
+    // Sub-path handled by ServeX
+    const resHello = await elysia.handle(new Request("http://localhost/servex/hello"));
+    expect(resHello.status).toBe(200);
+    expect(await resHello.text()).toBe("ServeX Hello inside Elysia");
+  });
 });
