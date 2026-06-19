@@ -1,0 +1,117 @@
+import type { Context } from "../../context";
+import type { NextFunction } from "../../types";
+
+export interface ServeStaticOptions {
+  /**
+   * Root directory to serve files from. Defaults to "./public"
+   */
+  root?: string;
+  /**
+   * Default file to serve if a directory is requested. Defaults to "index.html"
+   */
+  index?: string;
+}
+
+const MIME_TYPES: Record<string, string> = {
+  ".html": "text/html; charset=utf-8",
+  ".css": "text/css; charset=utf-8",
+  ".js": "application/javascript; charset=utf-8",
+  ".json": "application/json; charset=utf-8",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".gif": "image/gif",
+  ".svg": "image/svg+xml",
+  ".ico": "image/x-icon",
+  ".webp": "image/webp",
+  ".txt": "text/plain; charset=utf-8",
+  ".pdf": "application/pdf",
+  ".xml": "application/xml",
+  ".zip": "application/zip",
+  ".wasm": "application/wasm",
+  ".mp4": "video/mp4",
+  ".mp3": "audio/mpeg",
+};
+
+/**
+ * Middleware to serve static files from the file system.
+ * Uses dynamic imports for Node built-ins so it won't crash in edge environments
+ * unless executed.
+ */
+export const serveStatic = (options: ServeStaticOptions = {}) => {
+  const rootDir = options.root ?? "./public";
+  const indexFile = options.index ?? "index.html";
+  
+  let fs: typeof import("node:fs/promises");
+  let path: typeof import("node:path");
+  let initialized = false;
+
+  return async (c: Context, next: NextFunction) => {
+    // Only handle GET and HEAD requests
+    if (c.req.method !== "GET" && c.req.method !== "HEAD") {
+      return next();
+    }
+
+    try {
+      if (!initialized) {
+        fs = await import("node:fs/promises");
+        path = await import("node:path");
+        initialized = true;
+      }
+    } catch (e) {
+      console.warn("serveStatic: node:fs and node:path are required for this middleware.");
+      return next();
+    }
+
+    const url = new URL(c.req.url);
+    let pathname = decodeURIComponent(url.pathname);
+
+    // Prevent directory traversal
+    if (pathname.includes("..")) {
+      return c.text("Forbidden", 403);
+    }
+
+    const absoluteRoot = path.resolve(rootDir);
+    let requestedPath = path.join(absoluteRoot, pathname);
+
+    try {
+      let stat = await fs.stat(requestedPath);
+      
+      // If it's a directory, append index file
+      if (stat.isDirectory()) {
+        requestedPath = path.join(requestedPath, indexFile);
+        stat = await fs.stat(requestedPath);
+      }
+
+      // Final security check: ensure resolved path is within root
+      if (!requestedPath.startsWith(absoluteRoot)) {
+        return c.text("Forbidden", 403);
+      }
+
+      // Read file content
+      const fileBuffer = await fs.readFile(requestedPath);
+      const ext = path.extname(requestedPath).toLowerCase();
+      const contentType = MIME_TYPES[ext] || "application/octet-stream";
+
+      c.setHeaders({
+        "Content-Type": contentType,
+        "Content-Length": stat.size.toString()
+      });
+
+      // We explicitly bypass Context's strict typing for the body to return raw binary Buffer
+      return new Response(fileBuffer, {
+        status: 200,
+        headers: c.header
+      });
+      
+    } catch (error: any) {
+      // File not found, let the next middleware/handler run
+      if (error.code === "ENOENT" || error.code === "ENOTDIR") {
+        return next();
+      }
+      
+      // Re-throw unexpected errors
+      throw error;
+    }
+  };
+};

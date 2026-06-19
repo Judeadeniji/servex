@@ -372,6 +372,19 @@ export class ServeXApp<E extends Env = Env, S = {}, B extends string = "/"> exte
     onError(handler: import("./types").ErrorHook<Context>) { this.hooks.onError.push(handler); return this; }
     onResponse(handler: import("./types").HookHandler<Context>) { this.hooks.onResponse.push(handler); return this; }
 
+    use(path: string | import("./types").MiddlewareHandler<Context>, ...middlewares: import("./types").MiddlewareHandler<Context>[]) {
+        if (typeof path === "string") {
+            if (path === "*" || path === "/*") {
+                this.middlewares.push(...middlewares);
+            } else {
+                this.routerAdapter.pushMiddlewares(path, middlewares);
+            }
+            return this;
+        }
+        this.middlewares.push(path, ...middlewares);
+        return this;
+    }
+
     fetch = (request: Request, env?: any, executionCtx?: any): Promise<Response> | Response => {
         const url = request.url;
         const queryIndex = url.indexOf("?", 8);
