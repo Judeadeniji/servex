@@ -92,4 +92,78 @@ describe("Helpers: WebSocket", () => {
     expect(res.status).toBe(426);
     expect(await res.text()).toContain("Upgrade Required");
   });
+
+  it("should pass configuration options to the websocket object", () => {
+    const config = {
+      idleTimeout: 30,
+      maxPayloadLength: 1024,
+      perMessageDeflate: true,
+      backpressureLimit: 512,
+      closeOnBackpressureLimit: true
+    };
+
+    const { websocket } = createWebSocketManager(config);
+
+    // Verify all config properties are correctly mapped onto the websocket object
+    expect(websocket.idleTimeout).toBe(30);
+    expect(websocket.maxPayloadLength).toBe(1024);
+    expect(websocket.perMessageDeflate).toBe(true);
+    expect(websocket.backpressureLimit).toBe(512);
+    expect(websocket.closeOnBackpressureLimit).toBe(true);
+
+    // Also verify the methods still exist
+    expect(typeof websocket.open).toBe("function");
+    expect(typeof websocket.message).toBe("function");
+    expect(typeof websocket.close).toBe("function");
+    expect(typeof websocket.drain).toBe("function");
+  });
+
+  it("should enforce configuration (e.g., maxPayloadLength) at the engine level", async () => {
+    // We set a ridiculously small payload length to trigger the engine's internal rejection
+    const { websocket, createHandler } = createWebSocketManager({
+      maxPayloadLength: 10 // 10 bytes max
+    });
+    
+    const wsHandler = createHandler({
+      message(ws, msg) {
+        ws.send("ok");
+      }
+    });
+
+    const app = createServer();
+    app.get("/ws-limit", (c) => wsHandler(c));
+
+    const server = Bun.serve({
+      port: 0,
+      fetch: app.fetch,
+      websocket
+    });
+
+    const url = `ws://localhost:${server.port}/ws-limit`;
+    const ws = new WebSocket(url);
+    
+    let closeCode = 0;
+    
+    await new Promise<void>((resolve, reject) => {
+      ws.onopen = () => {
+        // Send an 11 byte string, which exceeds the 10 byte maxPayloadLength
+        ws.send("hello world"); // 11 characters
+      };
+      ws.onmessage = () => {
+        reject(new Error("Message should not have been received"));
+      };
+      ws.onclose = (e) => {
+        closeCode = e.code;
+        resolve();
+      };
+      ws.onerror = () => {
+        // an error might be emitted before closing depending on the environment
+      };
+    });
+
+    server.stop();
+    
+    // Depending on the engine's exact abrupt closure behavior, it might be 1009 or 1006 (Abnormal Closure)
+    expect([1009, 1006]).toContain(closeCode);
+  });
 });

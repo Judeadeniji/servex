@@ -21,6 +21,19 @@ export interface WebSocketHandler<T = any> {
   drain?: (ws: ServerWebSocket<T>) => void | Promise<void>;
 }
 
+export interface WebSocketConfig {
+  /** Enable compression for clients that support it. Default: false */
+  perMessageDeflate?: boolean | { compress?: boolean; decompress?: boolean };
+  /** The maximum size of a message. */
+  maxPayloadLength?: number;
+  /** After a connection has not received a message for this many seconds, it will be closed. Default: 120 */
+  idleTimeout?: number;
+  /** The maximum number of bytes that can be buffered for a single connection. Default: 16777216 (16MB) */
+  backpressureLimit?: number;
+  /** Close the connection if the backpressure limit is reached. Default: false */
+  closeOnBackpressureLimit?: boolean;
+}
+
 /**
  * Creates a standalone WebSocket manager.
  * This allows adding WebSocket support without modifying the core server.
@@ -38,11 +51,12 @@ export interface WebSocketHandler<T = any> {
  * 
  * Bun.serve({ fetch: app.fetch, websocket });
  */
-export const createWebSocketManager = () => {
+export const createWebSocketManager = (config?: WebSocketConfig) => {
   const handlers = new Map<string, WebSocketHandler>();
   let idCounter = 0;
 
   const websocket = {
+    ...config,
     open(ws: any) {
       const handlerId = ws.data?.servexWsId;
       const handler = handlers.get(handlerId);
