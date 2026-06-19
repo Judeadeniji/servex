@@ -1,15 +1,21 @@
 import type { Context } from "../../context";
 import type { NextFunction } from "../../types";
 
+import type { StorageAdapter } from "../../storage/types";
 export interface ServeStaticOptions {
   /**
-   * Root directory to serve files from. Defaults to "./public"
+   * Root directory to serve files from. Defaults to "./public" if no storage adapter is provided.
    */
   root?: string;
   /**
    * Default file to serve if a directory is requested. Defaults to "index.html"
    */
   index?: string;
+  /**
+   * Optional storage adapter to serve files from instead of the local file system.
+   * Useful for edge environments (Cloudflare Workers, Deno Deploy) where node:fs is unavailable.
+   */
+  storage?: StorageAdapter;
 }
 
 const MIME_TYPES: Record<string, string> = {
@@ -52,6 +58,47 @@ export const serveStatic = (options: ServeStaticOptions = {}) => {
       return next();
     }
 
+    const url = new URL(c.req.url);
+    let pathname = decodeURIComponent(url.pathname);
+
+    if (options.storage) {
+      let key = pathname.startsWith("/") ? pathname.slice(1) : pathname;
+      if (!key) key = indexFile;
+      
+      let data = await options.storage.get(key);
+      let finalKey = key;
+      
+      // If not found, try index fallback
+      if (!data) {
+        let indexKey = key.endsWith("/") ? key + indexFile : key + "/" + indexFile;
+        // Strip trailing/leading slashes just in case
+        if (indexKey.startsWith("/")) indexKey = indexKey.slice(1);
+
+        data = await options.storage.get(indexKey);
+        if (data) finalKey = indexKey;
+      }
+
+      if (!data) return next();
+
+      const lastDot = finalKey.lastIndexOf(".");
+      const lastSlash = finalKey.lastIndexOf("/");
+      let ext = "";
+      if (lastDot !== -1 && lastDot > lastSlash) {
+        ext = finalKey.slice(lastDot).toLowerCase();
+      }
+
+      const contentType = MIME_TYPES[ext] || "application/octet-stream";
+      c.setHeaders({
+        "Content-Type": contentType,
+        "Content-Length": data.byteLength.toString()
+      });
+
+      return new Response(data, {
+        status: 200,
+        headers: c.header
+      });
+    }
+
     try {
       if (!initialized) {
         fs = await import("node:fs/promises");
@@ -62,9 +109,6 @@ export const serveStatic = (options: ServeStaticOptions = {}) => {
       console.warn("serveStatic: node:fs and node:path are required for this middleware.");
       return next();
     }
-
-    const url = new URL(c.req.url);
-    let pathname = decodeURIComponent(url.pathname);
 
     // Prevent directory traversal
     if (pathname.includes("..")) {
