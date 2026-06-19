@@ -110,6 +110,16 @@ export interface ServeXRouter<E extends Env = Env, S = {}, B extends string = "/
   route<P extends string, ChildSchema = {}>(path: P, app: ServeXRouter<any, ChildSchema, any>): ServeXRouter<E, S & ChildSchema, B>;
 
   /**
+   * Mount a WinterTC-compliant fetch function to a specific path.
+   * This allows interoperability with frameworks like Hono, Remix, Itty Router, etc.
+   *
+   * @example
+   * const hono = new Hono().get("/", (c) => c.text("Hono!"));
+   * app.mount("/hono", hono.fetch);
+   */
+  mount<P extends string>(path: P, fetchFn: (request: Request, env?: any, ctx?: any) => Response | Promise<Response>): ServeXRouter<E, S, B>;
+
+  /**
    * Handle an incoming `Request` — compatible with Cloudflare Workers, Bun,
    * and Deno. Always present on the chained type so it can be referenced after
    * any number of `.get().post()…` calls without a type cast.

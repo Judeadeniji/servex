@@ -304,7 +304,10 @@ export class ServeXRouterImpl<E extends Env = Env, S = {}, B extends string = "/
     patch(path: string, ...handlers: any[]) { return this.add("PATCH", path, handlers); }
     options(path: string, ...handlers: any[]) { return this.add("OPTIONS", path, handlers); }
     head(path: string, ...handlers: any[]) { return this.add("HEAD", path, handlers); }
-    all(path: string, ...handlers: any[]) { return this.add("ALL", path, handlers); }
+    all(path: string, ...handlers: any[]) {
+        ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"].forEach(m => this.add(m as Method, path, handlers));
+        return this;
+    }
 
     route(path: string, fnOrApp: any) {
         if (fnOrApp instanceof ServeXRouterImpl) {
@@ -316,6 +319,35 @@ export class ServeXRouterImpl<E extends Env = Env, S = {}, B extends string = "/
         const childServeXRouter = new ServeXRouterImpl(childRouter);
         fnOrApp(childServeXRouter);
         this.routerAdapter.addSubTrie(path, childRouter);
+        return this as any;
+    }
+
+    mount(path: string, fetchFn: (request: Request, env?: any, ctx?: any) => Response | Promise<Response>) {
+        // Strip trailing slash if present to ensure the wildcard matches correctly
+        const normalizedPath = path.endsWith("/") && path !== "/" ? path.slice(0, -1) : path;
+        
+        const handler = (c: import("./context").Context) => {
+            const req = c.req;
+            const url = new URL(req.url);
+            
+            // Strip the mount path from the URL
+            let newPathname = url.pathname.slice(normalizedPath.length);
+            if (!newPathname.startsWith("/")) {
+                newPathname = "/" + newPathname;
+            }
+            url.pathname = newPathname;
+            
+            // Create a new request with the stripped URL
+            const newReq = new Request(url.toString(), req);
+            return fetchFn(newReq, c.env, c.executionCtx);
+        };
+
+        // Mount a catch-all route at the specified path
+        this.all(`${normalizedPath}/*`, handler);
+        
+        // Also map the exact path without trailing slash
+        this.all(normalizedPath, handler);
+
         return this as any;
     }
 
