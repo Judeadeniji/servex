@@ -72,8 +72,8 @@ export function cors<C extends Context>(
     }
 
     if (ctx.req.method === "OPTIONS") {
-      if (opts.maxAge !== null) {
-        set("Access-Control-Max-Age", opts.maxAge!.toString());
+      if (opts.maxAge !== undefined && opts.maxAge !== null) {
+        set("Access-Control-Max-Age", opts.maxAge.toString());
       }
 
       if (opts.allowMethods?.length) {
@@ -91,16 +91,16 @@ export function cors<C extends Context>(
       }
       if (headers?.length) {
         set("Access-Control-Allow-Headers", headers.join(","));
-        ctx.res.headers.append("Vary", "Access-Control-Request-Headers");
+        ctx.header.append("Vary", "Access-Control-Request-Headers");
       }
 
-      ctx.res.headers.delete("Content-Length");
-      ctx.res.headers.delete("Content-Type");
+      ctx.header.delete("Content-Length");
+      ctx.header.delete("Content-Type");
 
       return new Response(null, {
-        headers: ctx.res.headers,
+        headers: ctx.header,
         status: 204,
-        statusText: ctx.res.statusText,
+        statusText: "No Content",
       });
     }
     await next();
