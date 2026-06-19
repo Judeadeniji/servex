@@ -93,7 +93,7 @@ export const serveStatic = (options: ServeStaticOptions = {}) => {
         "Content-Length": data.byteLength.toString()
       });
 
-      return new Response(data, {
+      return new Response(data as unknown as BodyInit, {
         status: 200,
         headers: c.header
       });
@@ -142,8 +142,7 @@ export const serveStatic = (options: ServeStaticOptions = {}) => {
         "Content-Length": stat.size.toString()
       });
 
-      // We explicitly bypass Context's strict typing for the body to return raw binary Buffer
-      return new Response(fileBuffer, {
+      return new Response(fileBuffer as unknown as BodyInit, {
         status: 200,
         headers: c.header
       });
