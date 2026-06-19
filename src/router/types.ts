@@ -153,3 +153,29 @@ export type MergePaths<P1 extends string, P2 extends string> =
     : P2 extends `/${infer R2}`
       ? `/${TrimSlash<P1>}/${R2}`
       : `/${TrimSlash<P1>}/${TrimSlash<P2>}`;
+
+/**
+ * Type-level mirror of the `normalisePath()` runtime function.
+ * - Strips trailing slashes (recursively).
+ * - Ensures a leading slash.
+ * - Leaves the root `"/"` unchanged.
+ */
+type TrimTrailingSlash<S extends string> = S extends `${infer R}/`
+  ? TrimTrailingSlash<R>
+  : S;
+type EnsureLeadingSlash<S extends string> = S extends `/${string}` ? S : `/${S}`;
+
+export type NormalisePath<B extends string> = B extends "/"
+  ? "/"
+  : EnsureLeadingSlash<TrimTrailingSlash<B>>;
+
+/**
+ * Produces the absolute path for a route with relative path `P` on an app
+ * whose base is `B`.
+ *
+ * Handles the root base-path `"/"` correctly — where a plain
+ * `MergePaths<"/", "/users">` would produce the incorrect `"//users"`.
+ */
+export type AbsolutePath<B extends string, P extends string> = B extends "/"
+  ? P
+  : MergePaths<B, P>;

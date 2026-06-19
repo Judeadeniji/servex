@@ -240,7 +240,7 @@ export class Context<
    * @param status - Optional HTTP status code (default: 200).
    * @param headers - Optional headers to include in the response.
    */
-  json<T extends Record<any, any> | Array<any>, U extends StatusCode = 200>(
+  json<T extends JSONValue, U extends StatusCode = 200>(
     object: T,
     status?: U,
     _headers?: HeaderRecord

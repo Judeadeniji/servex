@@ -16,6 +16,7 @@ import {
   type RouterAdapterOptions,
 } from "./router/adapter";
 import { compileHandlerChain } from "./compiler";
+import type { NormalisePath } from "./router/types";
 
 // Remove global cache
 
@@ -271,7 +272,7 @@ async function executePostProcess(hooks: import("./types").Hooks, context: Conte
   }
 }
 
-export class ServeXRouterImpl<E extends Env = Env, S = {}> implements ServeXRouter<E, S> {
+export class ServeXRouterImpl<E extends Env = Env, S = {}, B extends string = "/"> implements ServeXRouter<E, S, B> {
     constructor(protected routerAdapter: RouterAdapter<ServerRoute[]>) {}
 
     use(path: string | MiddlewareHandler<Context>, ...middlewares: MiddlewareHandler<Context>[]) {
@@ -313,9 +314,27 @@ export class ServeXRouterImpl<E extends Env = Env, S = {}> implements ServeXRout
         this.routerAdapter.addSubTrie(path, childRouter);
         return this as any;
     }
+
+    /**
+     * Handle an incoming `Request`.
+     * Note: This method is only fully implemented on the main application instance
+     * returned by `createServer()`.
+     */
+    fetch = (_request: Request, _env?: any, _executionCtx?: any): Response | Promise<Response> => {
+        throw new Error(
+            "Cannot call fetch() on a sub-router. Please ensure you are calling fetch() on the main application instance created by createServer()."
+        );
+    };
+
+    /** @see fetch */
+    request = (_input: RequestInfo, _init?: RequestInit): Response | Promise<Response> => {
+        throw new Error(
+            "Cannot call request() on a sub-router. Please ensure you are calling request() on the main application instance created by createServer()."
+        );
+    };
 }
 
-export class ServeXApp<E extends Env = Env, S = {}> extends ServeXRouterImpl<E, S> {
+export class ServeXApp<E extends Env = Env, S = {}, B extends string = "/"> extends ServeXRouterImpl<E, S, B> {
     public hooks: import("./types").Hooks = {
         onRequest: [],
         onBeforeHandle: [],
@@ -326,18 +345,21 @@ export class ServeXApp<E extends Env = Env, S = {}> extends ServeXRouterImpl<E, 
     public compiledCache = new Map<string, (context: Context) => Promise<Response | undefined>>();
 
     /**
-     * The normalised base path this app is scoped to.
-     * Always starts with `/`, never ends with `/` (except for the root "/").
+     * The literal base path this app is scoped to.
+     * Always starts with `/`, never ends with `/` (except for the root `"/"`).
+     * Typed as the literal `B` so RPC clients can read it from `typeof app`.
      */
-    public readonly basePath: string;
+    public readonly basePath: B;
 
     constructor(
         router: RouterAdapter<ServerRoute[]>,
         private middlewares: Handler<Context>[],
-        basePath: string = "/"
+        basePath: B = "/" as B
     ) {
         super(router);
-        this.basePath = normalisePath(basePath);
+        // normalisePath at runtime; cast to B since the normalised form is the
+        // contract the user agreed to when writing the literal.
+        this.basePath = normalisePath(basePath) as B;
     }
 
     onRequest(handler: import("./types").HookHandler<Context>) { this.hooks.onRequest.push(handler); return this; }
@@ -381,13 +403,19 @@ export class ServeXApp<E extends Env = Env, S = {}> extends ServeXRouterImpl<E, 
     };
 }
 
-export function createServer<E extends Env = Env>(options: ServerOptions<string, string> = {}) {
+export function createServer<E extends Env = Env, B extends string = "/">(
+  options: ServerOptions<B> = {} as ServerOptions<B>
+): ServeXRouter<E, {}, NormalisePath<B>> & ServeXApp<E, {}, NormalisePath<B>> {
   const { router = RouterType.SONIC, middlewares = [], basePath } = options;
   const routerAdapter = new RouterAdapter<ServerRoute[]>({
     type: router,
   });
 
-  return new ServeXApp<E, {}>(routerAdapter, middlewares, basePath) as ServeXRouter<E, {}> & ServeXApp<E, {}>;
+  return new ServeXApp<E, {}, NormalisePath<B>>(
+    routerAdapter,
+    middlewares,
+    basePath as NormalisePath<B>
+  ) as ServeXRouter<E, {}, NormalisePath<B>> & ServeXApp<E, {}, NormalisePath<B>>;
 }
 
 /**
