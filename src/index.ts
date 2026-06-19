@@ -61,6 +61,7 @@ export function baseFetch(
 
       const handleValue = (r: Response | undefined) => {
         const res = r || new Response("Not Found", { status: 404 });
+        context.finalResponse = res;
         if (hooks.onResponse.length > 0 || context.deferred) {
           if (executionCtx && typeof executionCtx.waitUntil === "function") {
             executionCtx.waitUntil(executePostProcess(hooks, context));
@@ -238,6 +239,9 @@ async function baseFetchSlow(
       }
     }
   } finally {
+    if (context && response) {
+      context.finalResponse = response;
+    }
     // ── Post-Response Processing ─────────────────────────────────────────────
     if (context && (hooks.onResponse.length > 0 || context.deferred)) {
       if (executionCtx && typeof executionCtx.waitUntil === "function") {

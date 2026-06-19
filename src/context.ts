@@ -31,6 +31,7 @@ export class Context<
   #routine?: SignalContext;
   executionCtx?: any;
   deferred?: Array<() => Promise<any> | any>;
+  finalResponse?: Response;
 
   constructor(request: Request, env: E["Bindings"], ctx: RequestContext, executionCtx?: any) {
     this.#rawRequest = request as ServeXRequest;
