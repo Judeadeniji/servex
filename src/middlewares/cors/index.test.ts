@@ -1,6 +1,5 @@
 import { describe, it, expect } from "bun:test";
 import { createServer } from "../..";
-import { RouterType } from "../../router/adapter";
 import { cors } from ".";
 
 describe("Middleware: CORS", () => {
