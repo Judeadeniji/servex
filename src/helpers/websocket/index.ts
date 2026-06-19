@@ -1,3 +1,4 @@
+import type { Server } from "bun";
 import type { Context } from "../../context";
 import { HttpException } from "../../http-exception";
 
@@ -70,8 +71,8 @@ export const createWebSocketManager = () => {
 
     return (c: Context, data?: Partial<T>): Response => {
       // Bun passes Server as the second parameter to fetch, which ServeX sets as `env` or `executionCtx`.
-      const server = (c.env && (c.env as any).upgrade) ? c.env : ((c.executionCtx && (c.executionCtx as any).upgrade) ? c.executionCtx : null);
-      
+      const server: Server | null = (c.env && (c.env as Server).upgrade) ? c.env : ((c.executionCtx && (c.executionCtx as Server).upgrade) ? c.executionCtx : null);
+
       if (!server || typeof server.upgrade !== "function") {
         throw new HttpException({
           statusCode: 426,
