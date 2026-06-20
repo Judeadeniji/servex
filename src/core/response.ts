@@ -23,24 +23,26 @@ export async function executeHandlers(
   context: Context,
   handlers: Handler<Context>[]
 ): Promise<Response | undefined> {
-  const len = handlers.length;
-  if (len === 0) return undefined;
+  async function dispatch(i: number): Promise<Response | undefined> {
+    if (i >= handlers.length) return undefined;
+    
+    let nextResult: Response | undefined = undefined;
+    let nextCalled = false;
+    
+    const next = async () => {
+      if (nextCalled) throw new Error("next() called multiple times");
+      nextCalled = true;
+      nextResult = await dispatch(i + 1);
+      return nextResult;
+    };
 
-  let idx = 0;
-
-  // Single next per request — just increments the shared index.
-  const next = (): Promise<void> => {
-    idx++;
-    return RESOLVED;
-  };
-
-  while (idx < len) {
-    const before = idx;
-    const result = await handlers[idx](context, next);
-    if (result instanceof Response) return result;
-    // Handler didn't call next() AND didn't return a Response → chain stops.
-    if (idx === before) break;
+    const res = await handlers[i](context, next);
+    
+    if (res instanceof Response) return res;
+    if (nextCalled) return nextResult;
+    
+    return undefined;
   }
 
-  return undefined;
+  return dispatch(0);
 }

@@ -47,21 +47,23 @@ export const logger = (options: LoggerOptions = {}) => {
     const method = c.req.method;
     const path = c.req.url ? new URL(c.req.url).pathname : "/";
 
-    await next();
+    try {
+      await next();
+    } finally {
+      // Defer the actual logging until the response is sent to the client.
+      c.defer(() => {
+        const durationMs = performance.now() - start;
+        const status = c.finalResponse?.status || 200;
 
-    // Defer the actual logging until the response is sent to the client.
-    c.defer(() => {
-      const durationMs = performance.now() - start;
-      const status = c.finalResponse?.status || 200;
-
-      print(
-        format({
-          method,
-          path,
-          status,
-          durationMs,
-        })
-      );
-    });
+        print(
+          format({
+            method,
+            path,
+            status,
+            durationMs,
+          })
+        );
+      });
+    }
   };
 };

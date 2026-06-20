@@ -12,13 +12,11 @@ export function compileHandlerChain(handlers: Handler<Context>[]): Function {
   }
 
   let code = `return async function(context) {\n`;
-  code += `  let r;\n`;
-
-  for (let i = 0; i < handlers.length; i++) {
+  
+  for (let i = handlers.length - 1; i >= 0; i--) {
     const handler = handlers[i];
     const isAsync = handler.constructor.name === "AsyncFunction";
     
-    // Check if handler requests `next`
     const str = handler.toString();
     const paramsMatch = str.match(/^[^(]*\(\s*([^)]*)\)/);
     let hasNext = false;
@@ -30,34 +28,49 @@ export function compileHandlerChain(handlers: Handler<Context>[]): Function {
       }
     }
 
-    code += `  // Handler ${i}\n`;
+    code += `  const next${i} = async () => {\n`;
+    code += `    let nextResult;\n`;
+    code += `    let res;\n`;
+    
     if (hasNext) {
-      code += `  let nextCalled${i} = false;\n`;
-      code += `  const next${i} = () => { nextCalled${i} = true; return Promise.resolve(); };\n`;
+      code += `    let nextCalled = false;\n`;
+      code += `    const next = async () => {\n`;
+      code += `      if (nextCalled) throw new Error("next() called multiple times");\n`;
+      code += `      nextCalled = true;\n`;
+      if (i + 1 < handlers.length) {
+        code += `      nextResult = await next${i+1}();\n`;
+      } else {
+        code += `      nextResult = undefined;\n`;
+      }
+      code += `      return nextResult;\n`;
+      code += `    };\n`;
       
       if (isAsync) {
-        code += `  r = await deps.handlers[${i}](context, next${i});\n`;
+        code += `    res = await deps.handlers[${i}](context, next);\n`;
       } else {
-        code += `  r = deps.handlers[${i}](context, next${i});\n`;
-        code += `  if (r instanceof Promise) r = await r;\n`;
+        code += `    res = deps.handlers[${i}](context, next);\n`;
+        code += `    if (res instanceof Promise) res = await res;\n`;
       }
       
-      code += `  if (r instanceof Response) return r;\n`;
-      code += `  if (!nextCalled${i}) return;\n`;
+      code += `    if (res instanceof Response) return res;\n`;
+      code += `    if (nextCalled) return nextResult;\n`;
+      code += `    return undefined;\n`;
+      
     } else {
       if (isAsync) {
-        code += `  r = await deps.handlers[${i}](context);\n`;
+        code += `    res = await deps.handlers[${i}](context);\n`;
       } else {
-        code += `  r = deps.handlers[${i}](context);\n`;
-        code += `  if (r instanceof Promise) r = await r;\n`;
+        code += `    res = deps.handlers[${i}](context);\n`;
+        code += `    if (res instanceof Promise) res = await res;\n`;
       }
-      
-      code += `  if (r instanceof Response) return r;\n`;
-      code += `  return;\n`;
+      code += `    if (res instanceof Response) return res;\n`;
+      code += `    return undefined;\n`;
     }
+    
+    code += `  };\n`;
   }
-
-  code += `  return;\n`;
+  
+  code += `  return await next0();\n`;
   code += `};\n`;
 
   const fn = new Function("deps", code);
