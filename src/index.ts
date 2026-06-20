@@ -18,6 +18,43 @@ import {
 import { compileHandlerChain } from "./compiler";
 import type { NormalisePath } from "./router/types";
 
+// ── Trace Helper ─────────────────────────────────────────────────────────────
+async function runTracePhase(
+  listeners: import("./types").TraceListener[] | undefined,
+  phaseExecutor: () => Promise<any> | any
+): Promise<any> {
+  if (!listeners || listeners.length === 0) return phaseExecutor();
+
+  const begin = performance.now();
+  const onStopCallbacks: ((info: import("./types").TraceEventInfo) => void | Promise<void>)[] = [];
+
+  const event: import("./types").TraceEvent = {
+    begin,
+    onStop: (cb) => onStopCallbacks.push(cb)
+  };
+
+  for (let i = 0; i < listeners.length; i++) {
+    const r = listeners[i](event);
+    if (r instanceof Promise) await r;
+  }
+
+  let error: Error | null = null;
+  let result: any;
+  try {
+    result = await phaseExecutor();
+    return result;
+  } catch (err: any) {
+    error = err;
+    throw err;
+  } finally {
+    const end = performance.now();
+    for (let i = 0; i < onStopCallbacks.length; i++) {
+      const r = onStopCallbacks[i]({ begin, end, error });
+      if (r instanceof Promise) await r;
+    }
+  }
+}
+
 // Remove global cache
 
 export class ServeXRequest extends Request {}
@@ -39,7 +76,7 @@ export function baseFetch(
   debug: boolean = false
 ): Response | Promise<Response> {
   // ── Fast Path (No Hooks) ───────────────────────────────────────────────────
-  if (hooks.onRequest.length === 0 && hooks.onBeforeHandle.length === 0 && hooks.onAfterHandle.length === 0 && hooks.onError.length === 0) {
+  if (hooks.onRequest.length === 0 && hooks.onBeforeHandle.length === 0 && hooks.onAfterHandle.length === 0 && hooks.onError.length === 0 && hooks.trace.length === 0) {
     const route = router.match(method, pathname);
     if (route && route.matched) {
       let executor = route.store?.executor;
@@ -120,11 +157,16 @@ async function baseFetchSlow(
 ): Promise<Response> {
   let context: Context | undefined = undefined;
   let response: Response | undefined;
+  
+  let traceApi: import("./types").TraceAPI<Context> | undefined;
+  let traceListeners: Record<string, import("./types").TraceListener[]> | undefined;
 
   try {
     // ── 1. onRequest ──────────────────────────────────────────────────────────
     const onReqLen = hooks.onRequest.length;
-    if (onReqLen > 0) {
+    const hasTrace = hooks.trace.length > 0;
+    
+    if (onReqLen > 0 || hasTrace) {
       context = new Context(
         request, 
         envBindings ?? ((typeof process !== "undefined" ? process.env : {}) as any), 
@@ -132,10 +174,34 @@ async function baseFetchSlow(
         executionCtx,
         debug
       );
-      for (let i = 0; i < onReqLen; i++) {
-        const r = await hooks.onRequest[i](context);
-        if (r instanceof Response) return r; // short-circuit before routing
+      
+      if (hasTrace) {
+        traceListeners = { request: [], beforeHandle: [], handle: [], afterHandle: [], error: [], response: [] };
+        traceApi = {
+          context,
+          onRequest: (cb) => traceListeners!.request.push(cb),
+          onBeforeHandle: (cb) => traceListeners!.beforeHandle.push(cb),
+          onHandle: (cb) => traceListeners!.handle.push(cb),
+          onAfterHandle: (cb) => traceListeners!.afterHandle.push(cb),
+          onError: (cb) => traceListeners!.error.push(cb),
+          onResponse: (cb) => traceListeners!.response.push(cb),
+        };
+        for (let i = 0; i < hooks.trace.length; i++) {
+          const r = hooks.trace[i](traceApi);
+          if (r instanceof Promise) await r;
+        }
       }
+    }
+
+    if (onReqLen > 0 || (traceListeners && traceListeners.request.length > 0)) {
+      const executeOnRequest = async () => {
+        for (let i = 0; i < onReqLen; i++) {
+          const r = await hooks.onRequest[i](context!);
+          if (r instanceof Response) return r; // short-circuit before routing
+        }
+      };
+      const res = await runTracePhase(traceListeners?.request, executeOnRequest);
+      if (res instanceof Response) return res;
     }
 
     // ── Route matching ────────────────────────────────────────────────────────
@@ -165,18 +231,24 @@ async function baseFetchSlow(
         );
       }
       // 404 path: execute global middlewares
-      response = await executeHandlers(context, middlewares);
-      if (!response) response = new Response("Not Found", { status: 404 });
+      const execute404 = async () => {
+        const res = await executeHandlers(context!, middlewares);
+        return res || new Response("Not Found", { status: 404 });
+      };
+      response = await runTracePhase(traceListeners?.handle, execute404);
 
       // 3. onAfterHandle for 404
       const onAfterLen = hooks.onAfterHandle.length;
-      if (onAfterLen > 0) {
-        for (let i = 0; i < onAfterLen; i++) {
-          const r = await hooks.onAfterHandle[i](context, response);
-          if (r instanceof Response) response = r;
-        }
+      if (onAfterLen > 0 || (traceListeners && traceListeners.afterHandle.length > 0)) {
+        const executeOnAfter = async () => {
+          for (let i = 0; i < onAfterLen; i++) {
+            const r = await hooks.onAfterHandle[i](context!, response!);
+            if (r instanceof Response) response = r;
+          }
+        };
+        await runTracePhase(traceListeners?.afterHandle, executeOnAfter);
       }
-      return response;
+      return response!;
     }
 
     if (!context) {
@@ -193,11 +265,15 @@ async function baseFetchSlow(
 
     // ── 2. onBeforeHandle ─────────────────────────────────────────────────────
     const onBeforeLen = hooks.onBeforeHandle.length;
-    if (onBeforeLen > 0) {
-      for (let i = 0; i < onBeforeLen; i++) {
-        const r = await hooks.onBeforeHandle[i](context);
-        if (r instanceof Response) return r;
-      }
+    if (onBeforeLen > 0 || (traceListeners && traceListeners.beforeHandle.length > 0)) {
+      const executeOnBefore = async () => {
+        for (let i = 0; i < onBeforeLen; i++) {
+          const r = await hooks.onBeforeHandle[i](context!);
+          if (r instanceof Response) return r;
+        }
+      };
+      const res = await runTracePhase(traceListeners?.beforeHandle, executeOnBefore);
+      if (res instanceof Response) return res;
     }
 
     // ── Execute handler chain ─────────────────────────────────────────────────
@@ -218,28 +294,41 @@ async function baseFetchSlow(
       }
     }
 
-    result = await executor!(context);
-    response = result;
-    if (!response) response = new Response("Not Found", { status: 404 });
+    const executeHandle = async () => {
+      let result = await executor!(context!);
+      return result || new Response("Not Found", { status: 404 });
+    };
+    response = await runTracePhase(traceListeners?.handle, executeHandle);
 
-    // ── 3. onAfterHandle ──────────────────────────────────────────────────────
+    // ── 4. onAfterHandle ──────────────────────────────────────────────────────
     const onAfterLen = hooks.onAfterHandle.length;
-    if (onAfterLen > 0) {
-      for (let i = 0; i < onAfterLen; i++) {
-        const r = await hooks.onAfterHandle[i](context, response);
-        if (r instanceof Response) response = r;
-      }
+    if (onAfterLen > 0 || (traceListeners && traceListeners.afterHandle.length > 0)) {
+      const executeOnAfter = async () => {
+        for (let i = 0; i < onAfterLen; i++) {
+          const r = await hooks.onAfterHandle[i](context!, response!);
+          if (r instanceof Response) response = r;
+        }
+      };
+      await runTracePhase(traceListeners?.afterHandle, executeOnAfter);
     }
 
   } catch (error) {
     // ── onError hooks ─────────────────────────────────────────────────────────
-    const onErrLen = hooks.onError.length;
-    if (onErrLen > 0 && context) {
-      for (let i = 0; i < onErrLen; i++) {
-        const r = await hooks.onError[i](error as Error, context);
-        if (r instanceof Response) { response = r; break; }
+    const executeOnError = async () => {
+      const onErrLen = hooks.onError.length;
+      if (onErrLen > 0 && context) {
+        for (let i = 0; i < onErrLen; i++) {
+          const r = await hooks.onError[i](error as Error, context);
+          if (r instanceof Response) return r;
+        }
       }
+    };
+    
+    const errRes = await runTracePhase(traceListeners?.error, executeOnError);
+    if (errRes instanceof Response) {
+      response = errRes;
     }
+    
     if (!response) {
       if (error instanceof HttpException) {
         response = error.getResponse();
@@ -261,12 +350,13 @@ async function baseFetchSlow(
       context.finalResponse = response;
     }
     // ── Post-Response Processing ─────────────────────────────────────────────
-    if (context && (hooks.onResponse.length > 0 || context.deferred)) {
+    if (context && (hooks.onResponse.length > 0 || context.deferred || (traceListeners && traceListeners.response.length > 0))) {
+      const execResponse = () => executePostProcess(hooks, context!, traceListeners?.response);
       if (executionCtx && typeof executionCtx.waitUntil === "function") {
-        executionCtx.waitUntil(executePostProcess(hooks, context));
+        executionCtx.waitUntil(execResponse());
       } else {
         // Run in background without awaiting
-        executePostProcess(hooks, context);
+        execResponse();
       }
     }
   }
@@ -274,13 +364,16 @@ async function baseFetchSlow(
   return response!;
 }
 
-async function executePostProcess(hooks: import("./types").Hooks, context: Context) {
+async function executePostProcess(hooks: import("./types").Hooks, context: Context, traceListeners?: import("./types").TraceListener[]) {
   try {
     const onResLen = hooks.onResponse.length;
-    if (onResLen > 0) {
-      for (let i = 0; i < onResLen; i++) {
-        await hooks.onResponse[i](context);
-      }
+    if (onResLen > 0 || (traceListeners && traceListeners.length > 0)) {
+      const execOnRes = async () => {
+        for (let i = 0; i < onResLen; i++) {
+          await hooks.onResponse[i](context);
+        }
+      };
+      await runTracePhase(traceListeners, execOnRes);
     }
 
     const deferred = context.deferred;
@@ -394,7 +487,8 @@ export class ServeXApp<E extends Env = Env, S = {}, B extends string = "/"> exte
         onBeforeHandle: [],
         onAfterHandle: [],
         onError: [],
-        onResponse: []
+        onResponse: [],
+        trace: []
     };
     public compiledCache = new Map<string, (context: Context) => Promise<Response | undefined>>();
 
@@ -422,6 +516,7 @@ export class ServeXApp<E extends Env = Env, S = {}, B extends string = "/"> exte
     onAfterHandle(handler: import("./types").AfterHandleHook<Context>) { this.hooks.onAfterHandle.push(handler); return this; }
     onError(handler: import("./types").ErrorHook<Context>) { this.hooks.onError.push(handler); return this; }
     onResponse(handler: import("./types").HookHandler<Context>) { this.hooks.onResponse.push(handler); return this; }
+    trace(handler: (api: import("./types").TraceAPI<Context>) => void | Promise<void>) { this.hooks.trace.push(handler); return this; }
 
     use(path: string | import("./types").MiddlewareHandler<Context>, ...middlewares: import("./types").MiddlewareHandler<Context>[]) {
         if (typeof path === "string") {

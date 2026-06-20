@@ -64,18 +64,45 @@ export type HookHandler<C extends Context> = (ctx: C) => void | Promise<void> | 
 export type AfterHandleHook<C extends Context> = (ctx: C, response: Response) => void | Promise<void> | Response | Promise<Response>;
 export type ErrorHook<C extends Context> = (error: HttpException | Error, ctx: C) => void | Promise<void> | Response | Promise<Response>;
 
+export interface TraceEventInfo {
+  begin: number;
+  end: number;
+  error?: Error | null;
+}
+
+export interface TraceEvent {
+  begin: number;
+  onStop: (callback: (info: TraceEventInfo) => void | Promise<void>) => void;
+}
+
+export type TraceListener = (event: TraceEvent) => void | Promise<void>;
+
+export interface TraceAPI<C extends Context = Context> {
+  context: C;
+  onRequest(listener: TraceListener): void;
+  onBeforeHandle(listener: TraceListener): void;
+  onHandle(listener: TraceListener): void;
+  onAfterHandle(listener: TraceListener): void;
+  onError(listener: TraceListener): void;
+  onResponse(listener: TraceListener): void;
+}
+
 export interface Hooks {
   onRequest: HookHandler<Context>[];
   onBeforeHandle: HookHandler<Context>[];
   onAfterHandle: AfterHandleHook<Context>[];
   onError: ErrorHook<Context>[];
   onResponse: HookHandler<Context>[];
+  trace: ((api: TraceAPI<Context>) => void | Promise<void>)[];
 }
 
 export type ExtractResponseType<T> = T extends (...args: any[]) => infer R | Promise<infer R> ? R : never;
 export type Last<T extends any[]> = T extends readonly [...any, infer L] ? L : never;
 
 export interface ServeXRouter<E extends Env = Env, S = {}, B extends string = "/"> {
+  onResponse(handler: HookHandler<E["Context"]>): this;
+  trace(handler: (api: TraceAPI<E["Context"]>) => void | Promise<void>): this;
+
   use(path: string | MiddlewareHandler<Context>, ...middlewares: MiddlewareHandler<Context>[]): this;
 
   get<P extends string, R>(path: P, handler: (ctx: Context<E, P>, next: NextFunction) => R | Promise<R>): ServeXRouter<E, S & { [K in AbsolutePath<B, P>]: { GET: R } }, B>;

@@ -6,7 +6,7 @@ import type { Handler } from "../types";
  * This eliminates the closure overhead of `next()` and the microtask overhead
  * of recursively awaiting handlers.
  */
-export function compileHandlerChain(handlers: Handler<Context>[]) {
+export function compileHandlerChain(handlers: Handler<Context>[]): Function {
   if (handlers.length === 0) {
     return async () => undefined;
   }

@@ -1,6 +1,6 @@
 import { createServer } from "../../src";
 
-const app = createServer({ basePath: "api" }).get("/", (c) => c.text("Hello World"));
+const app = createServer({ basePath: "api" }).trace((() => { console.log("Request received") })).get("/", (c) => c.text("Hello World"));
 
 export default {
   port: 3001,
