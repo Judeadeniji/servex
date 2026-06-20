@@ -29,7 +29,7 @@ export function compileHandlerChain(handlers: Handler<Context>[]): Function {
     }
 
     code += `  const next${i} = async () => {\n`;
-    code += `    let nextResult;\n`;
+    code += `    let nextPromise;\n`;
     code += `    let res;\n`;
     
     if (hasNext) {
@@ -38,11 +38,12 @@ export function compileHandlerChain(handlers: Handler<Context>[]): Function {
       code += `      if (nextCalled) throw new Error("next() called multiple times");\n`;
       code += `      nextCalled = true;\n`;
       if (i + 1 < handlers.length) {
-        code += `      nextResult = await next${i+1}();\n`;
+        code += `      nextPromise = next${i+1}();\n`;
+        code += `      return await nextPromise;\n`;
       } else {
-        code += `      nextResult = undefined;\n`;
+        code += `      nextPromise = Promise.resolve(undefined);\n`;
+        code += `      return undefined;\n`;
       }
-      code += `      return nextResult;\n`;
       code += `    };\n`;
       
       if (isAsync) {
@@ -53,7 +54,7 @@ export function compileHandlerChain(handlers: Handler<Context>[]): Function {
       }
       
       code += `    if (res instanceof Response) return res;\n`;
-      code += `    if (nextCalled) return nextResult;\n`;
+      code += `    if (nextCalled) return await nextPromise;\n`;
       code += `    return undefined;\n`;
       
     } else {

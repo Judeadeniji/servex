@@ -26,20 +26,20 @@ export async function executeHandlers(
   async function dispatch(i: number): Promise<Response | undefined> {
     if (i >= handlers.length) return undefined;
     
-    let nextResult: Response | undefined = undefined;
+    let nextPromise: Promise<Response | undefined> | undefined = undefined;
     let nextCalled = false;
     
     const next = async () => {
       if (nextCalled) throw new Error("next() called multiple times");
       nextCalled = true;
-      nextResult = await dispatch(i + 1);
-      return nextResult;
+      nextPromise = dispatch(i + 1);
+      return await nextPromise;
     };
 
     const res = await handlers[i](context, next);
     
     if (res instanceof Response) return res;
-    if (nextCalled) return nextResult;
+    if (nextCalled && nextPromise) return await nextPromise;
     
     return undefined;
   }
