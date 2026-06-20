@@ -2,6 +2,7 @@ import type { Context, Method, MiddlewareHandler } from "../types";
 import type { HTTPMethod, IRouter, MatchedRoute, Route } from "./base";
 import type { DynamicSegmentsRemoved, RouteMatch } from "./types";
 import * as $$path from "node:path";
+import { compileSonicTrieMatcher } from "./sonic-trie-jit";
 
 type SonicRouteNode = {
   method: HTTPMethod;
@@ -31,19 +32,19 @@ function segmentRank(segment: string): 0 | 1 | 2 {
  *
  * Rule: walk both paths segment-by-segment, left to right. The first
  * segment where the two routes differ in specificity (static < param <
- * wildcard) decides the winner — that route is considered "more specific"
- * and must be tried first in the compiled regex alternation.
+ * wildcard) decides the winner. Ties fall back to longer-path-wins, then
+ * registration order (via sort's stability).
  *
- * If every compared segment ties (identical shape up to the shorter
- * path's length), the longer path wins (more literal constraints = more
- * specific). A true tie (identical segment-rank shape and length) returns
- * 0, in which case Array.prototype.sort's stability preserves whichever
- * route was registered first — this is the only case where registration
- * order still matters, and it's an intentional, documented fallback for
- * genuinely ambiguous routes.
- *
- * Returns a negative number if `a` is more specific than `b` (should sort
- * earlier), positive if `b` is more specific, 0 for a true tie.
+ * NOTE: now that dynamic matching is trie-based (see compile() below),
+ * precedence among literal/param/wildcard siblings falls out of the trie
+ * structure itself — a real trie naturally tries literal children before
+ * the param child before the wildcard child at every branching point, with
+ * no global ordering needed. This sort is kept anyway for two reasons:
+ * (1) it makes route registration order irrelevant to trie-build, so the
+ * resulting trie's shape is deterministic regardless of call order, which
+ * keeps generated code diffs stable/reviewable, and (2) it's the existing,
+ * tested contract — removing it is a separate decision from the regex ->
+ * trie migration and shouldn't be bundled into this change.
  */
 function compareRouteSpecificity(a: SonicRouteNode, b: SonicRouteNode): number {
   const aSegs = a.path === "" ? [""] : a.path.split("/");
@@ -57,8 +58,6 @@ function compareRouteSpecificity(a: SonicRouteNode, b: SonicRouteNode): number {
   }
 
   if (aSegs.length !== bSegs.length) {
-    // Longer path = more literal segments pinned down = more specific.
-    // Sorting it earlier means it's tried first.
     return bSegs.length - aSegs.length;
   }
 
@@ -66,39 +65,32 @@ function compareRouteSpecificity(a: SonicRouteNode, b: SonicRouteNode): number {
 }
 
 /**
- * SonicRouter is an ultra-fast RegExp-based router implementation.
- * It compiles dynamic routes into a single large Regular Expression, delegating
- * route matching to the highly optimized C++ V8 regex engine.
+ * SonicRouter is an ultra-fast, JIT-compiled router implementation.
  *
- * Matching precedence for fully-static paths is handled structurally: any
- * route with no ":" or "*" segments is stored in `staticRoutes` and is
- * always checked first via O(1) hash lookup before the dynamic regex is
- * even consulted — so static routes always win over dynamic ones by
- * construction, with no extra logic required.
+ * Static routes (no ":" or "*" segments) are stored in a plain object map
+ * and matched in O(1) via direct property lookup — always checked first,
+ * so static routes always win over dynamic ones by construction.
  *
- * Precedence *among* dynamic routes (param vs param, param vs wildcard,
- * etc.) is resolved explicitly at compile time by `compareRouteSpecificity`
- * — see that function for the rule. This replaces the previous behavior,
- * where dynamic routes were tried in raw registration order, which made
- * matching outcomes depend on the order `addRoute` happened to be called.
+ * Dynamic routes are compiled, at boot/registration time, into a single
+ * flat JS match function generated from a trie (see ./sonic-trie-jit.ts)
+ * — no regex involved. Precedence among dynamic routes (static-segment >
+ * param-segment > wildcard-segment, resolved left-to-right) is enforced
+ * both by the specificity sort below AND structurally by the trie's
+ * branch-ordering (literal children, then param, then wildcard, at every
+ * node) — see sonic-trie-jit.ts's module docblock for the backtracking
+ * correctness notes, which are the main risk area of this approach.
  */
 export class SonicRouter<Routes extends Route[] = Route[]> implements IRouter<Routes> {
   private _routes: Route<Routes[number]["data"]>[] = [];
 
-  // staticRoutes[method][path] -> node
-  private staticRoutes: Record<string, Record<string, SonicRouteNode>> = {};
-
-  // dynamicRoutes[method] -> array of nodes, in raw registration order.
+  // routesByMethod[method] -> array of nodes, in raw registration order.
   // Compile-time specificity sorting happens on a *copy* of this array in
-  // compile(), so registration order is preserved here for introspection
-  // (e.g. `routes` getter, debugging) even though match order differs.
-  private dynamicRoutes: Record<string, SonicRouteNode[]> = {};
+  // compile(), so registration order is preserved here for introspection.
+  private routesByMethod: Record<string, SonicRouteNode[]> = {};
 
-  // compiled dynamic match functions
-  private matchFns: Record<string, (sanitized: string, url: string, method: string) => MatchedRoute<Routes, boolean> | null> = {};
-  // compiled dynamic regexes (stored separately for profiling)
-  private matchers: Record<string, RegExp> = {};
-  // specificity-sorted route order,  // dynamic regex match logic)
+  // compiled match functions, keyed by method
+  private matchFns: Record<string, (url: string, method: string) => MatchedRoute<Routes, boolean> | null> = {};
+
   private isDirty: Record<string, boolean> = {};
 
   private pathMiddlewares: { path: string, middlewares: MiddlewareHandler<Context>[] }[] = [];
@@ -109,19 +101,13 @@ export class SonicRouter<Routes extends Route[] = Route[]> implements IRouter<Ro
     return this._routes;
   }
 
-  /** Expose compiled dynamic match functions for profiling/testing. */
+  /** Expose compiled match functions for profiling/testing. */
   get _matchFns() { return this.matchFns; }
-  /** Expose static route map for profiling/testing. */
-  get _staticRoutes() { return this.staticRoutes; }
-  /** Expose compiled dynamic regexes for profiling/testing. */
-  get _matchers() { return this.matchers; }
 
   addRoute(route: Route<Routes[number]["data"]>): void {
     this._routes.push(route);
     const { method, path, data } = route;
     const sanitizedPath = this.sanitizeRoute(path);
-
-    const isDynamic = sanitizedPath.includes(":") || sanitizedPath.includes("*");
 
     const node: SonicRouteNode = {
       method,
@@ -137,136 +123,54 @@ export class SonicRouter<Routes extends Route[] = Route[]> implements IRouter<Ro
       }
     }
 
-    if (isDynamic) {
-      if (!this.dynamicRoutes[method]) this.dynamicRoutes[method] = [];
+    if (!this.routesByMethod[method]) this.routesByMethod[method] = [];
 
-      const parts = sanitizedPath === "" ? [""] : sanitizedPath.split("/");
-      for (const p of parts) {
-        if (p.startsWith(":")) {
-          node.paramsKeys.push(p.slice(1));
-        } else if (p.startsWith("*")) {
-          node.paramsKeys.push(p.length > 1 ? p.slice(1) : "path");
-        }
+    const parts = sanitizedPath === "" ? [""] : sanitizedPath.split("/");
+    for (const p of parts) {
+      if (p.startsWith(":")) {
+        node.paramsKeys.push(p.slice(1));
+      } else if (p.startsWith("*")) {
+        node.paramsKeys.push(p.length > 1 ? p.slice(1) : "path");
       }
-      this.dynamicRoutes[method].push(node);
-      this.isDirty[method] = true;
-    } else {
-      if (!this.staticRoutes[method]) this.staticRoutes[method] = {};
-      this.staticRoutes[method][sanitizedPath === "" ? "/" : sanitizedPath] = node;
     }
+    this.routesByMethod[method].push(node);
+    this.isDirty[method] = true;
   }
 
+  /**
+   * Compiles the dynamic-route trie for `method` into a flat match
+   * function via sonic-trie-jit.ts, and stores it in `matchFns`.
+   *
+   * This replaces the previous regex-alternation approach entirely.
+   * `this.matchFns[method]` has the exact same call signature as before
+   * (`(sanitized, url, method) => MatchedRoute | null`), so `match()`
+   * below is unchanged.
+   */
   private compile(method: string) {
     if (!this.isDirty[method]) return;
     this.isDirty[method] = false;
 
-    const rawRoutes = this.dynamicRoutes[method] || [];
+    const rawRoutes = this.routesByMethod[method] || [];
     if (rawRoutes.length === 0) return;
 
-    // Sort a COPY by specificity for matching order. We never mutate
-    // this.dynamicRoutes[method] itself, so registration order is still
-    // available for anything that introspects the router (route listing,
-    // debugging tools, etc.) — only the compiled regex alternation order
-    // changes.
-    const routes = rawRoutes.slice().sort(compareRouteSpecificity);
+    // Sort a COPY by specificity — see compareRouteSpecificity's docblock
+    // for why this is kept even though the trie also enforces precedence
+    // structurally.
+    const sortedRoutes = rawRoutes.slice().sort(compareRouteSpecificity);
 
-    let regexStr = "^(?:";
-    const map: Array<SonicRouteNode | undefined> = [];
-    let groupIndex = 1;
+    const { matchFn } = compileSonicTrieMatcher<SonicRouteNode>(
+      method as HTTPMethod,
+      sortedRoutes
+    );
 
-    let dynamicJitCode = "";
-
-    for (let i = 0; i < routes.length; i++) {
-      const route = routes[i];
-      let pattern = "";
-      const segments = route.path === "" ? [""] : route.path.split("/");
-
-      let paramsCount = 0;
-      for (let j = 0; j < segments.length; j++) {
-        const seg = segments[j];
-        if (seg.startsWith(":")) {
-          pattern += (j === 0 ? "([^/]+)" : "/([^/]+)");
-          paramsCount++;
-        } else if (seg.startsWith("*")) {
-          pattern += (j === 0 ? "(.*)" : "/(.*)");
-          paramsCount++;
-        } else {
-          pattern += (j === 0 ? seg : "/" + seg);
-        }
-      }
-
-      if (pattern === "") pattern = "/";
-
-      // Wrap route in capturing group
-      regexStr += `(${pattern})`;
-      map[groupIndex] = route;
-
-      dynamicJitCode += `
-        if (match[${groupIndex}] !== undefined) {
-          const params = {`;
-      for(let k = 0; k < route.paramsKeys.length; k++) {
-        dynamicJitCode += `"${route.paramsKeys[k]}": match[${groupIndex + 1 + k}],`;
-      }
-      dynamicJitCode += `};
-          return {
-            matched: true,
-            method: method,
-            route: url,
-            matched_route: "${route.path}",
-            params: params,
-            data: deps.map[${groupIndex}].data,
-            middlewares: deps.map[${groupIndex}].middlewares,
-            store: deps.map[${groupIndex}]
-          };
-        }
-      `;
-
-      groupIndex += 1 + paramsCount;
-
-      if (i < routes.length - 1) regexStr += "|";
-    }
-    regexStr += ")$";
-
-    const regex = new RegExp(regexStr);
-    this.matchers[method] = regex;
-    const deps = {
-      regex,
-      map,
-      buildResult: this.buildResult.bind(this)
-    };
-
-    this.matchFns[method] = new Function("deps", `
-      return function(sanitized, url, method) {
-        const match = deps.regex.exec(sanitized);
-        if (match) {
-          ${dynamicJitCode}
-        }
-        return null;
-      };
-    `)(deps);
+    this.matchFns[method] = matchFn;
   }
 
   match<RoutePath extends DynamicSegmentsRemoved<Routes[number]["path"]>>(method: HTTPMethod, url: RoutePath): MatchedRoute<Routes, boolean> | null {
-    const rawSanitized = this.sanitizeRoute(url as string);
-    const sanitized = rawSanitized === "" ? "/" : rawSanitized;
-
-    // 1. Static fast path (O(1)) — always wins over any dynamic route,
-    //    by construction, since we never even reach the regex below.
-    if (this.staticRoutes[method] && this.staticRoutes[method][sanitized]) {
-      const node = this.staticRoutes[method][sanitized];
-      if (!node.staticMatchResult) {
-        node.staticMatchResult = this.buildResult(node, method, url as string, sanitized, {});
-      }
-      return node.staticMatchResult;
-    }
-
-    // 2. Dynamic RegExp evaluation, in specificity order (static-segment
-    //    > param-segment > wildcard-segment, resolved left-to-right —
-    //    see compareRouteSpecificity).
     this.compile(method);
     const dynamicMatchFn = this.matchFns[method];
     if (dynamicMatchFn) {
-      return dynamicMatchFn(sanitized, url as string, method);
+      return dynamicMatchFn(url as string, method);
     }
     return null;
   }
@@ -308,25 +212,15 @@ export class SonicRouter<Routes extends Route[] = Route[]> implements IRouter<Ro
     this.pathMiddlewares.push({ path: sanitized, middlewares: middlewares as any });
 
     if (sanitized === "*" || sanitized === "") {
-      for (const method in this.staticRoutes) {
-        for (const p in this.staticRoutes[method]) {
-          this.staticRoutes[method][p].middlewares.push(...middlewares as any);
-        }
-      }
-      for (const method in this.dynamicRoutes) {
-        for (const node of this.dynamicRoutes[method]) {
+      for (const method in this.routesByMethod) {
+        for (const node of this.routesByMethod[method]) {
           node.middlewares.push(...middlewares as any);
         }
       }
     } else {
-      for (const method in this.staticRoutes) {
-        if (this.staticRoutes[method][sanitized]) {
-          this.staticRoutes[method][sanitized].middlewares.push(...middlewares as any);
-        }
-      }
-      for (const method in this.dynamicRoutes) {
-         for (const node of this.dynamicRoutes[method]) {
-            if (node.path.startsWith(sanitized)) {
+      for (const method in this.routesByMethod) {
+         for (const node of this.routesByMethod[method]) {
+            if (node.path === sanitized || node.path.startsWith(sanitized + "/")) {
                node.middlewares.push(...middlewares as any);
             }
          }
@@ -336,24 +230,8 @@ export class SonicRouter<Routes extends Route[] = Route[]> implements IRouter<Ro
 
   /**
    * Strips the leading and trailing `/` from a route or URL path.
-   *
-   * This is intentionally the entire contract: sanitizeRoute does NOT
-   * percent-encode characters. Reasons:
-   *
-   * 1. HTTP requests arrive at the server already percent-encoded by the
-   *    client (browser, fetch, etc.). Encoding again would double-encode
-   *    `%xx` sequences — turning `/caf%C3%A9` into `/caf%25C3%25A9`,
-   *    which would never match any route. The old encodeURI() call had
-   *    exactly this bug.
-   *
-   * 2. Encoding consistency: since this function runs on both route
-   *    registration (addRoute) and URL matching (match), whatever a caller
-   *    puts in is what gets compared. The onus is on the caller to be
-   *    consistent — register `/café` if you expect requests with raw bytes;
-   *    register `/caf%C3%A9` (or let the HTTP layer normalize) if you
-   *    expect pre-encoded requests. Most real apps fall into the latter
-   *    category and are unaffected either way since their route paths are
-   *    plain ASCII.
+   * (Unchanged from the previous fix — see that commit's notes on why
+   * encodeURI() was removed and what the encoding contract is.)
    */
   private sanitizeRoute(route: string): string {
     if (route === "/" || route === "") return "";

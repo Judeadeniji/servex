@@ -98,22 +98,28 @@ function buildTrie(routes: RouteLike[]): TrieNode {
  * "no early exclusive branching" — don't change this pattern without
  * re-verifying the cross-check test suite (see compileTrie's caller).
  */
-function compileTrie(root: TrieNode, routesOut: RouteLike[]): string {
+export function compileSonicTrieMatcher<R extends RouteLike>(
+  method: HTTPMethod,
+  sortedDynamicRoutes: R[]
+): { matchFn: (url: string, method: string) => any; routes: R[] } {
+  const routes: R[] = [];
+  const trie = buildTrie(sortedDynamicRoutes);
+
   let uid = 0;
   const nextId = () => uid++;
 
   function routeIndex(route: RouteLike): number {
-    let idx = routesOut.indexOf(route);
+    let idx = routes.indexOf(route as any);
     if (idx === -1) {
-      routesOut.push(route);
-      idx = routesOut.length - 1;
+      routes.push(route as any);
+      idx = routes.length - 1;
     }
     return idx;
   }
 
-  function buildReturn(route: RouteLike, capturedVars: string[]): string {
+  function buildReturn(route: RouteLike, capturedVars: {start: string, end: string}[]): string {
     const paramsObj = route.paramsKeys
-      .map((k, i) => `${JSON.stringify(k)}: ${capturedVars[i]}`)
+      .map((k, i) => `${JSON.stringify(k)}: url.slice(${capturedVars[i].start}, ${capturedVars[i].end})`)
       .join(",");
     const idx = routeIndex(route);
     return `return {
@@ -128,50 +134,89 @@ function compileTrie(root: TrieNode, routesOut: RouteLike[]): string {
     };`;
   }
 
-  function gen(node: TrieNode, cursorExpr: string, capturedVars: string[]): string {
+  function gen(node: TrieNode, cursorExpr: string, capturedVars: {start: string, end: string}[]): string {
     const id = nextId();
     let code = ``;
 
-    // 1. Literal children
-    for (const [lit, child] of node.literal) {
-      code += `
-        if (sanitized.startsWith(${JSON.stringify(lit)}, ${cursorExpr})) {
-          var endLit${id} = ${cursorExpr} + ${lit.length};
-          var isEnd${id} = endLit${id} === sanitized.length;
-          if (isEnd${id} || sanitized.charCodeAt(endLit${id}) === 47) {
-            if (isEnd${id}) {
-              ${child.route ? buildReturn(child.route, capturedVars) : ""}
-            } else {
-              ${gen(child, `endLit${id} + 1`, capturedVars)}
-            }
-          }
-        }
-      `;
+    function compileLiteralCheck(str: string, baseCursor: string): string {
+      if (str.length === 0) return "true";
+      let checks = [];
+      for (let i = 0; i < str.length; i++) {
+         checks.push(`url.charCodeAt(${baseCursor} + ${i}) === ${str.charCodeAt(i)}`);
+      }
+      return checks.join(" && ");
     }
 
-    // 2. Param child
+    if (node.literal.size > 0) {
+      code += `switch (url.charCodeAt(${cursorExpr})) {\n`;
+      const byFirstChar = new Map<number, {lit: string, child: TrieNode}[]>();
+      for (const [lit, child] of node.literal) {
+         if (lit.length === 0) continue;
+         const char = lit.charCodeAt(0);
+         let arr = byFirstChar.get(char);
+         if (!arr) { arr = []; byFirstChar.set(char, arr); }
+         arr.push({lit, child});
+      }
+
+      for (const [char, entries] of byFirstChar) {
+         code += `        case ${char}:\n`;
+         for (const {lit, child} of entries) {
+            const rest = lit.slice(1);
+            if (rest.length > 0) {
+              code += `
+                if (${compileLiteralCheck(rest, `${cursorExpr} + 1`)}) {
+                  const endLit${id} = ${cursorExpr} + ${lit.length};
+                  const isEnd${id} = endLit${id} === _e;
+                  if (isEnd${id} || url.charCodeAt(endLit${id}) === 47) {
+                    if (isEnd${id}) {
+                      ${child.route ? buildReturn(child.route, capturedVars) : ""}
+                    } else {
+                      ${gen(child, `endLit${id} + 1`, capturedVars)}
+                    }
+                  }
+                }
+              `;
+            } else {
+              code += `
+                {
+                  const endLit${id} = ${cursorExpr} + 1;
+                  const isEnd${id} = endLit${id} === _e;
+                  if (isEnd${id} || url.charCodeAt(endLit${id}) === 47) {
+                    if (isEnd${id}) {
+                      ${child.route ? buildReturn(child.route, capturedVars) : ""}
+                    } else {
+                      ${gen(child, `endLit${id} + 1`, capturedVars)}
+                    }
+                  }
+                }
+              `;
+            }
+         }
+         code += `          break;\n`;
+      }
+      code += `      }\n`;
+    }
+
     if (node.param) {
       code += `
         {
-          var n${id} = sanitized.indexOf('/', ${cursorExpr});
-          var isEndParam${id} = n${id} === -1;
-          var endParam${id} = isEndParam${id} ? sanitized.length : n${id};
-          var segParam${id} = sanitized.slice(${cursorExpr}, endParam${id});
+          const n${id} = url.indexOf('/', ${cursorExpr});
+          const isEndParam${id} = n${id} === -1 || n${id} >= _e;
+          const endParam${id} = isEndParam${id} ? _e : n${id};
       `;
-      const newCaptured = [...capturedVars, `segParam${id}`];
+      const newCaptured = [...capturedVars, { start: cursorExpr, end: `endParam${id}` }];
       code += `
           if (isEndParam${id}) {
             ${node.param.route ? buildReturn(node.param.route, newCaptured) : ""}
           } else {
-            ${gen(node.param, `n${id} + 1`, newCaptured)}
+            ${gen(node.param, `endParam${id} + 1`, newCaptured)}
           }
         }
       `;
     }
 
-    // 3. Wildcard child
     if (node.wildcard) {
-      const newCaptured = [...capturedVars, `sanitized.slice(${cursorExpr})`];
+      const newCaptured = [...capturedVars, { start: cursorExpr, end: "_e" }];
       code += `
         ${buildReturn(node.wildcard.route, newCaptured)}
       `;
@@ -180,28 +225,22 @@ function compileTrie(root: TrieNode, routesOut: RouteLike[]): string {
     return code;
   }
 
-  return gen(root, "0", []);
-}
-
-/**
- * Public entry point: given specificity-sorted dynamic routes for one
- * method, returns a compiled match function plus the `deps.routes` array
- * it closes over (needed by the generated `deps.routes[i]` references).
- */
-export function compileSonicTrieMatcher<R extends RouteLike>(
-  method: HTTPMethod,
-  sortedDynamicRoutes: R[]
-): { matchFn: (sanitized: string, url: string, method: string) => any; routes: R[] } {
-  const routes: R[] = [];
-  const trie = buildTrie(sortedDynamicRoutes);
-  const body = compileTrie(trie, routes);
+  const body = gen(trie, "_s", []);
 
   const deps = { routes };
 
   const matchFn = new Function(
     "deps",
     `
-    return function(sanitized, url, method) {
+    return function(url, method) {
+      let _s = 0, _e = url.length;
+      if (url.charCodeAt(0) === 47) _s = 1;
+      if (_e > _s && url.charCodeAt(_e - 1) === 47) _e -= 1;
+      
+      if (_s === _e) {
+          ${trie.literal.get("")?.route ? buildReturn(trie.literal.get("")!.route!, []) : ""}
+      }
+      
       ${body}
       return null;
     };
