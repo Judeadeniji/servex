@@ -3,8 +3,12 @@ import type { Handler } from "../types";
 
 /**
  * JIT compiles an array of handlers into a single flat async function.
- * This eliminates the closure overhead of `next()` and the microtask overhead
- * of recursively awaiting handlers.
+ * This version uses a recursive dispatch loop with an explicit switch statement.
+ * 
+ * Why?
+ * 1. Monomorphic Call Sites: V8 can optimize the switch cases perfectly.
+ * 2. Correctness: It perfectly mimics the `executeHandlers` closure scope,
+ *    ensuring that `next()` short-circuiting and implicit response propagation work.
  */
 export function compileHandlerChain(handlers: Handler<Context>[]): Function {
   if (handlers.length === 0) {
@@ -13,62 +17,37 @@ export function compileHandlerChain(handlers: Handler<Context>[]): Function {
 
   let code = `const RESOLVED = Promise.resolve(undefined);\n`;
   code += `return async function(context) {\n`;
-  
-  for (let i = handlers.length - 1; i >= 0; i--) {
-    const handler = handlers[i];
-    const isAsync = handler.constructor.name === "AsyncFunction";
-    
-    const str = handler.toString();
-    const paramsMatch = str.match(/^[^(]*\(\s*([^)]*)\)/);
-    let hasNext = false;
-    
-    if (paramsMatch) {
-      const params = paramsMatch[1].split(',').map(p => p.trim());
-      if (params.length > 1 && params[1] !== "") {
-        hasNext = true;
-      }
-    }
+  code += `  async function dispatch(i) {\n`;
+  code += `    if (i >= ${handlers.length}) return undefined;\n`;
+  code += `    let nextPromise;\n`;
+  code += `    let nextCalled = false;\n`;
+  code += `    const next = async () => {\n`;
+  code += `      if (nextCalled) throw new Error("next() called multiple times");\n`;
+  code += `      nextCalled = true;\n`;
+  code += `      nextPromise = dispatch(i + 1);\n`;
+  code += `      return await nextPromise;\n`;
+  code += `    };\n`;
+  code += `    let res;\n`;
+  code += `    switch(i) {\n`;
 
-    code += `  const next${i} = async () => {\n`;
-    code += `    let res;\n`;
-    
-    if (hasNext) {
-      code += `    let nextPromise;\n`;
-      code += `    const next = () => {\n`;
-      code += `      if (nextPromise) throw new Error("next() called multiple times");\n`;
-      if (i + 1 < handlers.length) {
-        code += `      return nextPromise = next${i+1}();\n`;
-      } else {
-        code += `      return nextPromise = RESOLVED;\n`;
-      }
-      code += `    };\n`;
-      
-      if (isAsync) {
-        code += `    res = await deps.handlers[${i}](context, next);\n`;
-      } else {
-        code += `    res = deps.handlers[${i}](context, next);\n`;
-        code += `    if (res instanceof Promise) res = await res;\n`;
-      }
-      
-      code += `    if (res instanceof Response) return res;\n`;
-      code += `    if (nextPromise) return await nextPromise;\n`;
-      code += `    return undefined;\n`;
-      
+  for (let i = 0; i < handlers.length; i++) {
+    const isAsync = handlers[i].constructor.name === "AsyncFunction";
+    code += `      case ${i}:\n`;
+    if (isAsync) {
+      code += `        res = await deps.handlers[${i}](context, next);\n`;
     } else {
-      if (isAsync) {
-        code += `    res = await deps.handlers[${i}](context);\n`;
-      } else {
-        code += `    res = deps.handlers[${i}](context);\n`;
-        code += `    if (res instanceof Promise) res = await res;\n`;
-      }
-      code += `    if (res instanceof Response) return res;\n`;
-      code += `    return undefined;\n`;
+      code += `        res = deps.handlers[${i}](context, next);\n`;
+      code += `        if (res instanceof Promise) res = await res;\n`;
     }
-    
-    code += `  };\n`;
+    code += `        break;\n`;
   }
-  
-  code += `  return await next0();\n`;
+
+  code += `    }\n`;
+  code += `    if (res instanceof Response) return res;\n`;
+  code += `    if (nextCalled && nextPromise) return await nextPromise;\n`;
+  code += `    return undefined;\n`;
+  code += `  }\n`;
+  code += `  return dispatch(0);\n`;
   code += `};\n`;
 
   const fn = new Function("deps", code);

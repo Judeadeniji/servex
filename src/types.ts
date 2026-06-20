@@ -100,8 +100,8 @@ export type ExtractResponseType<T> = T extends (...args: any[]) => infer R | Pro
 export type Last<T extends any[]> = T extends readonly [...any, infer L] ? L : never;
 
 export interface ServeXRouter<E extends Env = Env, S = {}, B extends string = "/"> {
-  onResponse(handler: HookHandler<E["Context"]>): this;
-  trace(handler: (api: TraceAPI<E["Context"]>) => void | Promise<void>): this;
+  onResponse(handler: HookHandler<Context<E>>): this;
+  trace(handler: (api: TraceAPI<Context<E>>) => void | Promise<void>): this;
 
   use(path: string | MiddlewareHandler<Context>, ...middlewares: MiddlewareHandler<Context>[]): this;
 
@@ -220,7 +220,7 @@ export type TypedResponse<
   _format: F;
 };
 
-export type NextFunction = () => Promise<void>;
+export type NextFunction = () => Promise<Response | void | undefined>;
 export declare function fetch(request: Request): Promise<Response>
 
 export { Context };

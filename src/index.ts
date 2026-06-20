@@ -390,6 +390,14 @@ async function executePostProcess(hooks: import("./types").Hooks, context: Conte
 export class ServeXRouterImpl<E extends Env = Env, S = {}, B extends string = "/"> implements ServeXRouter<E, S, B> {
     constructor(protected routerAdapter: RouterAdapter<ServerRoute[]>) {}
 
+    onResponse(handler: import("./types").HookHandler<Context<E>>): this {
+        throw new Error("onResponse hook can only be registered on the main ServeXApp instance, not a sub-router.");
+    }
+
+    trace(handler: (api: import("./types").TraceAPI<Context<E>>) => void | Promise<void>): this {
+        throw new Error("trace hook can only be registered on the main ServeXApp instance, not a sub-router.");
+    }
+
     use(path: string | MiddlewareHandler<Context>, ...middlewares: MiddlewareHandler<Context>[]) {
         if (typeof path === "string") {
             this.routerAdapter.pushMiddlewares(path, middlewares);
@@ -515,8 +523,8 @@ export class ServeXApp<E extends Env = Env, S = {}, B extends string = "/"> exte
     onBeforeHandle(handler: import("./types").HookHandler<Context>) { this.hooks.onBeforeHandle.push(handler); return this; }
     onAfterHandle(handler: import("./types").AfterHandleHook<Context>) { this.hooks.onAfterHandle.push(handler); return this; }
     onError(handler: import("./types").ErrorHook<Context>) { this.hooks.onError.push(handler); return this; }
-    onResponse(handler: import("./types").HookHandler<Context>) { this.hooks.onResponse.push(handler); return this; }
-    trace(handler: (api: import("./types").TraceAPI<Context>) => void | Promise<void>) { this.hooks.trace.push(handler); return this; }
+    onResponse(handler: import("./types").HookHandler<Context<E>>) { this.hooks.onResponse.push(handler as any); return this; }
+    trace(handler: (api: import("./types").TraceAPI<Context<E>>) => void | Promise<void>) { this.hooks.trace.push(handler as any); return this; }
 
     use(path: string | import("./types").MiddlewareHandler<Context>, ...middlewares: import("./types").MiddlewareHandler<Context>[]) {
         if (typeof path === "string") {

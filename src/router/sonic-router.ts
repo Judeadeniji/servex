@@ -94,13 +94,11 @@ export class SonicRouter<Routes extends Route[] = Route[]> implements IRouter<Ro
   // (e.g. `routes` getter, debugging) even though match order differs.
   private dynamicRoutes: Record<string, SonicRouteNode[]> = {};
 
-  // compiledRegex[method] -> RegExp
+  // compiled dynamic match functions
+  private matchFns: Record<string, (sanitized: string, url: string, method: string) => MatchedRoute<Routes, boolean> | null> = {};
+  // compiled dynamic regexes (stored separately for profiling)
   private matchers: Record<string, RegExp> = {};
-
-  // map from capture group index -> route node (built from the
-  // specificity-sorted route order, not registration order)
-  private matchMaps: Record<string, Array<SonicRouteNode | undefined>> = {};
-
+  // specificity-sorted route order,  // dynamic regex match logic)
   private isDirty: Record<string, boolean> = {};
 
   private pathMiddlewares: { path: string, middlewares: MiddlewareHandler<Context>[] }[] = [];
@@ -110,6 +108,13 @@ export class SonicRouter<Routes extends Route[] = Route[]> implements IRouter<Ro
   get routes(): Route<Routes[number]["data"]>[] {
     return this._routes;
   }
+
+  /** Expose compiled dynamic match functions for profiling/testing. */
+  get _matchFns() { return this.matchFns; }
+  /** Expose static route map for profiling/testing. */
+  get _staticRoutes() { return this.staticRoutes; }
+  /** Expose compiled dynamic regexes for profiling/testing. */
+  get _matchers() { return this.matchers; }
 
   addRoute(route: Route<Routes[number]["data"]>): void {
     this._routes.push(route);
@@ -169,6 +174,8 @@ export class SonicRouter<Routes extends Route[] = Route[]> implements IRouter<Ro
     const map: Array<SonicRouteNode | undefined> = [];
     let groupIndex = 1;
 
+    let dynamicJitCode = "";
+
     for (let i = 0; i < routes.length; i++) {
       const route = routes[i];
       let pattern = "";
@@ -194,14 +201,49 @@ export class SonicRouter<Routes extends Route[] = Route[]> implements IRouter<Ro
       regexStr += `(${pattern})`;
       map[groupIndex] = route;
 
+      dynamicJitCode += `
+        if (match[${groupIndex}] !== undefined) {
+          const params = {`;
+      for(let k = 0; k < route.paramsKeys.length; k++) {
+        dynamicJitCode += `"${route.paramsKeys[k]}": match[${groupIndex + 1 + k}],`;
+      }
+      dynamicJitCode += `};
+          return {
+            matched: true,
+            method: method,
+            route: url,
+            matched_route: "${route.path}",
+            params: params,
+            data: deps.map[${groupIndex}].data,
+            middlewares: deps.map[${groupIndex}].middlewares,
+            store: deps.map[${groupIndex}]
+          };
+        }
+      `;
+
       groupIndex += 1 + paramsCount;
 
       if (i < routes.length - 1) regexStr += "|";
     }
     regexStr += ")$";
 
-    this.matchers[method] = new RegExp(regexStr);
-    this.matchMaps[method] = map;
+    const regex = new RegExp(regexStr);
+    this.matchers[method] = regex;
+    const deps = {
+      regex,
+      map,
+      buildResult: this.buildResult.bind(this)
+    };
+
+    this.matchFns[method] = new Function("deps", `
+      return function(sanitized, url, method) {
+        const match = deps.regex.exec(sanitized);
+        if (match) {
+          ${dynamicJitCode}
+        }
+        return null;
+      };
+    `)(deps);
   }
 
   match<RoutePath extends DynamicSegmentsRemoved<Routes[number]["path"]>>(method: HTTPMethod, url: RoutePath): MatchedRoute<Routes, boolean> | null {
@@ -222,24 +264,9 @@ export class SonicRouter<Routes extends Route[] = Route[]> implements IRouter<Ro
     //    > param-segment > wildcard-segment, resolved left-to-right —
     //    see compareRouteSpecificity).
     this.compile(method);
-    const regex = this.matchers[method];
-    if (regex) {
-      const match = regex.exec(sanitized);
-      if (match) {
-        const map = this.matchMaps[method];
-        // Scan for the wrapping group that matched
-        for (let i = 1; i < match.length; i++) {
-          const node = map[i];
-          if (node && match[i] !== undefined) {
-            const params: Record<string, string> = {};
-            for (let k = 0; k < node.paramsKeys.length; k++) {
-              // The params follow sequentially after the wrapping group
-              params[node.paramsKeys[k]] = match[i + 1 + k];
-            }
-            return this.buildResult(node, method, url as string, node.path, params);
-          }
-        }
-      }
+    const dynamicMatchFn = this.matchFns[method];
+    if (dynamicMatchFn) {
+      return dynamicMatchFn(sanitized, url as string, method);
     }
     return null;
   }
@@ -307,8 +334,32 @@ export class SonicRouter<Routes extends Route[] = Route[]> implements IRouter<Ro
     }
   }
 
+  /**
+   * Strips the leading and trailing `/` from a route or URL path.
+   *
+   * This is intentionally the entire contract: sanitizeRoute does NOT
+   * percent-encode characters. Reasons:
+   *
+   * 1. HTTP requests arrive at the server already percent-encoded by the
+   *    client (browser, fetch, etc.). Encoding again would double-encode
+   *    `%xx` sequences — turning `/caf%C3%A9` into `/caf%25C3%25A9`,
+   *    which would never match any route. The old encodeURI() call had
+   *    exactly this bug.
+   *
+   * 2. Encoding consistency: since this function runs on both route
+   *    registration (addRoute) and URL matching (match), whatever a caller
+   *    puts in is what gets compared. The onus is on the caller to be
+   *    consistent — register `/café` if you expect requests with raw bytes;
+   *    register `/caf%C3%A9` (or let the HTTP layer normalize) if you
+   *    expect pre-encoded requests. Most real apps fall into the latter
+   *    category and are unaffected either way since their route paths are
+   *    plain ASCII.
+   */
   private sanitizeRoute(route: string): string {
-    if (route === "/") return "";
-    return encodeURI(route.replace(/^\/|\/$/g, ""));
+    if (route === "/" || route === "") return "";
+    let s = 0, e = route.length;
+    if (route.charCodeAt(0) === 47 /* "/" */) s = 1;
+    if (e > s && route.charCodeAt(e - 1) === 47 /* "/" */) e -= 1;
+    return s === 0 && e === route.length ? route : route.slice(s, e);
   }
 }
