@@ -12,7 +12,7 @@ export type Route<T = unknown> = {
 export type SegmentType = "static" | "dynamic" | "wildcard";
 export type SegmentNode<T = unknown> = TrieSegmentNode<T> | RadixSegmentNode<T>;
 
-export type MatchedRoute<Routes extends Route[] = Route[], M = boolean> = {
+export type MatchedRoute<Routes extends Route<any>[] = Route<any>[], M = boolean> = {
   /**
    * @property matched - A boolean to indicate if the route was matched
    */
@@ -180,10 +180,7 @@ export interface IRouter<Routes extends Route[] = Route[]> {
    * @param url - The URL to match.
    * @returns The matched route or null if no match is found.
    */
-  match<
-    RoutePath extends DynamicSegmentsRemoved<Routes[number]["path"]>,
-    Matched = RouteMatch<Routes[number]["path"], RoutePath>
-  >(
+  match<RoutePath extends DynamicSegmentsRemoved<Routes[number]["path"]>>(
     method: HTTPMethod,
     url: RoutePath
   ): MatchedRoute<Routes, boolean> | null;

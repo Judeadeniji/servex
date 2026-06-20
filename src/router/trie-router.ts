@@ -273,44 +273,36 @@ export class TrieRouter<Routes extends Route[]> implements IRouter<Routes> {
     return routes;
   }
 
-  match<
-    RoutePath extends DynamicSegmentsRemoved<Routes[number]["path"]>,
-    Matched = RouteMatch<Routes[number]["path"], RoutePath>
-  >(
+  match<RoutePath extends DynamicSegmentsRemoved<Routes[number]["path"]>>(
     method: HTTPMethod,
     _route: RoutePath
   ): MatchedRoute<Routes, boolean> | null {
     const route = this.sanitizeRoute(_route) as RoutePath;
     const segments = route === "/" ? [route] : route.split("/");
-    const matched_route: MatchedRoute<Routes, Matched> = {
-      matched: false as Matched,
+    const matched_route: MatchedRoute<Routes, boolean> = {
+      matched: false,
       method: method,
       route: _route,
       matched_route: "",
-      params: {} as Extract<MatchedRoute<Routes, Matched>["params"], Record<string, string>>,
+      params: {} as MatchedRoute<Routes, boolean>["params"],
       data: null!,
       middlewares: [], // Initialize middleware array
     };
 
-    return this.matchAll<RoutePath, Matched>(
+    return this.matchAll<RoutePath>(
       matched_route,
       segments,
       method
     ) as MatchedRoute<Routes, boolean> | null;
   }
 
-  private matchAll<
-    R extends DynamicSegmentsRemoved<Routes[number]["path"]>,
-    Matched = RouteMatch<Routes[number]["path"], R>
-  >(
-    matched_route: MatchedRoute<Routes, Matched>,
+  private matchAll<R extends DynamicSegmentsRemoved<Routes[number]["path"]>>(
+    matched_route: MatchedRoute<Routes, boolean>,
     segments: string[],
     method: HTTPMethod,
     paths: string[] = [segments[0]],
     index: number = 0
-  ): Matched extends false
-    ? Coerce<MatchedRoute<Routes> & { matched: false }> | null
-    : Coerce<MatchedRoute<Routes> & { matched: true }> {
+  ): MatchedRoute<Routes, boolean> | null {
     const nextSegment = segments[index + 1];
     const path = paths.join("/") as R;
     const routes = this.lookup(path);
@@ -335,8 +327,8 @@ export class TrieRouter<Routes extends Route[]> implements IRouter<Routes> {
 
     if (!nextSegment && route.isEndOfRoute) {
       if (route.data[method]) {
-        matched_route.matched = true as Matched;
-        matched_route.data = route.data[method];
+        matched_route.matched = true;
+        matched_route.data = route.data[method] as any;
         //@ts-ignore
         return matched_route;
       } else {
@@ -398,8 +390,8 @@ export class TrieRouter<Routes extends Route[]> implements IRouter<Routes> {
 
           matched_route.matched_route += `/${seg}`;
           if (trieSegment.data[method]) {
-            matched_route.matched = true as Matched;
-            matched_route.data = trieSegment.data[method];
+            matched_route.matched = true;
+            matched_route.data = trieSegment.data[method] as any;
             this.collectMiddlewares(trieSegment, matched_route.middlewares);
             //@ts-ignore
             return matched_route;

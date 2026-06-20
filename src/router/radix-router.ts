@@ -213,10 +213,7 @@ export class RadixRouteTrie<Routes extends Route[]> implements IRouter<Routes> {
     };
   }
 
-  match<
-    RoutePath extends DynamicSegmentsRemoved<Routes[number]["path"]>,
-    Matched = RouteMatch<Routes[number]["path"], RoutePath>
-  >(method: HTTPMethod, url: RoutePath): MatchedRoute<Routes, boolean> | null {
+  match<RoutePath extends DynamicSegmentsRemoved<Routes[number]["path"]>>(method: HTTPMethod, url: RoutePath): MatchedRoute<Routes, boolean> | null {
     let sanitizedPath = url as unknown as string;
     if (sanitizedPath.charCodeAt(0) === 47) sanitizedPath = sanitizedPath.slice(1);
     if (sanitizedPath.length > 0 && sanitizedPath.charCodeAt(sanitizedPath.length - 1) === 47) {

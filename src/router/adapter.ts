@@ -67,10 +67,7 @@ export class RouterAdapter<Routes extends Route[] = Route[]> implements IRouter<
    * @param url - The URL to match.
    * @returns The matched route or null if no match is found.
    */
-  match<
-    RoutePath extends DynamicSegmentsRemoved<Routes[number]["path"]>,
-    Matched = RouteMatch<Routes[number]["path"], RoutePath>
-  >(
+  match<RoutePath extends DynamicSegmentsRemoved<Routes[number]["path"]>>(
     method: HTTPMethod,
     url: RoutePath
   ): MatchedRoute<Routes, boolean> | null {
