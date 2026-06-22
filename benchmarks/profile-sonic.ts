@@ -104,7 +104,7 @@ const fullTime = bench(
 const jitTime = bench(
 	"JIT matchFn() — all URLs",
 	() => {
-		for (const u of requestMix) matchFn(u, u, "GET");
+		for (const u of requestMix) matchFn(u, "GET");
 	},
 	requestMix.length,
 );
