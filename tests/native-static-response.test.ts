@@ -3,13 +3,12 @@ import { createServer } from "../src/index";
 
 describe("Native Static Response Injection", () => {
 	it("should convert inline values to route handlers", async () => {
-		const app = createServer();
-		
-		app.get("/string", "hello");
-		app.get("/number", 42);
-		app.get("/boolean", true);
-		app.get("/object", { message: "ok" });
-		app.get("/response", new Response("custom"));
+		const app = createServer()
+			.get("/string", "hello")
+			.get("/number", 42)
+			.get("/boolean", true)
+			.get("/object", { message: "ok" })
+			.get("/response", new Response("custom"));
 
 		const resString = await app.request("http://localhost/string");
 		expect(await resString.text()).toBe("hello");
@@ -28,17 +27,14 @@ describe("Native Static Response Injection", () => {
 	});
 
 	it("should inject static routes into app.static if nativeStaticResponse is true", () => {
-		const app = createServer({ nativeStaticResponse: true });
-		
-		app.get("/version", "1.0.0");
-		app.get("/api/status", { status: "ok" });
-		
-		// Shouldn't inject if it has path params or wildcard
-		app.get("/user/:id", "123");
-		app.get("/static/*", "fallback");
-
-		// Shouldn't inject if it has middlewares
-		app.get("/middleware", () => {}, "hello");
+		const app = createServer({ nativeStaticResponse: true })
+			.get("/version", "1.0.0")
+			.get("/api/status", { status: "ok" })
+			// Shouldn't inject if it has path params or wildcard
+			.get("/user/:id", "123")
+			.get("/static/*", "fallback")
+			// Shouldn't inject if it has middlewares
+			.get("/middleware", () => {}, "hello");
 
 		expect(app.static).toBeDefined();
 		expect(app.static?.["/version"]).toBeDefined();
@@ -50,9 +46,9 @@ describe("Native Static Response Injection", () => {
 	});
 
 	it("should return the correct content type in static response", async () => {
-		const app = createServer({ nativeStaticResponse: true });
-		app.get("/version", "1.0.0");
-		app.get("/api/status", { status: "ok" });
+		const app = createServer({ nativeStaticResponse: true })
+			.get("/version", "1.0.0")
+			.get("/api/status", { status: "ok" });
 		
 		const resStr = app.static?.["/version"] as Response;
 		expect(await resStr.clone().text()).toBe("1.0.0");
