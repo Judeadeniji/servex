@@ -43,7 +43,6 @@ export function compression<C extends Context>(options: CompressionOptions = {})
     const compressionStream = new CompressionStream(encoding);
     const compressedBody = res.body.pipeThrough(compressionStream);
 
-    // Use c.setHeaders to set encoding and vary
     const vary = res.headers.get("Vary");
     c.setHeaders({
       "Content-Encoding": encoding,
@@ -65,6 +64,6 @@ export function compression<C extends Context>(options: CompressionOptions = {})
       status: res.status,
       statusText: res.statusText,
       headers: finalHeaders,
-    });
-  };
+    }); 
+  }
 }
