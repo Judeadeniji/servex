@@ -290,6 +290,9 @@ export interface ServeXRouter<
 		) => Response | Promise<Response>,
 	): ServeXRouter<E, S, B>;
 
+	/** Array of all registered routes in this router */
+	readonly routes: ServerRoute[];
+
 	/**
 	 * Handle an incoming `Request` — compatible with Cloudflare Workers, Bun,
 	 * and Deno. Always present on the chained type so it can be referenced after

@@ -12,3 +12,4 @@ export { HttpException } from "./http-exception";
 export { RouterAdapter, RouterType } from "./router/adapter";
 export * from "./app";
 export * from "./storage";
+export { showRoutes } from "./helpers/show-routes";

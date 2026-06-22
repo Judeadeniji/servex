@@ -1,8 +1,8 @@
-import type { Handler, Method, MiddlewareHandler, ServerOptions, ServerRoute, ServeXRouter, Env, Hooks, HookHandler, AfterHandleHook, ErrorHook, TraceAPI } from "./types";
-import { Context } from "./context";
+import type { Context } from "./context";
+import { baseFetch } from "./core/fetch";
 import { RouterAdapter, RouterType } from "./router/adapter";
 import type { NormalisePath } from "./router/types";
-import { baseFetch } from "./core/fetch";
+import type { Env, Handler, Method, MiddlewareHandler, ServerOptions, ServerRoute, ServeXRouter } from "./types";
 
 export class ServeXRequest extends Request {}
 
@@ -10,8 +10,8 @@ export class ServeXRequest extends Request {}
 export class ServeXRouterImpl<E extends Env = Env, S = {}, B extends string = "/"> implements ServeXRouter<E, S, B> {
     constructor(protected routerAdapter: RouterAdapter<ServerRoute[]>) {}
 
-    onResponse(_handler: import("./types").HookHandler<Context<E>>): this {
-        throw new Error("onResponse hook can only be registered on the main ServeXApp instance, not a sub-router.");
+    get routes(): ServerRoute[] {
+        return this.routerAdapter.routes;
     }
 
     trace(_handler: (api: import("./types").TraceAPI<Context<E>>) => void | Promise<void>): this {
