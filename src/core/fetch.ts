@@ -374,6 +374,7 @@ async function baseFetchSlow(
 }
 
 async function executePostProcess(hooks: import("../types").Hooks, context: Context, traceListeners?: import("../types").TraceListener[]) {
+  context.markFinished();
   try {
     const onResLen = hooks.onResponse.length;
     if (onResLen > 0 || (traceListeners && traceListeners.length > 0)) {

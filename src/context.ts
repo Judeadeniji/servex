@@ -30,6 +30,7 @@ export class Context<
 	#headers?: Headers;
 	#status: StatusCode = 200;
 	#variables?: Map<string, unknown>;
+	#isFinished: boolean = false;
 	debug = false;
 
 	#routine?: SignalContext;
@@ -49,6 +50,17 @@ export class Context<
 		this.#params = ctx?.params || {};
 		this.executionCtx = executionCtx;
 		this.debug = debug;
+	}
+
+	#warnIfFinished(method: string) {
+		if (this.#isFinished && !this.debug) {
+			console.warn(`[ServeX] Warning: Attempted to call Context.${method}() after the response was already sent!`);
+		}
+	}
+
+	/** @internal */
+	markFinished() {
+		this.#isFinished = true;
 	}
 
 	/**
@@ -81,6 +93,7 @@ export class Context<
 	}
 
 	setHeaders(headers: { [key: string]: string | string[] }) {
+		this.#warnIfFinished("setHeaders");
 		for (const name in headers) {
 			if (Object.hasOwn(headers, name)) {
 				const value = headers[name];
@@ -97,6 +110,7 @@ export class Context<
 	}
 
 	setCookie(name: string, value: string, options?: ck.CookieSerializeOptions) {
+		this.#warnIfFinished("setCookie");
 		const ckStr = ck.serialize(name, value, options);
 		this.header.append("Set-Cookie", ckStr);
 		return this;
@@ -265,6 +279,7 @@ export class Context<
 		status?: U,
 		_headers?: HeaderRecord,
 	): Response & import("./types").TypedResponse<T, U, "json"> {
+		this.#warnIfFinished("json");
 		const body = JSON.stringify(object);
 		this.#status = status ?? 200;
 
@@ -300,6 +315,7 @@ export class Context<
 		status?: U,
 		_headers?: HeaderRecord,
 	): Response & import("./types").TypedResponse<T, U, "text"> {
+		this.#warnIfFinished("text");
 		this.#status = status ?? 200;
 
 		if (!this.#headers && !_headers && !this.#response) {
@@ -334,6 +350,7 @@ export class Context<
 		status?: U,
 		_headers?: HeaderRecord,
 	): Response & import("./types").TypedResponse<T, U, "html"> {
+		this.#warnIfFinished("html");
 		this.#status = status ?? 200;
 
 		if (!this.#headers && !_headers && !this.#response) {
@@ -363,6 +380,7 @@ export class Context<
 	 * @param status - Optional HTTP status code (default: 302).
 	 */
 	redirect(location: string, status: StatusCode = 302): Response {
+		this.#warnIfFinished("redirect");
 		this.#status = status;
 
 		if (!this.#headers && !this.#response) {
@@ -391,6 +409,7 @@ export class Context<
 		status?: StatusCode,
 		_headers?: HeaderRecord,
 	): Response {
+		this.#warnIfFinished("stream");
 		this.#status = status ?? 200;
 
 		if (!this.#headers && !_headers && !this.#response) {
