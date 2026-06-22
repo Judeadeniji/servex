@@ -463,7 +463,7 @@ export interface ServeXRouter<
 	static?: Record<string, Response> & { 
 		[K in keyof S as K extends `${string}:${string}` | `${string}*${string}`
 			? never
-			: S[K] extends { GET: any, IS_STATIC: true }
+			: S[K] extends { GET: unknown, IS_STATIC: true }
 				? K
 				: never]?: S[K] extends { GET: infer R }
 			? R extends Response ? R : Response & TypedResponse<R, 200>

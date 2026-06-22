@@ -44,13 +44,14 @@ export class ServeXRouterImpl<E extends Env = Env, S = {}, B extends string = "/
                 finalHandlers[finalHandlers.length - 1] = routeHandler;
                 
                 // Track native static route if supported
-                if (method === "GET" && (this as any)._nativeStaticResponse && !path.includes(":") && !path.includes("*") && finalHandlers.length === 1) {
-                    if (!(this as any).static) (this as any).static = {};
+                if (method === "GET" && (this as unknown as { _nativeStaticResponse?: boolean })._nativeStaticResponse && !path.includes(":") && !path.includes("*") && finalHandlers.length === 1) {
+                    if (!(this as unknown as { static?: Record<string, Response> }).static) (this as unknown as { static?: Record<string, Response> }).static = {};
                     let res: Response;
                     if (inlineVal instanceof Response) res = inlineVal.clone();
                     else if (typeof inlineVal === "object" && inlineVal !== null) res = new Response(JSON.stringify(inlineVal), { headers: { "Content-Type": "application/json; charset=UTF-8" }});
                     else res = new Response(String(inlineVal), { headers: { "Content-Type": "text/plain; charset=UTF-8" }});
-                    (this as any).static[path] = res;
+                    const self = this as unknown as { static: Record<string, Response> };
+                    self.static[path] = res;
                 }
             }
         }
@@ -166,7 +167,7 @@ export class ServeXApp<E extends Env = Env, S = {}, B extends string = "/"> exte
     public static?: Record<string, Response> & { 
         [K in keyof S as K extends `${string}:${string}` | `${string}*${string}`
             ? never
-            : S[K] extends { GET: any, IS_STATIC: true }
+            : S[K] extends { GET: unknown, IS_STATIC: true }
                 ? K
                 : never]?: S[K] extends { GET: infer R }
             ? R extends Response ? R : Response & import("./types").TypedResponse<R, 200>
