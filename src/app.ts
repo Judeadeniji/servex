@@ -44,7 +44,7 @@ export class ServeXRouterImpl<E extends Env = Env, S = {}, B extends string = "/
                 finalHandlers[finalHandlers.length - 1] = routeHandler;
                 
                 // Track native static route if supported
-                if ((this as any)._nativeStaticResponse && !path.includes(":") && !path.includes("*") && finalHandlers.length === 1) {
+                if (method === "GET" && (this as any)._nativeStaticResponse && !path.includes(":") && !path.includes("*") && finalHandlers.length === 1) {
                     if (!(this as any).static) (this as any).static = {};
                     let res: Response;
                     if (inlineVal instanceof Response) res = inlineVal.clone();
@@ -164,7 +164,11 @@ export class ServeXApp<E extends Env = Env, S = {}, B extends string = "/"> exte
     public readonly basePath: B;
     public _nativeStaticResponse: boolean = false;
     public static?: Record<string, Response> & { 
-        [K in keyof S]?: S[K] extends { GET: infer R }
+        [K in keyof S as K extends `${string}:${string}` | `${string}*${string}`
+            ? never
+            : S[K] extends { GET: any, IS_STATIC: true }
+                ? K
+                : never]?: S[K] extends { GET: infer R }
             ? R extends Response ? R : Response & import("./types").TypedResponse<R, 200>
             : Response
     };
