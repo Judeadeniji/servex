@@ -43,23 +43,28 @@ export function compression<C extends Context>(options: CompressionOptions = {})
     const compressionStream = new CompressionStream(encoding);
     const compressedBody = res.body.pipeThrough(compressionStream);
 
-    // Create new headers
-    const newHeaders = new Headers(res.headers);
-    newHeaders.set("Content-Encoding", encoding);
-    newHeaders.delete("Content-Length"); // Content-Length will change
-    
-    // Maintain vary header
-    const vary = newHeaders.get("Vary");
-    if (!vary) {
-      newHeaders.set("Vary", "Accept-Encoding");
-    } else if (!vary.includes("Accept-Encoding")) {
-      newHeaders.set("Vary", `${vary}, Accept-Encoding`);
+    // Use c.setHeaders to set encoding and vary
+    const vary = res.headers.get("Vary");
+    c.setHeaders({
+      "Content-Encoding": encoding,
+      "Vary": !vary ? "Accept-Encoding" : (vary.includes("Accept-Encoding") ? vary : `${vary}, Accept-Encoding`)
+    });
+
+    // Delete Content-Length from context headers just in case
+    c.header.delete("Content-Length");
+
+    // We must merge the original response headers with our context headers 
+    // to support both c.json() and raw new Response() returns safely.
+    const finalHeaders = new Headers(res.headers);
+    for (const [k, v] of c.header.entries()) {
+      finalHeaders.set(k, v);
     }
+    finalHeaders.delete("Content-Length");
 
     return new Response(compressedBody, {
       status: res.status,
       statusText: res.statusText,
-      headers: newHeaders,
+      headers: finalHeaders,
     });
   };
 }
