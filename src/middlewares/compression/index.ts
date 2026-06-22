@@ -1,0 +1,65 @@
+import type { Context, MiddlewareHandler, NextFunction } from "../../types";
+
+export interface CompressionOptions {
+  /**
+   * Minimum response size in bytes to apply compression.
+   * Note: This only works if the Content-Length header is present on the original response.
+   * @default 1024
+   */
+  threshold?: number;
+}
+
+export function compression<C extends Context>(options: CompressionOptions = {}): MiddlewareHandler<C> {
+  const threshold = options.threshold ?? 1024;
+
+  return async (c: C, next: NextFunction) => {
+    const res = await next();
+    
+    // If there is no response (e.g. 404 fallback will happen later), we skip
+    if (!res?.body) return res;
+
+    // Skip if already compressed
+    if (res.headers.has("Content-Encoding")) return res;
+
+    // Check threshold if Content-Length is present
+    const contentLength = res.headers.get("Content-Length");
+    if (contentLength && parseInt(contentLength, 10) < threshold) {
+      return res;
+    }
+
+    const acceptEncoding = c.req.headers.get("Accept-Encoding");
+    if (!acceptEncoding) return res;
+
+    let encoding: "gzip" | "deflate" | null = null;
+    if (acceptEncoding.includes("gzip")) {
+      encoding = "gzip";
+    } else if (acceptEncoding.includes("deflate")) {
+      encoding = "deflate";
+    }
+
+    if (!encoding) return res;
+
+    // Create compression stream
+    const compressionStream = new CompressionStream(encoding);
+    const compressedBody = res.body.pipeThrough(compressionStream);
+
+    // Create new headers
+    const newHeaders = new Headers(res.headers);
+    newHeaders.set("Content-Encoding", encoding);
+    newHeaders.delete("Content-Length"); // Content-Length will change
+    
+    // Maintain vary header
+    const vary = newHeaders.get("Vary");
+    if (!vary) {
+      newHeaders.set("Vary", "Accept-Encoding");
+    } else if (!vary.includes("Accept-Encoding")) {
+      newHeaders.set("Vary", `${vary}, Accept-Encoding`);
+    }
+
+    return new Response(compressedBody, {
+      status: res.status,
+      statusText: res.statusText,
+      headers: newHeaders,
+    });
+  };
+}
