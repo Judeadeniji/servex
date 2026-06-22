@@ -10,14 +10,14 @@ describe("JIT Compiler", () => {
 	describe("buildCompilerSource (Code Generation)", () => {
 		test("should generate empty async function for 0 handlers", () => {
 			const source = buildCompilerSource([]);
-			expect(source).toContain("return async () => undefined;");
+			expect(source).toContain("return () => Promise.resolve(undefined);");
 		});
 
 		test("should use localized next closures and nextCalled variables", () => {
 			const handlers: Handler<any>[] = Array(5).fill((c: any, n: any) => n());
 			const source = buildCompilerSource(handlers);
 			expect(source).toContain("let nextCalled = false;");
-			expect(source).toContain("const next = async () => {");
+			expect(source).toContain("const next = () => {");
 		});
 
 		test("should omit 'next' arg for terminal handlers", () => {

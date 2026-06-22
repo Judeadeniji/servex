@@ -11,56 +11,57 @@ import type { Handler } from "../types";
  * 3. State Opt: Uses a simple integer bitmask (or Uint8Array) to perfectly mimic `next()`
  *    short-circuiting and duplicate call prevention without array allocations.
  */
-export function buildCompilerSource(handlers: Handler<any>[]): string {
+export function buildCompilerSource(handlers: Handler[]): string {
 	if (handlers.length === 0) {
-		return `return async () => undefined;\n`;
+		return `return () => Promise.resolve(undefined);\n`;
 	}
 
-	let code = `return async function(context) {\n`;
-	code += `  async function dispatch(i) {\n`;
+	let code = `return function(context) {\n`;
+	code += `  function dispatch(i) {\n`;
 	code += `    if (i >= ${handlers.length}) return undefined;\n`;
 	code += `    let res;\n`;
 	code += `    switch(i) {\n`;
 
 	for (let j = 0; j < handlers.length; j++) {
-		const isAsync = handlers[j].constructor.name === "AsyncFunction";
 		const needsNext = handlers[j].length > 1;
 		code += `      case ${j}:\n`;
 		if (needsNext) {
 			code += `        {\n`;
 			code += `          let nextCalled = false;\n`;
 			code += `          let nextPromise;\n`;
-			code += `          const next = async () => {\n`;
+			code += `          const next = () => {\n`;
 			code += `            if (nextCalled) throw new Error("next() called multiple times");\n`;
 			code += `            nextCalled = true;\n`;
-			code += `            nextPromise = dispatch(${j + 1});\n`;
-			code += `            return await nextPromise;\n`;
+			code += `            let p = dispatch(${j + 1});\n`;
+			code += `            nextPromise = p instanceof Promise ? p : Promise.resolve(p);\n`;
+			code += `            return nextPromise;\n`;
 			code += `          };\n`;
-			if (isAsync) {
-				code += `          res = await deps.handlers[${j}](context, next);\n`;
-			} else {
-				code += `          res = deps.handlers[${j}](context, next);\n`;
-				code += `          if (res instanceof Promise) res = await res;\n`;
-			}
+			code += `          res = deps.handlers[${j}](context, next);\n`;
+			code += `          if (res instanceof Promise) {\n`;
+			code += `            return res.then(r => {\n`;
+			code += `              if (r instanceof Response) return r;\n`;
+			code += `              if (nextCalled && nextPromise) return nextPromise;\n`;
+			code += `              return undefined;\n`;
+			code += `            });\n`;
+			code += `          }\n`;
 			code += `          if (res instanceof Response) return res;\n`;
-			code += `          if (nextCalled && nextPromise) return await nextPromise;\n`;
+			code += `          if (nextCalled && nextPromise) return nextPromise;\n`;
+			code += `          return undefined;\n`;
 			code += `        }\n`;
 		} else {
-			if (isAsync) {
-				code += `        res = await deps.handlers[${j}](context);\n`;
-			} else {
-				code += `        res = deps.handlers[${j}](context);\n`;
-				code += `        if (res instanceof Promise) res = await res;\n`;
-			}
-			code += `        if (res instanceof Response) return res;\n`;
+			code += `        res = deps.handlers[${j}](context);\n`;
+			code += `        if (res instanceof Promise) {\n`;
+			code += `          return res.then(r => r instanceof Response ? r : undefined);\n`;
+			code += `        }\n`;
+			code += `        return res instanceof Response ? res : undefined;\n`;
 		}
-		code += `        break;\n`;
 	}
 
 	code += `    }\n`;
 	code += `    return undefined;\n`;
 	code += `  }\n`;
-	code += `  return dispatch(0);\n`;
+	code += `  let finalRes = dispatch(0);\n`;
+	code += `  return finalRes instanceof Promise ? finalRes : Promise.resolve(finalRes);\n`;
 	code += `};\n`;
 	
 	return code;
