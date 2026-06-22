@@ -1,58 +1,62 @@
-import { describe, it, expect, mock } from "bun:test";
-import { logger } from "./index";
+import { describe, expect, it, mock } from "bun:test";
 import { createServer } from "../../../src";
+import { logger } from "./index";
 
 describe("Middleware: Logger", () => {
-  it("should log requests with default format", async () => {
-    const printMock = mock((str: string) => {});
-    const app = createServer();
-    
-    app.use(logger({ print: printMock }));
-    app.get("/ping", (c) => c.text("pong", 201));
+	it("should log requests with default format", async () => {
+		const printMock = mock((_str: string) => {});
+		const app = createServer();
 
-    await app.fetch(new Request("http://localhost/ping"));
-    await Bun.sleep(1);
+		app.use(logger({ print: printMock }));
+		app.get("/ping", (c) => c.text("pong", 201));
 
-    expect(printMock).toHaveBeenCalled();
-    const logOutput = printMock.mock.calls[0][0] as string;
-    
-    expect(logOutput).toContain("GET");
-    expect(logOutput).toContain("/ping");
-    expect(logOutput).toContain("201");
-    expect(logOutput).toContain("ms");
-  });
+		await app.fetch(new Request("http://localhost/ping"));
+		await Bun.sleep(1);
 
-  it("should log errors correctly with correct status code", async () => {
-    const printMock = mock((str: string) => {});
-    const app = createServer();
-    
-    app.use(logger({ print: printMock }));
-    app.get("/error", () => { throw new Error("Boom"); });
+		expect(printMock).toHaveBeenCalled();
+		const logOutput = printMock.mock.calls[0][0] as string;
 
-    await app.fetch(new Request("http://localhost/error"));
-    await Bun.sleep(1);
+		expect(logOutput).toContain("GET");
+		expect(logOutput).toContain("/ping");
+		expect(logOutput).toContain("201");
+		expect(logOutput).toContain("ms");
+	});
 
-    expect(printMock).toHaveBeenCalled();
-    const logOutput = printMock.mock.calls[0][0] as string;
-    
-    expect(logOutput).toContain("GET");
-    expect(logOutput).toContain("/error");
-    expect(logOutput).toContain("500");
-  });
+	it("should log errors correctly with correct status code", async () => {
+		const printMock = mock((_str: string) => {});
+		const app = createServer();
 
-  it("should use a custom format function if provided", async () => {
-    const printMock = mock((str: string) => {});
-    const formatMock = mock((data) => `CUSTOM ${data.method} ${data.path} ${data.status}`);
-    
-    const app = createServer();
-    app.use(logger({ print: printMock, format: formatMock }));
-    app.post("/custom", (c) => c.text("ok", 202));
+		app.use(logger({ print: printMock }));
+		app.get("/error", () => {
+			throw new Error("Boom");
+		});
 
-    await app.fetch(new Request("http://localhost/custom", { method: "POST" }));
-    await Bun.sleep(1);
+		await app.fetch(new Request("http://localhost/error"));
+		await Bun.sleep(1);
 
-    expect(formatMock).toHaveBeenCalled();
-    const logOutput = printMock.mock.calls[0][0] as string;
-    expect(logOutput).toBe("CUSTOM POST /custom 202");
-  });
+		expect(printMock).toHaveBeenCalled();
+		const logOutput = printMock.mock.calls[0][0] as string;
+
+		expect(logOutput).toContain("GET");
+		expect(logOutput).toContain("/error");
+		expect(logOutput).toContain("500");
+	});
+
+	it("should use a custom format function if provided", async () => {
+		const printMock = mock((_str: string) => {});
+		const formatMock = mock(
+			(data) => `CUSTOM ${data.method} ${data.path} ${data.status}`,
+		);
+
+		const app = createServer();
+		app.use(logger({ print: printMock, format: formatMock }));
+		app.post("/custom", (c) => c.text("ok", 202));
+
+		await app.fetch(new Request("http://localhost/custom", { method: "POST" }));
+		await Bun.sleep(1);
+
+		expect(formatMock).toHaveBeenCalled();
+		const logOutput = printMock.mock.calls[0][0] as string;
+		expect(logOutput).toBe("CUSTOM POST /custom 202");
+	});
 });

@@ -17,7 +17,6 @@
  */
 
 import { HttpException, type HttpExceptionOptions } from "./http-exception";
-import type { ClientErrorStatusCode, ServerErrorStatusCode } from "./http-status";
 
 // ─── Helper ──────────────────────────────────────────────────────────────────
 
@@ -30,11 +29,11 @@ type NamedErrorOptions = Omit<HttpExceptionOptions, "statusCode">;
  * (e.g., malformed request syntax, invalid parameters).
  */
 export class BadRequestError extends HttpException {
-  constructor(message?: string, options?: NamedErrorOptions) {
-    super({ statusCode: 400, message, ...options });
-    this.name = "BadRequestError";
-    Object.setPrototypeOf(this, BadRequestError.prototype);
-  }
+	constructor(message?: string, options?: NamedErrorOptions) {
+		super({ statusCode: 400, message, ...options });
+		this.name = "BadRequestError";
+		Object.setPrototypeOf(this, BadRequestError.prototype);
+	}
 }
 
 /**
@@ -43,11 +42,11 @@ export class BadRequestError extends HttpException {
  * Typically accompanied by a `WWW-Authenticate` header.
  */
 export class UnauthorizedError extends HttpException {
-  constructor(message?: string, options?: NamedErrorOptions) {
-    super({ statusCode: 401, message, ...options });
-    this.name = "UnauthorizedError";
-    Object.setPrototypeOf(this, UnauthorizedError.prototype);
-  }
+	constructor(message?: string, options?: NamedErrorOptions) {
+		super({ statusCode: 401, message, ...options });
+		this.name = "UnauthorizedError";
+		Object.setPrototypeOf(this, UnauthorizedError.prototype);
+	}
 }
 
 /**
@@ -55,11 +54,11 @@ export class UnauthorizedError extends HttpException {
  * that payment is needed before accessing the resource.
  */
 export class PaymentRequiredError extends HttpException {
-  constructor(message?: string, options?: NamedErrorOptions) {
-    super({ statusCode: 402, message, ...options });
-    this.name = "PaymentRequiredError";
-    Object.setPrototypeOf(this, PaymentRequiredError.prototype);
-  }
+	constructor(message?: string, options?: NamedErrorOptions) {
+		super({ statusCode: 402, message, ...options });
+		this.name = "PaymentRequiredError";
+		Object.setPrototypeOf(this, PaymentRequiredError.prototype);
+	}
 }
 
 /**
@@ -67,22 +66,22 @@ export class PaymentRequiredError extends HttpException {
  * to access the requested resource.
  */
 export class ForbiddenError extends HttpException {
-  constructor(message?: string, options?: NamedErrorOptions) {
-    super({ statusCode: 403, message, ...options });
-    this.name = "ForbiddenError";
-    Object.setPrototypeOf(this, ForbiddenError.prototype);
-  }
+	constructor(message?: string, options?: NamedErrorOptions) {
+		super({ statusCode: 403, message, ...options });
+		this.name = "ForbiddenError";
+		Object.setPrototypeOf(this, ForbiddenError.prototype);
+	}
 }
 
 /**
  * **404 Not Found** — The requested resource does not exist on the server.
  */
 export class NotFoundError extends HttpException {
-  constructor(message?: string, options?: NamedErrorOptions) {
-    super({ statusCode: 404, message, ...options });
-    this.name = "NotFoundError";
-    Object.setPrototypeOf(this, NotFoundError.prototype);
-  }
+	constructor(message?: string, options?: NamedErrorOptions) {
+		super({ statusCode: 404, message, ...options });
+		this.name = "NotFoundError";
+		Object.setPrototypeOf(this, NotFoundError.prototype);
+	}
 }
 
 /**
@@ -90,23 +89,24 @@ export class NotFoundError extends HttpException {
  * target resource. Include an `Allow` header listing valid methods.
  */
 export class MethodNotAllowedError extends HttpException {
-  constructor(
-    allowedMethods: string[],
-    message?: string,
-    options?: NamedErrorOptions
-  ) {
-    super({
-      statusCode: 405,
-      message: message ?? `Method not allowed. Allowed: ${allowedMethods.join(", ")}`,
-      headers: {
-        Allow: allowedMethods.join(", "),
-        ...(options?.headers as Record<string, string> | undefined),
-      },
-      ...options,
-    });
-    this.name = "MethodNotAllowedError";
-    Object.setPrototypeOf(this, MethodNotAllowedError.prototype);
-  }
+	constructor(
+		allowedMethods: string[],
+		message?: string,
+		options?: NamedErrorOptions,
+	) {
+		super({
+			statusCode: 405,
+			message:
+				message ?? `Method not allowed. Allowed: ${allowedMethods.join(", ")}`,
+			headers: {
+				Allow: allowedMethods.join(", "),
+				...(options?.headers as Record<string, string> | undefined),
+			},
+			...options,
+		});
+		this.name = "MethodNotAllowedError";
+		Object.setPrototypeOf(this, MethodNotAllowedError.prototype);
+	}
 }
 
 /**
@@ -114,22 +114,22 @@ export class MethodNotAllowedError extends HttpException {
  * `Accept` header sent by the client.
  */
 export class NotAcceptableError extends HttpException {
-  constructor(message?: string, options?: NamedErrorOptions) {
-    super({ statusCode: 406, message, ...options });
-    this.name = "NotAcceptableError";
-    Object.setPrototypeOf(this, NotAcceptableError.prototype);
-  }
+	constructor(message?: string, options?: NamedErrorOptions) {
+		super({ statusCode: 406, message, ...options });
+		this.name = "NotAcceptableError";
+		Object.setPrototypeOf(this, NotAcceptableError.prototype);
+	}
 }
 
 /**
  * **408 Request Timeout** — The server timed out waiting for the request.
  */
 export class RequestTimeoutError extends HttpException {
-  constructor(message?: string, options?: NamedErrorOptions) {
-    super({ statusCode: 408, message, ...options });
-    this.name = "RequestTimeoutError";
-    Object.setPrototypeOf(this, RequestTimeoutError.prototype);
-  }
+	constructor(message?: string, options?: NamedErrorOptions) {
+		super({ statusCode: 408, message, ...options });
+		this.name = "RequestTimeoutError";
+		Object.setPrototypeOf(this, RequestTimeoutError.prototype);
+	}
 }
 
 /**
@@ -137,11 +137,11 @@ export class RequestTimeoutError extends HttpException {
  * (e.g., a duplicate resource).
  */
 export class ConflictError extends HttpException {
-  constructor(message?: string, options?: NamedErrorOptions) {
-    super({ statusCode: 409, message, ...options });
-    this.name = "ConflictError";
-    Object.setPrototypeOf(this, ConflictError.prototype);
-  }
+	constructor(message?: string, options?: NamedErrorOptions) {
+		super({ statusCode: 409, message, ...options });
+		this.name = "ConflictError";
+		Object.setPrototypeOf(this, ConflictError.prototype);
+	}
 }
 
 /**
@@ -149,22 +149,22 @@ export class ConflictError extends HttpException {
  * Unlike 404, this is permanent and search engines should de-index the URL.
  */
 export class GoneError extends HttpException {
-  constructor(message?: string, options?: NamedErrorOptions) {
-    super({ statusCode: 410, message, ...options });
-    this.name = "GoneError";
-    Object.setPrototypeOf(this, GoneError.prototype);
-  }
+	constructor(message?: string, options?: NamedErrorOptions) {
+		super({ statusCode: 410, message, ...options });
+		this.name = "GoneError";
+		Object.setPrototypeOf(this, GoneError.prototype);
+	}
 }
 
 /**
  * **413 Content Too Large** — The request body exceeds the server's limits.
  */
 export class ContentTooLargeError extends HttpException {
-  constructor(message?: string, options?: NamedErrorOptions) {
-    super({ statusCode: 413, message, ...options });
-    this.name = "ContentTooLargeError";
-    Object.setPrototypeOf(this, ContentTooLargeError.prototype);
-  }
+	constructor(message?: string, options?: NamedErrorOptions) {
+		super({ statusCode: 413, message, ...options });
+		this.name = "ContentTooLargeError";
+		Object.setPrototypeOf(this, ContentTooLargeError.prototype);
+	}
 }
 
 /**
@@ -172,11 +172,11 @@ export class ContentTooLargeError extends HttpException {
  * supported by the server.
  */
 export class UnsupportedMediaTypeError extends HttpException {
-  constructor(message?: string, options?: NamedErrorOptions) {
-    super({ statusCode: 415, message, ...options });
-    this.name = "UnsupportedMediaTypeError";
-    Object.setPrototypeOf(this, UnsupportedMediaTypeError.prototype);
-  }
+	constructor(message?: string, options?: NamedErrorOptions) {
+		super({ statusCode: 415, message, ...options });
+		this.name = "UnsupportedMediaTypeError";
+		Object.setPrototypeOf(this, UnsupportedMediaTypeError.prototype);
+	}
 }
 
 /**
@@ -191,11 +191,15 @@ export class UnsupportedMediaTypeError extends HttpException {
  * ```
  */
 export class ValidationError extends HttpException {
-  constructor(message?: string, options?: NamedErrorOptions) {
-    super({ statusCode: 422, message: message ?? "Validation failed", ...options });
-    this.name = "ValidationError";
-    Object.setPrototypeOf(this, ValidationError.prototype);
-  }
+	constructor(message?: string, options?: NamedErrorOptions) {
+		super({
+			statusCode: 422,
+			message: message ?? "Validation failed",
+			...options,
+		});
+		this.name = "ValidationError";
+		Object.setPrototypeOf(this, ValidationError.prototype);
+	}
 }
 
 /**
@@ -203,21 +207,26 @@ export class ValidationError extends HttpException {
  * timeframe. Use a `Retry-After` header to hint when to retry.
  */
 export class TooManyRequestsError extends HttpException {
-  constructor(retryAfterSeconds?: number, message?: string, options?: NamedErrorOptions) {
-    super({
-      statusCode: 429,
-      message: message ?? "Too many requests",
-      headers: retryAfterSeconds !== undefined
-        ? {
-            "Retry-After": String(retryAfterSeconds),
-            ...(options?.headers as Record<string, string> | undefined),
-          }
-        : options?.headers,
-      ...options,
-    });
-    this.name = "TooManyRequestsError";
-    Object.setPrototypeOf(this, TooManyRequestsError.prototype);
-  }
+	constructor(
+		retryAfterSeconds?: number,
+		message?: string,
+		options?: NamedErrorOptions,
+	) {
+		super({
+			statusCode: 429,
+			message: message ?? "Too many requests",
+			headers:
+				retryAfterSeconds !== undefined
+					? {
+							"Retry-After": String(retryAfterSeconds),
+							...(options?.headers as Record<string, string> | undefined),
+						}
+					: options?.headers,
+			...options,
+		});
+		this.name = "TooManyRequestsError";
+		Object.setPrototypeOf(this, TooManyRequestsError.prototype);
+	}
 }
 
 // ─── 5xx Server Errors ───────────────────────────────────────────────────────
@@ -227,11 +236,11 @@ export class TooManyRequestsError extends HttpException {
  * subclasses when possible.
  */
 export class InternalServerError extends HttpException {
-  constructor(message?: string, options?: NamedErrorOptions) {
-    super({ statusCode: 500, message, ...options });
-    this.name = "InternalServerError";
-    Object.setPrototypeOf(this, InternalServerError.prototype);
-  }
+	constructor(message?: string, options?: NamedErrorOptions) {
+		super({ statusCode: 500, message, ...options });
+		this.name = "InternalServerError";
+		Object.setPrototypeOf(this, InternalServerError.prototype);
+	}
 }
 
 /**
@@ -239,11 +248,11 @@ export class InternalServerError extends HttpException {
  * to fulfil the request.
  */
 export class NotImplementedError extends HttpException {
-  constructor(message?: string, options?: NamedErrorOptions) {
-    super({ statusCode: 501, message, ...options });
-    this.name = "NotImplementedError";
-    Object.setPrototypeOf(this, NotImplementedError.prototype);
-  }
+	constructor(message?: string, options?: NamedErrorOptions) {
+		super({ statusCode: 501, message, ...options });
+		this.name = "NotImplementedError";
+		Object.setPrototypeOf(this, NotImplementedError.prototype);
+	}
 }
 
 /**
@@ -251,11 +260,11 @@ export class NotImplementedError extends HttpException {
  * from an upstream server.
  */
 export class BadGatewayError extends HttpException {
-  constructor(message?: string, options?: NamedErrorOptions) {
-    super({ statusCode: 502, message, ...options });
-    this.name = "BadGatewayError";
-    Object.setPrototypeOf(this, BadGatewayError.prototype);
-  }
+	constructor(message?: string, options?: NamedErrorOptions) {
+		super({ statusCode: 502, message, ...options });
+		this.name = "BadGatewayError";
+		Object.setPrototypeOf(this, BadGatewayError.prototype);
+	}
 }
 
 /**
@@ -263,11 +272,11 @@ export class BadGatewayError extends HttpException {
  * request (e.g., overloaded or under maintenance).
  */
 export class ServiceUnavailableError extends HttpException {
-  constructor(message?: string, options?: NamedErrorOptions) {
-    super({ statusCode: 503, message, ...options });
-    this.name = "ServiceUnavailableError";
-    Object.setPrototypeOf(this, ServiceUnavailableError.prototype);
-  }
+	constructor(message?: string, options?: NamedErrorOptions) {
+		super({ statusCode: 503, message, ...options });
+		this.name = "ServiceUnavailableError";
+		Object.setPrototypeOf(this, ServiceUnavailableError.prototype);
+	}
 }
 
 /**
@@ -275,11 +284,11 @@ export class ServiceUnavailableError extends HttpException {
  * a timely response from an upstream server.
  */
 export class GatewayTimeoutError extends HttpException {
-  constructor(message?: string, options?: NamedErrorOptions) {
-    super({ statusCode: 504, message, ...options });
-    this.name = "GatewayTimeoutError";
-    Object.setPrototypeOf(this, GatewayTimeoutError.prototype);
-  }
+	constructor(message?: string, options?: NamedErrorOptions) {
+		super({ statusCode: 504, message, ...options });
+		this.name = "GatewayTimeoutError";
+		Object.setPrototypeOf(this, GatewayTimeoutError.prototype);
+	}
 }
 
 // ─── Re-exports ──────────────────────────────────────────────────────────────
@@ -299,5 +308,5 @@ export { HttpException, type HttpExceptionOptions } from "./http-exception";
  * ```
  */
 export function isHttpException(value: unknown): value is HttpException {
-  return value instanceof HttpException;
+	return value instanceof HttpException;
 }

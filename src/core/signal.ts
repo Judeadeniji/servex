@@ -10,17 +10,17 @@
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface Context {
-  /** AbortSignal that fires when this context is cancelled or times out. */
-  readonly signal: AbortSignal;
+	/** AbortSignal that fires when this context is cancelled or times out. */
+	readonly signal: AbortSignal;
 
-  /** Walk up the tree to find the nearest value stored under key. */
-  value<T = unknown>(key: string): T | undefined;
+	/** Walk up the tree to find the nearest value stored under key. */
+	value<T = unknown>(key: string): T | undefined;
 
-  /** True if this context has been cancelled or has timed out. */
-  readonly done: boolean;
+	/** True if this context has been cancelled or has timed out. */
+	readonly done: boolean;
 
-  /** The reason this context was cancelled, if any. */
-  readonly error: unknown;
+	/** The reason this context was cancelled, if any. */
+	readonly error: unknown;
 }
 
 export type CancelFn = () => void;
@@ -29,135 +29,148 @@ export type CancelContext = [ctx: Context, cancel: CancelFn];
 // ─── Internal base ────────────────────────────────────────────────────────────
 
 abstract class BaseContext implements Context {
-  protected _children = new Set<ChildContext>();
+	protected _children = new Set<ChildContext>();
 
-  abstract readonly signal: AbortSignal;
-  abstract value<T = unknown>(key: string): T | undefined;
-  abstract readonly done: boolean;
-  abstract readonly error: unknown;
+	abstract readonly signal: AbortSignal;
+	abstract value<T = unknown>(key: string): T | undefined;
+	abstract readonly done: boolean;
+	abstract readonly error: unknown;
 
-  _register(child: ChildContext) {
-    this._children.add(child);
-  }
+	_register(child: ChildContext) {
+		this._children.add(child);
+	}
 
-  _deregister(child: ChildContext) {
-    this._children.delete(child);
-  }
+	_deregister(child: ChildContext) {
+		this._children.delete(child);
+	}
 
-  _propagate(reason: unknown) {
-    for (const child of this._children) {
-      child._cancel(reason);
-    }
-    this._children.clear();
-  }
+	_propagate(reason: unknown) {
+		for (const child of this._children) {
+			child._cancel(reason);
+		}
+		this._children.clear();
+	}
 }
 
 // ─── Background ───────────────────────────────────────────────────────────────
 
 class BgContext extends BaseContext {
-  readonly #ctrl = new AbortController();
+	readonly #ctrl = new AbortController();
 
-  get signal() { return this.#ctrl.signal; }
-  get done() { return false; }
-  get error() { return undefined; }
-  value<T = unknown>(_key: string): T | undefined { return undefined; }
+	get signal() {
+		return this.#ctrl.signal;
+	}
+	get done() {
+		return false;
+	}
+	get error() {
+		return undefined;
+	}
+	value<T = unknown>(_key: string): T | undefined {
+		return undefined;
+	}
 }
 
 // ─── Child context base ───────────────────────────────────────────────────────
 
 abstract class ChildContext extends BaseContext {
-  protected readonly _parent: BaseContext;
-  protected readonly _controller: AbortController;
-  protected _error: unknown = undefined;
+	protected readonly _parent: BaseContext;
+	protected readonly _controller: AbortController;
+	protected _error: unknown = undefined;
 
-  constructor(parent: BaseContext) {
-    super();
-    this._parent = parent;
-    this._controller = new AbortController();
+	constructor(parent: BaseContext) {
+		super();
+		this._parent = parent;
+		this._controller = new AbortController();
 
-    if (parent.done) {
-      // Parent already cancelled — cancel immediately
-      this._error = parent.error;
-      this._controller.abort(parent.error);
-    } else {
-      // Subscribe to parent's cancellation
-      parent.signal.addEventListener(
-        "abort",
-        () => this._cancel(parent.signal.reason),
-        { once: true }
-      );
-    }
+		if (parent.done) {
+			// Parent already cancelled — cancel immediately
+			this._error = parent.error;
+			this._controller.abort(parent.error);
+		} else {
+			// Subscribe to parent's cancellation
+			parent.signal.addEventListener(
+				"abort",
+				() => this._cancel(parent.signal.reason),
+				{ once: true },
+			);
+		}
 
-    parent._register(this);
-  }
+		parent._register(this);
+	}
 
-  get signal() { return this._controller.signal; }
-  get done() { return this._controller.signal.aborted; }
-  get error() { return this._error; }
+	get signal() {
+		return this._controller.signal;
+	}
+	get done() {
+		return this._controller.signal.aborted;
+	}
+	get error() {
+		return this._error;
+	}
 
-  _cancel(reason: unknown) {
-    if (this.done) return;
+	_cancel(reason: unknown) {
+		if (this.done) return;
 
-    this._error = reason;
-    this._controller.abort(reason);
-    this._propagate(reason);          // cascade down
-    this._parent._deregister(this);   // detach from parent → GC eligible
-  }
+		this._error = reason;
+		this._controller.abort(reason);
+		this._propagate(reason); // cascade down
+		this._parent._deregister(this); // detach from parent → GC eligible
+	}
 
-  abstract value<T = unknown>(key: string): T | undefined;
+	abstract value<T = unknown>(key: string): T | undefined;
 }
 
 // ─── CancelContext ─────────────────────────────────────────────────────────────
 
 class CancelContextImpl extends ChildContext {
-  constructor(parent: BaseContext) { super(parent); }
 
-  value<T = unknown>(key: string): T | undefined {
-    return this._parent.value<T>(key);
-  }
+	value<T = unknown>(key: string): T | undefined {
+		return this._parent.value<T>(key);
+	}
 }
 
 // ─── ValueContext ──────────────────────────────────────────────────────────────
 
 class ValueContextImpl extends ChildContext {
-  readonly #key: string;
-  readonly #val: unknown;
+	readonly #key: string;
+	readonly #val: unknown;
 
-  constructor(parent: BaseContext, key: string, val: unknown) {
-    super(parent);
-    this.#key = key;
-    this.#val = val;
-  }
+	constructor(parent: BaseContext, key: string, val: unknown) {
+		super(parent);
+		this.#key = key;
+		this.#val = val;
+	}
 
-  value<T = unknown>(key: string): T | undefined {
-    if (key === this.#key) return this.#val as T;
-    return this._parent.value<T>(key); // walk up the tree
-  }
+	value<T = unknown>(key: string): T | undefined {
+		if (key === this.#key) return this.#val as T;
+		return this._parent.value<T>(key); // walk up the tree
+	}
 }
 
 // ─── TimeoutContext ────────────────────────────────────────────────────────────
 
 class TimeoutContextImpl extends ChildContext {
-  readonly #timer: ReturnType<typeof setTimeout>;
+	readonly #timer: ReturnType<typeof setTimeout>;
 
-  constructor(parent: BaseContext, ms: number) {
-    super(parent);
+	constructor(parent: BaseContext, ms: number) {
+		super(parent);
 
-    this.#timer = setTimeout(() => {
-      this._cancel(new Error(`context deadline exceeded after ${ms}ms`));
-    }, ms);
+		this.#timer = setTimeout(() => {
+			this._cancel(new Error(`context deadline exceeded after ${ms}ms`));
+		}, ms);
 
-    // Clear timer if cancelled before deadline
-    this._controller.signal.addEventListener(
-      "abort",
-      () => clearTimeout(this.#timer),
-      { once: true }
-    );
-  }
+		// Clear timer if cancelled before deadline
+		this._controller.signal.addEventListener(
+			"abort",
+			() => clearTimeout(this.#timer),
+			{ once: true },
+		);
+	}
 
-  value<T = unknown>(key: string): T | undefined {
-    return this._parent.value<T>(key);
-  }
+	value<T = unknown>(key: string): T | undefined {
+		return this._parent.value<T>(key);
+	}
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────────
@@ -165,10 +178,10 @@ class TimeoutContextImpl extends ChildContext {
 /**
  * The root of every context tree.
  * Never cancels, holds no values, has no deadline.
-*/
+ */
 export function background(): Context {
-  const _bg = new BgContext();
-  return _bg;
+	const _bg = new BgContext();
+	return _bg;
 }
 
 /**
@@ -182,8 +195,8 @@ export function background(): Context {
  * try { await doWork(ctx); } finally { cancel(); }
  */
 export function withCancel(parent: Context): CancelContext {
-  const ctx = new CancelContextImpl(parent as BaseContext);
-  return [ctx, () => ctx._cancel(new Error("context cancelled"))];
+	const ctx = new CancelContextImpl(parent as BaseContext);
+	return [ctx, () => ctx._cancel(new Error("context cancelled"))];
 }
 
 /**
@@ -195,8 +208,8 @@ export function withCancel(parent: Context): CancelContext {
  * try { await fetch(url, { signal: ctx.signal }); } finally { cancel(); }
  */
 export function withTimeout(parent: Context, ms: number): CancelContext {
-  const ctx = new TimeoutContextImpl(parent as BaseContext, ms);
-  return [ctx, () => ctx._cancel(new Error("context cancelled"))];
+	const ctx = new TimeoutContextImpl(parent as BaseContext, ms);
+	return [ctx, () => ctx._cancel(new Error("context cancelled"))];
 }
 
 /**
@@ -208,5 +221,5 @@ export function withTimeout(parent: Context, ms: number): CancelContext {
  * ctx.value("userId"); // "abc123"
  */
 export function withValue<T>(parent: Context, key: string, val: T): Context {
-  return new ValueContextImpl(parent as BaseContext, key, val);
+	return new ValueContextImpl(parent as BaseContext, key, val);
 }

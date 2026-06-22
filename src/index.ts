@@ -13,16 +13,15 @@ import { HttpException } from "./http-exception";
 import {
   RouterAdapter,
   RouterType,
-  type RouterAdapterOptions,
 } from "./router/adapter";
 import { compileHandlerChain } from "./compiler";
 import type { NormalisePath } from "./router/types";
 
 // ── Trace Helper ─────────────────────────────────────────────────────────────
-async function runTracePhase(
+async function runTracePhase<T>(
   listeners: import("./types").TraceListener[] | undefined,
-  phaseExecutor: () => Promise<any> | any
-): Promise<any> {
+  phaseExecutor: () => Promise<T> | T
+): Promise<T> {
   if (!listeners || listeners.length === 0) return phaseExecutor();
 
   const begin = performance.now();
@@ -39,12 +38,12 @@ async function runTracePhase(
   }
 
   let error: Error | null = null;
-  let result: any;
+  let result: T;
   try {
     result = await phaseExecutor();
     return result;
-  } catch (err: any) {
-    error = err;
+  } catch (err: unknown) {
+    error = err instanceof Error ? err : new Error(String(err));
     throw err;
   } finally {
     const end = performance.now();
@@ -71,14 +70,14 @@ export function baseFetch(
   middlewares: Handler<Context>[],
   hooks: import("./types").Hooks,
   compiledCache: Map<string, (context: Context) => Promise<Response | undefined>>,
-  envBindings?: any,
-  executionCtx?: any,
+  envBindings?: Record<string, unknown>,
+  executionCtx?: unknown,
   debug: boolean = false
 ): Response | Promise<Response> {
   // ── Fast Path (No Hooks) ───────────────────────────────────────────────────
   if (hooks.onRequest.length === 0 && hooks.onBeforeHandle.length === 0 && hooks.onAfterHandle.length === 0 && hooks.onError.length === 0 && hooks.trace.length === 0) {
     const route = router.match(method, pathname);
-    if (route && route.matched) {
+    if (route?.matched) {
       let executor = route.store?.executor;
       if (!executor) {
         executor = compiledCache.get(method + route.matched_route);
@@ -92,7 +91,7 @@ export function baseFetch(
       
       const context = new Context(
         request, 
-        envBindings ?? ((typeof process !== "undefined" ? process.env : {}) as any), 
+        envBindings ?? ((typeof process !== "undefined" ? process.env : {}) as Record<string, unknown>), 
         { params: route.params }, 
         executionCtx,
         debug
@@ -102,8 +101,8 @@ export function baseFetch(
         const res = r || new Response("Not Found", { status: 404 });
         context.finalResponse = res;
         if (hooks.onResponse.length > 0 || context.deferred) {
-          if (executionCtx && typeof executionCtx.waitUntil === "function") {
-            executionCtx.waitUntil(executePostProcess(hooks, context));
+          if (executionCtx && typeof (executionCtx as Record<string, unknown>).waitUntil === "function") {
+            ((executionCtx as Record<string, unknown>).waitUntil as (p: Promise<unknown> | unknown) => void)(executePostProcess(hooks, context));
           } else {
             executePostProcess(hooks, context);
           }
@@ -115,7 +114,7 @@ export function baseFetch(
         if (error instanceof HttpException) return error.getResponse();
         console.error("Unhandled error:", error);
         
-        const payload: any = { statusCode: 500, error: "Internal Server Error", message: "An unexpected error occurred" };
+        const payload: Record<string, unknown> = { statusCode: 500, error: "Internal Server Error", message: "An unexpected error occurred" };
         if (debug) {
             payload.message = error instanceof Error ? error.message : String(error);
             payload.stack = error instanceof Error ? error.stack : undefined;
@@ -151,11 +150,11 @@ async function baseFetchSlow(
   middlewares: Handler<Context>[],
   hooks: import("./types").Hooks,
   compiledCache: Map<string, (context: Context) => Promise<Response | undefined>>,
-  envBindings?: any,
-  executionCtx?: any,
+  envBindings?: Record<string, unknown>,
+  executionCtx?: unknown,
   debug: boolean = false
 ): Promise<Response> {
-  let context: Context | undefined = undefined;
+  let context: Context | undefined ;
   let response: Response | undefined;
   
   let traceApi: import("./types").TraceAPI<Context> | undefined;
@@ -169,7 +168,7 @@ async function baseFetchSlow(
     if (onReqLen > 0 || hasTrace) {
       context = new Context(
         request, 
-        envBindings ?? ((typeof process !== "undefined" ? process.env : {}) as any), 
+        envBindings ?? ((typeof process !== "undefined" ? process.env : {}) as Record<string, unknown>), 
         { params: {} }, 
         executionCtx,
         debug
@@ -179,12 +178,12 @@ async function baseFetchSlow(
         traceListeners = { request: [], beforeHandle: [], handle: [], afterHandle: [], error: [], response: [] };
         traceApi = {
           context,
-          onRequest: (cb) => traceListeners!.request.push(cb),
-          onBeforeHandle: (cb) => traceListeners!.beforeHandle.push(cb),
-          onHandle: (cb) => traceListeners!.handle.push(cb),
-          onAfterHandle: (cb) => traceListeners!.afterHandle.push(cb),
-          onError: (cb) => traceListeners!.error.push(cb),
-          onResponse: (cb) => traceListeners!.response.push(cb),
+          onRequest: (cb) => traceListeners?.request.push(cb),
+          onBeforeHandle: (cb) => traceListeners?.beforeHandle.push(cb),
+          onHandle: (cb) => traceListeners?.handle.push(cb),
+          onAfterHandle: (cb) => traceListeners?.afterHandle.push(cb),
+          onError: (cb) => traceListeners?.error.push(cb),
+          onResponse: (cb) => traceListeners?.response.push(cb),
         };
         for (let i = 0; i < hooks.trace.length; i++) {
           const r = hooks.trace[i](traceApi);
@@ -207,13 +206,13 @@ async function baseFetchSlow(
     // ── Route matching ────────────────────────────────────────────────────────
     const route = router.match(method, pathname);
 
-    if (!route || !route.matched) {
+    if (!route?.matched) {
       // 405 detection: only iterate other methods if route exists for any of them
       let is405 = false;
       for (let i = 0; i < ALL_METHODS.length; i++) {
         if (ALL_METHODS[i] !== method) {
           const r = router.match(ALL_METHODS[i], pathname);
-          if (r && r.matched) { is405 = true; break; }
+          if (r?.matched) { is405 = true; break; }
         }
       }
       
@@ -224,7 +223,7 @@ async function baseFetchSlow(
       if (!context) {
         context = new Context(
           request, 
-          envBindings ?? ((typeof process !== "undefined" ? process.env : {}) as any), 
+          envBindings ?? ((typeof process !== "undefined" ? process.env : {}) as Record<string, unknown>), 
           { params: {} }, 
           executionCtx,
           debug
@@ -254,7 +253,7 @@ async function baseFetchSlow(
     if (!context) {
       context = new Context(
         request, 
-        envBindings ?? ((typeof process !== "undefined" ? process.env : {}) as any), 
+        envBindings ?? ((typeof process !== "undefined" ? process.env : {}) as Record<string, unknown>), 
         { params: route.params }, 
         executionCtx,
         debug
@@ -280,7 +279,7 @@ async function baseFetchSlow(
     const routeMids = route.middlewares;
     const routeData = route.data
 
-    let result: Response | undefined = undefined;
+    let _result: Response | undefined ;
 
     // ── 3. Execute handlers ───────────────────────────────────────────────────
     let executor = route.store?.executor;
@@ -295,7 +294,7 @@ async function baseFetchSlow(
     }
 
     const executeHandle = async () => {
-      let result = await executor!(context!);
+      const result = await executor?.(context!);
       return result || new Response("Not Found", { status: 404 });
     };
     response = await runTracePhase(traceListeners?.handle, executeHandle);
@@ -334,7 +333,7 @@ async function baseFetchSlow(
         response = error.getResponse();
       } else {
         console.error("Unhandled error:", error);
-        const payload: any = { statusCode: 500, error: "Internal Server Error", message: "An unexpected error occurred" };
+        const payload: Record<string, unknown> = { statusCode: 500, error: "Internal Server Error", message: "An unexpected error occurred" };
         if (debug) {
             payload.message = error instanceof Error ? error.message : String(error);
             payload.stack = error instanceof Error ? error.stack : undefined;
@@ -352,8 +351,8 @@ async function baseFetchSlow(
     // ── Post-Response Processing ─────────────────────────────────────────────
     if (context && (hooks.onResponse.length > 0 || context.deferred || (traceListeners && traceListeners.response.length > 0))) {
       const execResponse = () => executePostProcess(hooks, context!, traceListeners?.response);
-      if (executionCtx && typeof executionCtx.waitUntil === "function") {
-        executionCtx.waitUntil(execResponse());
+      if (executionCtx && typeof (executionCtx as Record<string, unknown>).waitUntil === "function") {
+        ((executionCtx as Record<string, unknown>).waitUntil as (p: Promise<unknown> | unknown) => void)(execResponse());
       } else {
         // Run in background without awaiting
         execResponse();
@@ -387,14 +386,15 @@ async function executePostProcess(hooks: import("./types").Hooks, context: Conte
   }
 }
 
+// biome-ignore lint/complexity/noBannedTypes: empty schema requires {}
 export class ServeXRouterImpl<E extends Env = Env, S = {}, B extends string = "/"> implements ServeXRouter<E, S, B> {
     constructor(protected routerAdapter: RouterAdapter<ServerRoute[]>) {}
 
-    onResponse(handler: import("./types").HookHandler<Context<E>>): this {
+    onResponse(_handler: import("./types").HookHandler<Context<E>>): this {
         throw new Error("onResponse hook can only be registered on the main ServeXApp instance, not a sub-router.");
     }
 
-    trace(handler: (api: import("./types").TraceAPI<Context<E>>) => void | Promise<void>): this {
+    trace(_handler: (api: import("./types").TraceAPI<Context<E>>) => void | Promise<void>): this {
         throw new Error("trace hook can only be registered on the main ServeXApp instance, not a sub-router.");
     }
 
@@ -416,32 +416,41 @@ export class ServeXRouterImpl<E extends Env = Env, S = {}, B extends string = "/
         return this;
     }
 
-    get(path: string, ...handlers: any[]) { return this.add("GET", path, handlers); }
-    post(path: string, ...handlers: any[]) { return this.add("POST", path, handlers); }
-    put(path: string, ...handlers: any[]) { return this.add("PUT", path, handlers); }
-    delete(path: string, ...handlers: any[]) { return this.add("DELETE", path, handlers); }
-    patch(path: string, ...handlers: any[]) { return this.add("PATCH", path, handlers); }
-    options(path: string, ...handlers: any[]) { return this.add("OPTIONS", path, handlers); }
-    head(path: string, ...handlers: any[]) { return this.add("HEAD", path, handlers); }
-    all(path: string, ...handlers: any[]) {
-        ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"].forEach(m => this.add(m as Method, path, handlers));
+    // @ts-ignore: Implementation signature
+    get(path: string, ...handlers: import("./types").Handler<Context<E>>[]) { return this.add("GET", path, handlers as Handler<Context>[]); }
+    // @ts-ignore: Implementation signature
+    post(path: string, ...handlers: import("./types").Handler<Context<E>>[]) { return this.add("POST", path, handlers as Handler<Context>[]); }
+    // @ts-ignore: Implementation signature
+    put(path: string, ...handlers: import("./types").Handler<Context<E>>[]) { return this.add("PUT", path, handlers as Handler<Context>[]); }
+    // @ts-ignore: Implementation signature
+    delete(path: string, ...handlers: import("./types").Handler<Context<E>>[]) { return this.add("DELETE", path, handlers as Handler<Context>[]); }
+    // @ts-ignore: Implementation signature
+    patch(path: string, ...handlers: import("./types").Handler<Context<E>>[]) { return this.add("PATCH", path, handlers as Handler<Context>[]); }
+    // @ts-ignore: Implementation signature
+    options(path: string, ...handlers: import("./types").Handler<Context<E>>[]) { return this.add("OPTIONS", path, handlers as Handler<Context>[]); }
+    // @ts-ignore: Implementation signature
+    head(path: string, ...handlers: import("./types").Handler<Context<E>>[]) { return this.add("HEAD", path, handlers as Handler<Context>[]); }
+    // @ts-ignore: Implementation signature
+    all(path: string, ...handlers: import("./types").Handler<Context<E>>[]) {
+        ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"].forEach(m => { this.add(m as Method, path, handlers as Handler<Context>[]); });
         return this;
     }
 
-    route(path: string, fnOrApp: any) {
+    // @ts-ignore: Implementation signature
+    route(path: string, fnOrApp: ServeXRouterImpl<E, unknown, string> | ((r: ServeXRouter<E, {}, string>) => unknown)) {
         if (fnOrApp instanceof ServeXRouterImpl) {
             this.routerAdapter.addSubTrie(path, fnOrApp.routerAdapter);
-            return this as any;
+            return this as unknown as ServeXRouter<E, {}, string>;
         }
 
         const childRouter = new RouterAdapter<ServerRoute[]>({ type: this.routerAdapter.type });
-        const childServeXRouter = new ServeXRouterImpl(childRouter);
-        fnOrApp(childServeXRouter);
+        const childServeXRouter = new ServeXRouterImpl<E, {}, string>(childRouter);
+        (fnOrApp as (r: ServeXRouter<E, {}, string>) => unknown)(childServeXRouter as unknown as ServeXRouter<E, {}, string>);
         this.routerAdapter.addSubTrie(path, childRouter);
-        return this as any;
+        return this as unknown as ServeXRouter<E, {}, string>;
     }
 
-    mount(path: string, fetchFn: (request: Request, env?: any, ctx?: any) => Response | Promise<Response>) {
+    mount(path: string, fetchFn: (request: Request, env?: unknown, ctx?: unknown) => Response | Promise<Response>) {
         // Strip trailing slash if present to ensure the wildcard matches correctly
         const normalizedPath = path.endsWith("/") && path !== "/" ? path.slice(0, -1) : path;
         
@@ -452,7 +461,7 @@ export class ServeXRouterImpl<E extends Env = Env, S = {}, B extends string = "/
             // Strip the mount path from the URL
             let newPathname = url.pathname.slice(normalizedPath.length);
             if (!newPathname.startsWith("/")) {
-                newPathname = "/" + newPathname;
+                newPathname = `/${newPathname}`;
             }
             url.pathname = newPathname;
             
@@ -467,7 +476,8 @@ export class ServeXRouterImpl<E extends Env = Env, S = {}, B extends string = "/
         // Also map the exact path without trailing slash
         this.all(normalizedPath, handler);
 
-        return this as any;
+        // biome-ignore lint/complexity/noBannedTypes: empty schema requires {}
+        return this as unknown as ServeXRouter<E, {}, string>;
     }
 
     /**
@@ -475,7 +485,7 @@ export class ServeXRouterImpl<E extends Env = Env, S = {}, B extends string = "/
      * Note: This method is only fully implemented on the main application instance
      * returned by `createServer()`.
      */
-    fetch = (_request: Request, _env?: any, _executionCtx?: any): Response | Promise<Response> => {
+    fetch = (_request: Request, _env?: Record<string, unknown>, _executionCtx?: unknown): Response | Promise<Response> => {
         throw new Error(
             "Cannot call fetch() on a sub-router. Please ensure you are calling fetch() on the main application instance created by createServer()."
         );
@@ -489,6 +499,7 @@ export class ServeXRouterImpl<E extends Env = Env, S = {}, B extends string = "/
     };
 }
 
+// biome-ignore lint/complexity/noBannedTypes: empty schema requires {}
 export class ServeXApp<E extends Env = Env, S = {}, B extends string = "/"> extends ServeXRouterImpl<E, S, B> {
     public hooks: import("./types").Hooks = {
         onRequest: [],
@@ -523,8 +534,8 @@ export class ServeXApp<E extends Env = Env, S = {}, B extends string = "/"> exte
     onBeforeHandle(handler: import("./types").HookHandler<Context>) { this.hooks.onBeforeHandle.push(handler); return this; }
     onAfterHandle(handler: import("./types").AfterHandleHook<Context>) { this.hooks.onAfterHandle.push(handler); return this; }
     onError(handler: import("./types").ErrorHook<Context>) { this.hooks.onError.push(handler); return this; }
-    onResponse(handler: import("./types").HookHandler<Context<E>>) { this.hooks.onResponse.push(handler as any); return this; }
-    trace(handler: (api: import("./types").TraceAPI<Context<E>>) => void | Promise<void>) { this.hooks.trace.push(handler as any); return this; }
+    onResponse(handler: import("./types").HookHandler<Context<E>>) { this.hooks.onResponse.push(handler as never); return this; }
+    trace(handler: (api: import("./types").TraceAPI<Context<E>>) => void | Promise<void>) { this.hooks.trace.push(handler as never); return this; }
 
     use(path: string | import("./types").MiddlewareHandler<Context>, ...middlewares: import("./types").MiddlewareHandler<Context>[]) {
         if (typeof path === "string") {
@@ -539,10 +550,10 @@ export class ServeXApp<E extends Env = Env, S = {}, B extends string = "/"> exte
         return this;
     }
 
-    fetch = (request: Request, env?: any, executionCtx?: any): Promise<Response> | Response => {
+    fetch = (request: Request, env?: Record<string, unknown>, executionCtx?: unknown): Promise<Response> | Response => {
         const url = request.url;
         const queryIndex = url.indexOf("?", 8);
-        let pathIdx = url.indexOf("/", 8);
+        const pathIdx = url.indexOf("/", 8);
 
         let pathname: string;
         if (pathIdx === -1) {
@@ -576,12 +587,14 @@ export class ServeXApp<E extends Env = Env, S = {}, B extends string = "/"> exte
 
 export function createServer<E extends Env = Env, B extends string = "/">(
   options: ServerOptions<B> = {} as ServerOptions<B>
+// biome-ignore lint/complexity/noBannedTypes: empty schema requires {}
 ): ServeXRouter<E, {}, NormalisePath<B>> & ServeXApp<E, {}, NormalisePath<B>> {
   const { router = RouterType.SONIC, middlewares = [], basePath, debug = false } = options;
   const routerAdapter = new RouterAdapter<ServerRoute[]>({
     type: router,
   });
 
+  // biome-ignore lint/complexity/noBannedTypes: empty schema requires {}
   return new ServeXApp<E, {}, NormalisePath<B>>(
     routerAdapter,
     middlewares,

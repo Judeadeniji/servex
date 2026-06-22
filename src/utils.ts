@@ -1,3 +1,3 @@
-export async function waitUntil(promise: Promise<any>) {
-  (await Promise.resolve(promise));
+export async function waitUntil(promise: Promise<unknown>) {
+	await Promise.resolve(promise);
 }
