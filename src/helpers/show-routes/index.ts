@@ -1,4 +1,4 @@
-import type { ServeXRouter, ServerRoute } from "../../types";
+import type { ServeXRouter, } from "../../types";
 
 export interface ShowRoutesOptions {
   /** 
@@ -14,7 +14,7 @@ export interface ShowRoutesOptions {
  * @param app The ServeX app or router instance.
  * @param options Optional configuration.
  */
-export function showRoutes(app: ServeXRouter<any, any, any>, options: ShowRoutesOptions = {}): string | void {
+export function showRoutes(app: ServeXRouter, options: ShowRoutesOptions = {}): string | undefined {
   const routes = app.routes;
   if (!routes || routes.length === 0) {
     const msg = "No routes registered.";
