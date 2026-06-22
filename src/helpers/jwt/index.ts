@@ -69,7 +69,7 @@ export const verify = async (
 	token: string,
 	secret: string,
 	alg: Algorithm = "HS256",
-): Promise<any> => {
+): Promise<Record<string, unknown>> => {
 	const parts = token.split(".");
 	if (parts.length !== 3) throw new Error("Invalid JWT format");
 
