@@ -11,7 +11,7 @@ import type { Handler } from "../types";
  * 3. State Opt: Uses a simple integer bitmask (or Uint8Array) to perfectly mimic `next()`
  *    short-circuiting and duplicate call prevention without array allocations.
  */
-export function buildCompilerSource(handlers: Handler[]): string {
+export function buildCompilerSource<C extends Context>(handlers: Handler<C>[]): string {
 	if (handlers.length === 0) {
 		return `return () => Promise.resolve(undefined);\n`;
 	}
