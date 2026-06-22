@@ -68,7 +68,7 @@ describe("JIT Compiler", () => {
 
 			const fn = compileHandlerChain([m1, m2]);
 			
-			let error;
+			let error: unknown;
 			try {
 				await fn(ctx);
 			} catch (e) {
