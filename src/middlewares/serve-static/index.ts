@@ -149,9 +149,10 @@ export const serveStatic = (options: ServeStaticOptions = {}) => {
 				status: 200,
 				headers: c.header,
 			});
-		} catch (error: any) {
+		} catch (error: unknown) {
 			// File not found, let the next middleware/handler run
-			if (error.code === "ENOENT" || error.code === "ENOTDIR") {
+			const err = error as { code?: string };
+			if (err.code === "ENOENT" || err.code === "ENOTDIR") {
 				return next();
 			}
 

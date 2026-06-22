@@ -24,7 +24,7 @@ describe("Mounting WinterTC apps (Hono & Elysia)", () => {
 			.get("/hello", (c) => c.text("Hono Hello"));
 
 		// Mount Hono
-		app.mount("/hono", hono.fetch);
+		app.mount("/hono", (req, env, ctx) => hono.fetch(req, env, ctx as import("hono").ExecutionContext));
 
 		// Root request handled by ServeX
 		const resRoot = await app.request("http://localhost/");
@@ -64,10 +64,10 @@ describe("Mounting WinterTC apps (Hono & Elysia)", () => {
 	});
 
 	it("should pass env and executionCtx to mounted fetch functions", async () => {
-		let capturedEnv: any;
-		let capturedCtx: any;
+		let capturedEnv: unknown;
+		let capturedCtx: unknown;
 
-		const mockFetchWithEnv = (req: Request, env?: any, ctx?: any) => {
+		const mockFetchWithEnv = (req: Request, env?: unknown, ctx?: unknown) => {
 			capturedEnv = env;
 			capturedCtx = ctx;
 			return new Response("OK");
@@ -83,7 +83,7 @@ describe("Mounting WinterTC apps (Hono & Elysia)", () => {
 		);
 
 		expect(capturedEnv).toEqual({ secret: "123" });
-		expect(capturedCtx.waitUntil).toBeDefined();
+		expect((capturedCtx as {waitUntil: Function}).waitUntil).toBeDefined();
 	});
 
 	it("should allow ServeX to be mounted inside Hono using .route() or .mount()", async () => {

@@ -42,7 +42,7 @@ const getCryptoKey = async (
 };
 
 export const sign = async (
-	payload: any,
+	payload: Record<string, unknown>,
 	secret: string,
 	alg: Algorithm = "HS256",
 ): Promise<string> => {

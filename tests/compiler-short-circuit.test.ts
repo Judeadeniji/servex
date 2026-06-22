@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { compileHandlerChain } from "../src/compiler/index";
 import type { Context } from "../src/context";
+import type { Handler } from "../src/types";
 
 const mockRequest = new Request("http://localhost/");
 const createMockContext = () =>
@@ -13,9 +14,9 @@ const createMockContext = () =>
 
 describe("JIT Compiler - Short Circuiting & Edge Cases", () => {
 	it("Index 0: Short-circuits correctly", async () => {
-		const handlers = [
+		const handlers: Handler[] = [
 			async () => new Response("0"),
-			async (ctx: any, next: any) => {
+			async () => {
 				throw new Error("Should not reach");
 			},
 		];
@@ -26,12 +27,12 @@ describe("JIT Compiler - Short Circuiting & Edge Cases", () => {
 	});
 
 	it("Index Middle: Short-circuits correctly", async () => {
-		const handlers = [
-			async (ctx: any, next: any) => {
+		const handlers: Handler[] = [
+			async (_, next) => {
 				await next();
 			},
 			async () => new Response("1"),
-			async (ctx: any, next: any) => {
+			async () => {
 				throw new Error("Should not reach");
 			},
 		];
@@ -42,11 +43,11 @@ describe("JIT Compiler - Short Circuiting & Edge Cases", () => {
 	});
 
 	it("Index Last: Resolves properly", async () => {
-		const handlers = [
-			async (ctx: any, next: any) => {
+		const handlers: Handler[] = [
+			async (_, next) => {
 				await next();
 			},
-			async (ctx: any, next: any) => {
+			async (_, next) => {
 				await next();
 			},
 			async () => new Response("2"),
@@ -58,18 +59,18 @@ describe("JIT Compiler - Short Circuiting & Edge Cases", () => {
 	});
 
 	it("Error Throw: Propagates correctly", async () => {
-		const handlers = [
-			async (ctx: any, next: any) => {
+		const handlers: Handler[] = [
+			async (_, next) => {
 				try {
 					await next();
-				} catch (e: any) {
-					return new Response(e.message, { status: 500 });
+				} catch (e: unknown) {
+					return new Response((e as Error).message, { status: 500 });
 				}
 			},
-			async (ctx: any, next: any) => {
+			async () => {
 				throw new Error("Mid-chain error");
 			},
-			async (ctx: any, next: any) => {
+			async () => {
 				throw new Error("Should not reach");
 			},
 		];
@@ -80,11 +81,11 @@ describe("JIT Compiler - Short Circuiting & Edge Cases", () => {
 	});
 
 	it("No Response: Resolves to undefined", async () => {
-		const handlers = [
-			async (ctx: any, next: any) => {
+		const handlers: Handler[] = [
+			async (_, next) => {
 				await next();
 			},
-			async (ctx: any, next: any) => {
+			async (_, next) => {
 				await next();
 			},
 		];

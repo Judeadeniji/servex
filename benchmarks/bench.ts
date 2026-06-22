@@ -11,12 +11,12 @@ const ITERATIONS = 1_000_000;
 function generateChain(length: number): Handler<any>[] {
 	const chain: Handler<any>[] = [];
 	for (let i = 0; i < length - 1; i++) {
-		chain.push(async (ctx: any, next: any) => {
-			ctx.executionCtx = (ctx.executionCtx || 0) + 1;
+		chain.push(async (ctx: Context, next: () => Promise<void | Response>) => {
+			ctx.executionCtx = ((ctx.executionCtx as number) || 0) + 1;
 			await next();
 		});
 	}
-	chain.push((_ctx: any) => new Response("OK"));
+	chain.push((_ctx: Context) => new Response("OK"));
 	return chain;
 }
 
@@ -48,15 +48,15 @@ async function testE2E() {
 	// Set up Non-JIT App (by manually filling compiledCache with executeHandlers wrapper)
 	const appNonJit = createServer({ router: RouterType.SONIC });
 	const middlewares = [
-		async (ctx: any, next: any) => {
+		async (ctx: Context, next: () => Promise<void | Response>) => {
 			ctx.executionCtx = 1;
 			await next();
 		},
-		async (ctx: any, next: any) => {
+		async (ctx: Context, next: () => Promise<void | Response>) => {
 			ctx.executionCtx = 2;
 			await next();
 		},
-		(_ctx: any) => new Response("Hello"),
+		(_ctx: Context) => new Response("Hello"),
 	];
 	appNonJit.get("/api/test", middlewares[2]);
 	(appNonJit as any).middlewares.push(middlewares[0], middlewares[1]);
@@ -68,12 +68,12 @@ async function testE2E() {
 		await appNonJit.fetch(new Request("http://localhost/api/test"));
 
 	// Now overwrite the cached executor with the non-JIT loop
-	appNonJit.compiledCache.set("GET/api/test", (ctx: any) =>
+	appNonJit.compiledCache.set("GET/api/test", (ctx: Context) =>
 		executeHandlers(ctx, middlewares),
 	);
 	const r = (appNonJit as unknown as { routerAdapter: { match: (m: string, p: string) => any } }).routerAdapter.match("GET", "/api/test");
 	if (r?.store)
-		r.store.executor = (ctx: any) => executeHandlers(ctx, middlewares);
+		r.store.executor = (ctx: Context) => executeHandlers(ctx, middlewares);
 
 	// Set up JIT App
 	const appJit = createServer({ router: RouterType.SONIC });

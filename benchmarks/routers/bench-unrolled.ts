@@ -64,7 +64,7 @@ function compileUnrolled(
 function generateChain(length: number): Handler<Context>[] {
 	const chain: Handler<Context>[] = [];
 	for (let i = 0; i < length - 1; i++) {
-		chain.push(async (ctx: Context, next: any) => {
+		chain.push(async (ctx: Context, next: () => Promise<void | Response>) => {
 			(ctx as any).count = ((ctx as any).count || 0) + 1;
 			await next();
 		});
@@ -90,9 +90,9 @@ async function testCorrectness() {
 	// Test 2: short-circuit at position 0 (auth-style)
 	let afterAuth = false;
 	const chainAuth = [
-		async (_ctx: any, _next: any) =>
+		async (_ctx: Context, _next: () => Promise<void | Response>) =>
 			new Response("Unauthorized", { status: 401 }),
-		async (_ctx: any) => {
+		async (_ctx: Context) => {
 			afterAuth = true;
 			return new Response("OK");
 		},
@@ -108,11 +108,11 @@ async function testCorrectness() {
 
 	// Test 3: short-circuit at position 1
 	const chainMid = [
-		async (_ctx: any, next: any) => {
+		async (_ctx: Context, next: () => Promise<void | Response>) => {
 			await next();
 		},
-		async (_ctx: any, _next: any) => new Response("Stopped"),
-		async (_ctx: any) => new Response("Never reached"),
+		async (_ctx: Context, _next: () => Promise<void | Response>) => new Response("Stopped"),
+		async (_ctx: Context) => new Response("Never reached"),
 	];
 	const fnMid = compileUnrolled(chainMid as any);
 	const rMid = await fnMid(ctx);

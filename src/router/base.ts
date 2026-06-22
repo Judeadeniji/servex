@@ -60,7 +60,7 @@ export type MatchedRoute<
 	/**
 	 * @property store - A mutable reference object (usually the router node) used for caching JIT executors.
 	 */
-	store?: any;
+	store?: Record<string, unknown>;
 };
 
 /**

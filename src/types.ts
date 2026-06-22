@@ -277,9 +277,9 @@ export interface ServeXRouter<
 		fetchFn: (
 			request: Request,
 			// biome-ignore lint/suspicious/noExplicitAny: Required for interop with other frameworks like Hono
-			env?: any,
+			env?: unknown,
 			// biome-ignore lint/suspicious/noExplicitAny: Required for interop with other frameworks like Hono
-			ctx?: any,
+			ctx?: unknown,
 		) => Response | Promise<Response>,
 	): ServeXRouter<E, S, B>;
 
@@ -291,7 +291,7 @@ export interface ServeXRouter<
 	fetch(
 		request: Request,
 		env?: unknown,
-		executionCtx?: unknown,
+		ctx?: unknown,
 	): Response | Promise<Response>;
 
 	/**

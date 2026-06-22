@@ -78,14 +78,14 @@ export function baseFetch(
   if (hooks.onRequest.length === 0 && hooks.onBeforeHandle.length === 0 && hooks.onAfterHandle.length === 0 && hooks.onError.length === 0 && hooks.trace.length === 0) {
     const route = router.match(method, pathname);
     if (route?.matched) {
-      let executor = route.store?.executor;
+      let executor = route.store?.executor as ((context: Context) => Promise<Response | undefined>) | undefined;
       if (!executor) {
         executor = compiledCache.get(method + route.matched_route);
         if (!executor) {
           const handlers = [...middlewares, ...route.middlewares, ...route.data];
           executor = compileHandlerChain(handlers);
           if (route.store) route.store.executor = executor;
-          compiledCache.set(method + route.matched_route, executor);
+          compiledCache.set(method + route.matched_route, executor!);
         }
       }
       
@@ -127,7 +127,7 @@ export function baseFetch(
       };
 
       try {
-        const res = executor(context);
+        const res = executor!(context);
         if (res instanceof Promise) {
           return res.then(handleValue).catch(error => handleValue(resolveError(error)));
         }
@@ -282,14 +282,14 @@ async function baseFetchSlow(
     let _result: Response | undefined ;
 
     // ── 3. Execute handlers ───────────────────────────────────────────────────
-    let executor = route.store?.executor;
+    let executor = route.store?.executor as ((context: Context) => Promise<Response | undefined>) | undefined;
     if (!executor) {
       executor = compiledCache.get(method + route.matched_route);
       if (!executor) {
         const handlers = [...middlewares, ...routeMids, ...routeData];
         executor = compileHandlerChain(handlers);
         if (route.store) route.store.executor = executor;
-        compiledCache.set(method + route.matched_route, executor);
+        compiledCache.set(method + route.matched_route, executor!);
       }
     }
 
@@ -386,7 +386,6 @@ async function executePostProcess(hooks: import("./types").Hooks, context: Conte
   }
 }
 
-// biome-ignore lint/complexity/noBannedTypes: empty schema requires {}
 export class ServeXRouterImpl<E extends Env = Env, S = {}, B extends string = "/"> implements ServeXRouter<E, S, B> {
     constructor(protected routerAdapter: RouterAdapter<ServerRoute[]>) {}
 
@@ -476,7 +475,6 @@ export class ServeXRouterImpl<E extends Env = Env, S = {}, B extends string = "/
         // Also map the exact path without trailing slash
         this.all(normalizedPath, handler);
 
-        // biome-ignore lint/complexity/noBannedTypes: empty schema requires {}
         return this as unknown as ServeXRouter<E, {}, string>;
     }
 
@@ -499,7 +497,6 @@ export class ServeXRouterImpl<E extends Env = Env, S = {}, B extends string = "/
     };
 }
 
-// biome-ignore lint/complexity/noBannedTypes: empty schema requires {}
 export class ServeXApp<E extends Env = Env, S = {}, B extends string = "/"> extends ServeXRouterImpl<E, S, B> {
     public hooks: import("./types").Hooks = {
         onRequest: [],

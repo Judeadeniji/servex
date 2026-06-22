@@ -8,7 +8,7 @@ const ITERATIONS = 1_000_000;
 function generateChain(length: number): Handler<Context>[] {
 	const chain: Handler<Context>[] = [];
 	for (let i = 0; i < length - 1; i++) {
-		chain.push(async (ctx: Context, next: any) => {
+		chain.push(async (ctx: Context, next: () => Promise<void | Response>) => {
 			(ctx as any).count = ((ctx as any).count || 0) + 1;
 			await next();
 		});
