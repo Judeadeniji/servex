@@ -45,7 +45,7 @@ describe("JIT Compiler", () => {
 
 			expect(res).toBeInstanceOf(Response);
 			expect(res?.status).toBe(200);
-			expect(ctx.get("m1")).toBe(true);
+			expect(ctx.get<boolean>("m1")).toBe(true);
 		});
 
 		test("should short-circuit if next() is not called", async () => {

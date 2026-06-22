@@ -37,7 +37,7 @@ export class ServeXRouterImpl<E extends Env = Env, S = {}, B extends string = "/
                 if (inlineVal instanceof Response) {
                     routeHandler = () => inlineVal.clone();
                 } else if (typeof inlineVal === "object" && inlineVal !== null) {
-                    routeHandler = (c) => c.json(inlineVal);
+                    routeHandler = (c) => c.json(inlineVal as import("./types").JSONValue);
                 } else {
                     routeHandler = (c) => c.text(String(inlineVal));
                 }
