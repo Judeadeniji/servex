@@ -163,7 +163,7 @@ export class ServeXApp<E extends Env = Env, S = {}, B extends string = "/"> exte
      */
     public readonly basePath: B;
     public _nativeStaticResponse: boolean = false;
-    public static?: Record<string, Response>;
+    public static?: Record<string, Response> & { [K in keyof S]?: Response };
 
     constructor(
         router: RouterAdapter<ServerRoute[]>,

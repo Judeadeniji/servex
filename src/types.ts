@@ -333,6 +333,12 @@ export interface ServeXRouter<
 	readonly routes: ServerRoute[];
 
 	/**
+	 * Natively injected static responses (if nativeStaticResponse is enabled).
+	 * Strictly typed with all known route paths.
+	 */
+	static?: Record<string, Response> & { [K in keyof S]?: Response };
+
+	/**
 	 * Handle an incoming `Request` — compatible with Cloudflare Workers, Bun,
 	 * and Deno. Always present on the chained type so it can be referenced after
 	 * any number of `.get().post()…` calls without a type cast.
