@@ -88,13 +88,14 @@ export function baseFetch(
       const handleValue = (r: Response | undefined) => {
         const res = r || new Response("Not Found", { status: 404 });
         context.finalResponse = res;
-        if (hooks.onResponse.length > 0 || context.deferred) {
-          if (executionCtx && typeof (executionCtx as Record<string, unknown>).waitUntil === "function") {
-            ((executionCtx as Record<string, unknown>).waitUntil as (p: Promise<unknown> | unknown) => void)(executePostProcess(hooks, context));
-          } else {
-            executePostProcess(hooks, context);
-          }
+        
+        if (executionCtx && typeof (executionCtx as Record<string, unknown>).waitUntil === "function") {
+          ((executionCtx as Record<string, unknown>).waitUntil as (p: Promise<unknown> | unknown) => void)(executePostProcess(hooks, context));
+        } else {
+          // Fire and forget so we don't block the response return
+          Promise.resolve().then(() => executePostProcess(hooks, context));
         }
+        
         return res;
       };
 
@@ -387,5 +388,8 @@ async function executePostProcess(hooks: import("../types").Hooks, context: Cont
     }
   } catch (e) {
     console.error("ServeX background task error:", e);
+  } finally {
+    // Explicitly lose the reference to help GC
+    context = null as any;
   }
 }
