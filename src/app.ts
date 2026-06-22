@@ -27,11 +27,38 @@ export class ServeXRouterImpl<E extends Env = Env, S = {}, B extends string = "/
         return this;
     }
 
-    private add(method: Method, path: string, handlers: Handler<Context>[]) {
+    private add(method: Method, path: string, handlers: (import("./types").Handler<Context> | import("./types").InlineHandler)[]) {
+        let finalHandlers = [...handlers];
+        if (finalHandlers.length > 0) {
+            const last = finalHandlers[finalHandlers.length - 1];
+            if (typeof last !== "function") {
+                const inlineVal = last;
+                let routeHandler: import("./types").Handler<Context>;
+                if (inlineVal instanceof Response) {
+                    routeHandler = () => inlineVal.clone();
+                } else if (typeof inlineVal === "object" && inlineVal !== null) {
+                    routeHandler = (c) => c.json(inlineVal);
+                } else {
+                    routeHandler = (c) => c.text(String(inlineVal));
+                }
+                finalHandlers[finalHandlers.length - 1] = routeHandler;
+                
+                // Track native static route if supported
+                if ((this as any)._nativeStaticResponse && !path.includes(":") && !path.includes("*") && finalHandlers.length === 1) {
+                    if (!(this as any).static) (this as any).static = {};
+                    let res: Response;
+                    if (inlineVal instanceof Response) res = inlineVal.clone();
+                    else if (typeof inlineVal === "object" && inlineVal !== null) res = new Response(JSON.stringify(inlineVal), { headers: { "Content-Type": "application/json; charset=UTF-8" }});
+                    else res = new Response(String(inlineVal), { headers: { "Content-Type": "text/plain; charset=UTF-8" }});
+                    (this as any).static[path] = res;
+                }
+            }
+        }
+
         this.routerAdapter.addRoute({
             method,
             path,
-            data: handlers
+            data: finalHandlers as import("./types").Handler<Context>[]
         });
         return this;
     }
@@ -135,15 +162,19 @@ export class ServeXApp<E extends Env = Env, S = {}, B extends string = "/"> exte
      * Typed as the literal `B` so RPC clients can read it from `typeof app`.
      */
     public readonly basePath: B;
+    public _nativeStaticResponse: boolean = false;
+    public static?: Record<string, Response>;
 
     constructor(
         router: RouterAdapter<ServerRoute[]>,
         private middlewares: Handler<Context>[],
         basePath: B = "/" as B,
         public debug: boolean = false,
-        public aot: boolean = true
+        public aot: boolean = true,
+        nativeStaticResponse: boolean = false
     ) {
         super(router);
+        this._nativeStaticResponse = nativeStaticResponse;
         // normalisePath at runtime; cast to B since the normalised form is the
         // contract the user agreed to when writing the literal.
         this.basePath = normalisePath(basePath) as B;
@@ -207,7 +238,7 @@ export class ServeXApp<E extends Env = Env, S = {}, B extends string = "/"> exte
 export function createServer<E extends Env = Env, B extends string = "/">(
     options: ServerOptions<B> = {} as ServerOptions<B>
 ): ServeXRouter<E, {}, NormalisePath<B>> & ServeXApp<E, {}, NormalisePath<B>> {
-  const { router = RouterType.SONIC, middlewares = [], basePath, debug = false, aot = true } = options;
+  const { router = RouterType.SONIC, middlewares = [], basePath, debug = false, aot = true, nativeStaticResponse = false } = options;
   const routerAdapter = new RouterAdapter<ServerRoute[]>({
     type: router,
   });
@@ -217,7 +248,8 @@ export function createServer<E extends Env = Env, B extends string = "/">(
     middlewares,
     basePath as NormalisePath<B>,
     debug,
-    aot
+    aot,
+    nativeStaticResponse
   ) as ServeXRouter<E, {}, NormalisePath<B>> & ServeXApp<E, {}, NormalisePath<B>>;
 }
 
