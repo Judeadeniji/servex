@@ -88,9 +88,7 @@ export function baseFetch(
       const handleValue = (r: Response | undefined) => {
         const res = r || new Response("Not Found", { status: 404 });
         context!.finalResponse = res;
-        const postProcessPromise = (function(ctx) {
-          return executePostProcess(hooks, ctx);
-        })(context!);
+        const postProcessPromise = ((ctx) => executePostProcess(hooks, ctx))(context!);
         if (executionCtx && typeof (executionCtx as Record<string, unknown>).waitUntil === "function") {
           ((executionCtx as Record<string, unknown>).waitUntil as (p: Promise<unknown> | unknown) => void)(postProcessPromise);
         } else {
@@ -355,9 +353,7 @@ async function baseFetchSlow(
     }
     // ── Post-Response Processing ─────────────────────────────────────────────
     if (context && (hooks.onResponse.length > 0 || context.deferred || (traceListeners && traceListeners.response.length > 0))) {
-      const postProcessPromise = (function(ctx, tListeners) {
-        return executePostProcess(hooks, ctx, tListeners);
-      })(context, traceListeners?.response);
+      const postProcessPromise = ((ctx, tListeners) => executePostProcess(hooks, ctx, tListeners))(context, traceListeners?.response);
       if (executionCtx && typeof (executionCtx as Record<string, unknown>).waitUntil === "function") {
         ((executionCtx as Record<string, unknown>).waitUntil as (p: Promise<unknown> | unknown) => void)(postProcessPromise);
       } else {
