@@ -155,11 +155,22 @@ export interface ServeXRouter<
 		m1: Handler,
 		handler: (ctx: Context<E, P>, next: NextFunction) => R | Promise<R>,
 	): ServeXRouter<E, S & { [K in AbsolutePath<B, P>]: { GET: R } }, B>;
+	get<P extends string, R extends InlineHandler>(
+		path: P,
+		m1: Handler,
+		handler: R,
+	): ServeXRouter<E, S & { [K in AbsolutePath<B, P>]: { GET: R } }, B>;
 	get<P extends string, R>(
 		path: P,
 		m1: Handler,
 		m2: Handler,
 		handler: (ctx: Context<E, P>, next: NextFunction) => R | Promise<R>,
+	): ServeXRouter<E, S & { [K in AbsolutePath<B, P>]: { GET: R } }, B>;
+	get<P extends string, R extends InlineHandler>(
+		path: P,
+		m1: Handler,
+		m2: Handler,
+		handler: R,
 	): ServeXRouter<E, S & { [K in AbsolutePath<B, P>]: { GET: R } }, B>;
 	get<P extends string, R>(
 		path: P,
@@ -179,11 +190,22 @@ export interface ServeXRouter<
 		m1: Handler,
 		handler: (ctx: Context<E, P>, next: NextFunction) => R | Promise<R>,
 	): ServeXRouter<E, S & { [K in AbsolutePath<B, P>]: { POST: R } }, B>;
+	post<P extends string, R extends InlineHandler>(
+		path: P,
+		m1: Handler,
+		handler: R,
+	): ServeXRouter<E, S & { [K in AbsolutePath<B, P>]: { POST: R } }, B>;
 	post<P extends string, R>(
 		path: P,
 		m1: Handler,
 		m2: Handler,
 		handler: (ctx: Context<E, P>, next: NextFunction) => R | Promise<R>,
+	): ServeXRouter<E, S & { [K in AbsolutePath<B, P>]: { POST: R } }, B>;
+	post<P extends string, R extends InlineHandler>(
+		path: P,
+		m1: Handler,
+		m2: Handler,
+		handler: R,
 	): ServeXRouter<E, S & { [K in AbsolutePath<B, P>]: { POST: R } }, B>;
 	post<P extends string, R>(
 		path: P,
@@ -203,6 +225,23 @@ export interface ServeXRouter<
 		m1: Handler,
 		handler: (ctx: Context<E, P>, next: NextFunction) => R | Promise<R>,
 	): ServeXRouter<E, S & { [K in AbsolutePath<B, P>]: { PUT: R } }, B>;
+	put<P extends string, R extends InlineHandler>(
+		path: P,
+		m1: Handler,
+		handler: R,
+	): ServeXRouter<E, S & { [K in AbsolutePath<B, P>]: { PUT: R } }, B>;
+	put<P extends string, R>(
+		path: P,
+		m1: Handler,
+		m2: Handler,
+		handler: (ctx: Context<E, P>, next: NextFunction) => R | Promise<R>,
+	): ServeXRouter<E, S & { [K in AbsolutePath<B, P>]: { PUT: R } }, B>;
+	put<P extends string, R extends InlineHandler>(
+		path: P,
+		m1: Handler,
+		m2: Handler,
+		handler: R,
+	): ServeXRouter<E, S & { [K in AbsolutePath<B, P>]: { PUT: R } }, B>;
 	put<P extends string, R>(
 		path: P,
 		...handlers: (Handler | InlineHandler)[]
@@ -220,6 +259,23 @@ export interface ServeXRouter<
 		path: P,
 		m1: Handler,
 		handler: (ctx: Context<E, P>, next: NextFunction) => R | Promise<R>,
+	): ServeXRouter<E, S & { [K in AbsolutePath<B, P>]: { DELETE: R } }, B>;
+	delete<P extends string, R extends InlineHandler>(
+		path: P,
+		m1: Handler,
+		handler: R,
+	): ServeXRouter<E, S & { [K in AbsolutePath<B, P>]: { DELETE: R } }, B>;
+	delete<P extends string, R>(
+		path: P,
+		m1: Handler,
+		m2: Handler,
+		handler: (ctx: Context<E, P>, next: NextFunction) => R | Promise<R>,
+	): ServeXRouter<E, S & { [K in AbsolutePath<B, P>]: { DELETE: R } }, B>;
+	delete<P extends string, R extends InlineHandler>(
+		path: P,
+		m1: Handler,
+		m2: Handler,
+		handler: R,
 	): ServeXRouter<E, S & { [K in AbsolutePath<B, P>]: { DELETE: R } }, B>;
 	delete<P extends string, R>(
 		path: P,
@@ -239,6 +295,23 @@ export interface ServeXRouter<
 		m1: Handler,
 		handler: (ctx: Context<E, P>, next: NextFunction) => R | Promise<R>,
 	): ServeXRouter<E, S & { [K in AbsolutePath<B, P>]: { PATCH: R } }, B>;
+	patch<P extends string, R extends InlineHandler>(
+		path: P,
+		m1: Handler,
+		handler: R,
+	): ServeXRouter<E, S & { [K in AbsolutePath<B, P>]: { PATCH: R } }, B>;
+	patch<P extends string, R>(
+		path: P,
+		m1: Handler,
+		m2: Handler,
+		handler: (ctx: Context<E, P>, next: NextFunction) => R | Promise<R>,
+	): ServeXRouter<E, S & { [K in AbsolutePath<B, P>]: { PATCH: R } }, B>;
+	patch<P extends string, R extends InlineHandler>(
+		path: P,
+		m1: Handler,
+		m2: Handler,
+		handler: R,
+	): ServeXRouter<E, S & { [K in AbsolutePath<B, P>]: { PATCH: R } }, B>;
 	patch<P extends string, R>(
 		path: P,
 		...handlers: (Handler | InlineHandler)[]
@@ -256,6 +329,23 @@ export interface ServeXRouter<
 		path: P,
 		m1: Handler,
 		handler: (ctx: Context<E, P>, next: NextFunction) => R | Promise<R>,
+	): ServeXRouter<E, S & { [K in AbsolutePath<B, P>]: { OPTIONS: R } }, B>;
+	options<P extends string, R extends InlineHandler>(
+		path: P,
+		m1: Handler,
+		handler: R,
+	): ServeXRouter<E, S & { [K in AbsolutePath<B, P>]: { OPTIONS: R } }, B>;
+	options<P extends string, R>(
+		path: P,
+		m1: Handler,
+		m2: Handler,
+		handler: (ctx: Context<E, P>, next: NextFunction) => R | Promise<R>,
+	): ServeXRouter<E, S & { [K in AbsolutePath<B, P>]: { OPTIONS: R } }, B>;
+	options<P extends string, R extends InlineHandler>(
+		path: P,
+		m1: Handler,
+		m2: Handler,
+		handler: R,
 	): ServeXRouter<E, S & { [K in AbsolutePath<B, P>]: { OPTIONS: R } }, B>;
 	options<P extends string, R>(
 		path: P,
@@ -275,6 +365,23 @@ export interface ServeXRouter<
 		m1: Handler,
 		handler: (ctx: Context<E, P>, next: NextFunction) => R | Promise<R>,
 	): ServeXRouter<E, S & { [K in AbsolutePath<B, P>]: { HEAD: R } }, B>;
+	head<P extends string, R extends InlineHandler>(
+		path: P,
+		m1: Handler,
+		handler: R,
+	): ServeXRouter<E, S & { [K in AbsolutePath<B, P>]: { HEAD: R } }, B>;
+	head<P extends string, R>(
+		path: P,
+		m1: Handler,
+		m2: Handler,
+		handler: (ctx: Context<E, P>, next: NextFunction) => R | Promise<R>,
+	): ServeXRouter<E, S & { [K in AbsolutePath<B, P>]: { HEAD: R } }, B>;
+	head<P extends string, R extends InlineHandler>(
+		path: P,
+		m1: Handler,
+		m2: Handler,
+		handler: R,
+	): ServeXRouter<E, S & { [K in AbsolutePath<B, P>]: { HEAD: R } }, B>;
 	head<P extends string, R>(
 		path: P,
 		...handlers: (Handler | InlineHandler)[]
@@ -292,6 +399,23 @@ export interface ServeXRouter<
 		path: P,
 		m1: Handler,
 		handler: (ctx: Context<E, P>, next: NextFunction) => R | Promise<R>,
+	): ServeXRouter<E, S & { [K in AbsolutePath<B, P>]: { ALL: R } }, B>;
+	all<P extends string, R extends InlineHandler>(
+		path: P,
+		m1: Handler,
+		handler: R,
+	): ServeXRouter<E, S & { [K in AbsolutePath<B, P>]: { ALL: R } }, B>;
+	all<P extends string, R>(
+		path: P,
+		m1: Handler,
+		m2: Handler,
+		handler: (ctx: Context<E, P>, next: NextFunction) => R | Promise<R>,
+	): ServeXRouter<E, S & { [K in AbsolutePath<B, P>]: { ALL: R } }, B>;
+	all<P extends string, R extends InlineHandler>(
+		path: P,
+		m1: Handler,
+		m2: Handler,
+		handler: R,
 	): ServeXRouter<E, S & { [K in AbsolutePath<B, P>]: { ALL: R } }, B>;
 	all<P extends string, R>(
 		path: P,
