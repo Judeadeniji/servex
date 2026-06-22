@@ -583,15 +583,13 @@ export class ServeXApp<E extends Env = Env, S = {}, B extends string = "/"> exte
 }
 
 export function createServer<E extends Env = Env, B extends string = "/">(
-  options: ServerOptions<B> = {} as ServerOptions<B>
-// biome-ignore lint/complexity/noBannedTypes: empty schema requires {}
+    options: ServerOptions<B> = {} as ServerOptions<B>
 ): ServeXRouter<E, {}, NormalisePath<B>> & ServeXApp<E, {}, NormalisePath<B>> {
   const { router = RouterType.SONIC, middlewares = [], basePath, debug = false } = options;
   const routerAdapter = new RouterAdapter<ServerRoute[]>({
     type: router,
   });
 
-  // biome-ignore lint/complexity/noBannedTypes: empty schema requires {}
   return new ServeXApp<E, {}, NormalisePath<B>>(
     routerAdapter,
     middlewares,
