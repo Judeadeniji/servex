@@ -1,4 +1,4 @@
-import { SonicRouter } from "../src/router/sonic-router";
+import { SonicRouter } from "../../src/router/sonic-router";
 
 const sonic = new SonicRouter();
 const routes = [

@@ -1,4 +1,4 @@
-const { SonicRouter } = require("../src/router/sonic-router");
+const { SonicRouter } = require("../../src/router/sonic-router");
 
 function createMockNode(path: string, paramsKeys: string[]) {
 	return { path, paramsKeys, data: { handler: 1 }, middlewares: [] };

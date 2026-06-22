@@ -1,7 +1,7 @@
 import {
 	compareRouteSpecificity,
 	type SonicRouteNode,
-} from "../src/router/sonic-router";
+} from "../../src/router/sonic-router";
 
 class TrieNode {
 	staticChildren: Record<string, TrieNode> = {};

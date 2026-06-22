@@ -1,5 +1,5 @@
 import * as fs from "node:fs";
-import { SonicRouter } from "../src/router/sonic-router";
+import { SonicRouter } from "../../src/router/sonic-router";
 
 const sonic = new SonicRouter();
 sonic.addRoute({ method: "GET", path: "/", data: "ok" });

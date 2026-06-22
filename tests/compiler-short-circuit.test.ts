@@ -20,7 +20,7 @@ describe("JIT Compiler - Short Circuiting & Edge Cases", () => {
 			},
 		];
 		const fn = compileHandlerChain(handlers);
-		const res = await fn(createMockContext());
+		const res = await fn(createMockContext()) as Response;
 		expect(res?.status).toBe(200);
 		expect(await res!.text()).toBe("0");
 	});
@@ -36,7 +36,7 @@ describe("JIT Compiler - Short Circuiting & Edge Cases", () => {
 			},
 		];
 		const fn = compileHandlerChain(handlers);
-		const res = await fn(createMockContext());
+		const res = await fn(createMockContext()) as Response;
 		expect(res?.status).toBe(200);
 		expect(await res!.text()).toBe("1");
 	});
@@ -52,7 +52,7 @@ describe("JIT Compiler - Short Circuiting & Edge Cases", () => {
 			async () => new Response("2"),
 		];
 		const fn = compileHandlerChain(handlers);
-		const res = await fn(createMockContext());
+		const res = await fn(createMockContext()) as Response;
 		expect(res?.status).toBe(200);
 		expect(await res!.text()).toBe("2");
 	});
@@ -74,7 +74,7 @@ describe("JIT Compiler - Short Circuiting & Edge Cases", () => {
 			},
 		];
 		const fn = compileHandlerChain(handlers);
-		const res = await fn(createMockContext());
+		const res = await fn(createMockContext()) as Response;
 		expect(res?.status).toBe(500);
 		expect(await res!.text()).toBe("Mid-chain error");
 	});
@@ -89,7 +89,7 @@ describe("JIT Compiler - Short Circuiting & Edge Cases", () => {
 			},
 		];
 		const fn = compileHandlerChain(handlers);
-		const res = await fn(createMockContext());
+		const res = await fn(createMockContext()) as Response;
 		expect(res).toBeUndefined();
 	});
 });

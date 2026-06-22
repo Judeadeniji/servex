@@ -23,9 +23,9 @@
  * feature, not a correctness feature for correct programs) in exchange for the perf win.
  */
 
-import type { Context } from "../src/context";
-import { executeHandlers } from "../src/core/response";
-import type { Handler } from "../src/types";
+import type { Context } from "../../src/context";
+import { executeHandlers } from "../../src/core/response";
+import type { Handler } from "../../src/types";
 
 const ITERS = 1_000_000;
 

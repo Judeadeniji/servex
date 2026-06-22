@@ -1,5 +1,5 @@
-import { RouterAdapter, RouterType } from "../src/router/adapter";
-import type { Route } from "../src/router/base";
+import { RouterAdapter, RouterType } from "../../src/router/adapter";
+import type { Route } from "../../src/router/base";
 
 const iterations = 100_000;
 

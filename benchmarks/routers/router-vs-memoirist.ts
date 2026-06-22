@@ -1,5 +1,5 @@
 import { Memoirist } from "memoirist";
-import { SonicRouter } from "../src/router/sonic-router";
+import { SonicRouter } from "../../src/router/sonic-router";
 
 // 1. Setup Memoirist
 const memoirist = new Memoirist();

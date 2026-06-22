@@ -10,7 +10,7 @@ import type { Handler } from "../types";
  * 2. Correctness: It perfectly mimics the `executeHandlers` closure scope,
  *    ensuring that `next()` short-circuiting and implicit response propagation work.
  */
-export function compileHandlerChain<E extends import("../types").Env = import("../types").Env>(handlers: Handler<Context<E>>[]): () => Promise<unknown> {
+export function compileHandlerChain<E extends import("../types").Env = import("../types").Env>(handlers: Handler<Context<E>>[]): (context: Context<E>) => Promise<unknown> {
 	if (handlers.length === 0) {
 		return async () => undefined;
 	}

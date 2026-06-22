@@ -8,8 +8,8 @@
  *   5. Overhead = (3) - (4): cost of param extraction + object alloc
  */
 
-import type { Route } from "../src/router/base";
-import { SonicRouter } from "../src/router/sonic-router";
+import type { Route } from "../../src/router/base";
+import { SonicRouter } from "../../src/router/sonic-router";
 
 const routes: Route<number>[] = [
 	{ method: "GET", path: "/", data: 1 },
