@@ -77,7 +77,7 @@ export function baseFetch(
         }
       }
       
-      const context = new Context(
+      let context: Context | undefined = new Context(
         request, 
         envBindings ?? ((typeof process !== "undefined" ? process.env : {}) as Record<string, unknown>), 
         { params: route.params }, 
@@ -89,13 +89,14 @@ export function baseFetch(
         const res = r || new Response("Not Found", { status: 404 });
         context.finalResponse = res;
         
+        const postProcessPromise = executePostProcess(hooks, context!);
         if (executionCtx && typeof (executionCtx as Record<string, unknown>).waitUntil === "function") {
-          ((executionCtx as Record<string, unknown>).waitUntil as (p: Promise<unknown> | unknown) => void)(executePostProcess(hooks, context));
+          ((executionCtx as Record<string, unknown>).waitUntil as (p: Promise<unknown> | unknown) => void)(postProcessPromise);
         } else {
-          // Fire and forget so we don't block the response return
-          Promise.resolve().then(() => executePostProcess(hooks, context));
+          postProcessPromise.catch(console.error);
         }
         
+        context = undefined;
         return res;
       };
 
@@ -275,8 +276,6 @@ async function baseFetchSlow(
     const routeMids = route.middlewares;
     const routeData = route.data
 
-    let _result: Response | undefined ;
-
     const handlers = [...middlewares, ...routeMids, ...routeData];
 
     // ── 3. Execute handlers ───────────────────────────────────────────────────
@@ -355,14 +354,17 @@ async function baseFetchSlow(
     }
     // ── Post-Response Processing ─────────────────────────────────────────────
     if (context && (hooks.onResponse.length > 0 || context.deferred || (traceListeners && traceListeners.response.length > 0))) {
-      const execResponse = () => executePostProcess(hooks, context!, traceListeners?.response);
+      const postProcessPromise = executePostProcess(hooks, context, traceListeners?.response);
       if (executionCtx && typeof (executionCtx as Record<string, unknown>).waitUntil === "function") {
-        ((executionCtx as Record<string, unknown>).waitUntil as (p: Promise<unknown> | unknown) => void)(execResponse());
+        ((executionCtx as Record<string, unknown>).waitUntil as (p: Promise<unknown> | unknown) => void)(postProcessPromise);
       } else {
-        // Run in background without awaiting
-        execResponse();
+        postProcessPromise.catch(console.error);
       }
     }
+
+    context = undefined;
+    traceApi = undefined;
+    traceListeners = undefined;
   }
 
   return response!;
@@ -388,8 +390,5 @@ async function executePostProcess(hooks: import("../types").Hooks, context: Cont
     }
   } catch (e) {
     console.error("ServeX background task error:", e);
-  } finally {
-    // Explicitly lose the reference to help GC
-    context = null as any;
   }
 }
