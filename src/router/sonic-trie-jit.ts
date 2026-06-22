@@ -5,16 +5,16 @@ import type { HTTPMethod } from "./base";
  * (Importing the real type from sonic-router.ts in the actual integration.)
  */
 type RouteLike = {
-  path: string;
-  paramsKeys: string[];
+	path: string;
+	paramsKeys: string[];
 };
 
 interface TrieNode {
-  literal: Map<string, TrieNode>;
-  param?: TrieNode;
-  wildcard?: { route: RouteLike };
-  /** Set when a route's path ends exactly at this node (full segment match). */
-  route?: RouteLike;
+	literal: Map<string, TrieNode>;
+	param?: TrieNode;
+	wildcard?: { route: RouteLike };
+	/** Set when a route's path ends exactly at this node (full segment match). */
+	route?: RouteLike;
 }
 
 /**
@@ -30,41 +30,41 @@ interface TrieNode {
  * and gives a deterministic, reviewable diff if routes are added/removed.
  */
 function buildTrie(routes: RouteLike[]): TrieNode {
-  const root: TrieNode = { literal: new Map() };
+	const root: TrieNode = { literal: new Map() };
 
-  for (const route of routes) {
-    const segments = route.path.split("/");
-    let node = root;
+	for (const route of routes) {
+		const segments = route.path.split("/");
+		let node = root;
 
-    for (let i = 0; i < segments.length; i++) {
-      const seg = segments[i];
+		for (let i = 0; i < segments.length; i++) {
+			const seg = segments[i];
 
-      if (seg.startsWith("*")) {
-        // Wildcard is always terminal — it consumes everything remaining
-        // from this point, so it doesn't need (or get) a child node.
-        node.wildcard = { route };
-        break;
-      }
+			if (seg.startsWith("*")) {
+				// Wildcard is always terminal — it consumes everything remaining
+				// from this point, so it doesn't need (or get) a child node.
+				node.wildcard = { route };
+				break;
+			}
 
-      if (seg.startsWith(":")) {
-        if (!node.param) node.param = { literal: new Map() };
-        node = node.param;
-      } else {
-        let child = node.literal.get(seg);
-        if (!child) {
-          child = { literal: new Map() };
-          node.literal.set(seg, child);
-        }
-        node = child;
-      }
+			if (seg.startsWith(":")) {
+				if (!node.param) node.param = { literal: new Map() };
+				node = node.param;
+			} else {
+				let child = node.literal.get(seg);
+				if (!child) {
+					child = { literal: new Map() };
+					node.literal.set(seg, child);
+				}
+				node = child;
+			}
 
-      if (i === segments.length - 1) {
-        if (!node.route) node.route = route;
-      }
-    }
-  }
+			if (i === segments.length - 1) {
+				if (!node.route) node.route = route;
+			}
+		}
+	}
 
-  return root;
+	return root;
 }
 
 /**
@@ -98,31 +98,34 @@ function buildTrie(routes: RouteLike[]): TrieNode {
  * "no early exclusive branching" — don't change this pattern without
  * re-verifying the cross-check test suite (see compileTrie's caller).
  */
-export function compileSonicTrieMatcher<R extends RouteLike>(
-  method: HTTPMethod,
-  sortedDynamicRoutes: R[]
-): { matchFn: (url: string, method: string) => any; routes: R[] } {
-  const routes: R[] = [];
-  const trie = buildTrie(sortedDynamicRoutes);
+export function compileSonicTrieMatcher<_T>(
+	method: HTTPMethod,
+	routes: (RouteLike & { middlewares: unknown; data: unknown; path: string })[],
+) {
+	const trie = buildTrie(routes);
 
-  let uid = 0;
-  const nextId = () => uid++;
+	function routeIndex(route: RouteLike): number {
+		return routes.indexOf(
+			route as RouteLike & {
+				middlewares: unknown;
+				data: unknown;
+				path: string;
+			},
+		);
+	}
 
-  function routeIndex(route: RouteLike): number {
-    let idx = routes.indexOf(route as any);
-    if (idx === -1) {
-      routes.push(route as any);
-      idx = routes.length - 1;
-    }
-    return idx;
-  }
-
-  function buildReturn(route: RouteLike, capturedVars: {start: string, end: string}[]): string {
-    const paramsObj = route.paramsKeys
-      .map((k, i) => `${JSON.stringify(k)}: url.slice(${capturedVars[i].start}, ${capturedVars[i].end})`)
-      .join(",");
-    const idx = routeIndex(route);
-    return `return {
+	function buildReturn(
+		route: RouteLike,
+		capturedVars: { start: string; end: string }[],
+	): string {
+		const paramsObj = route.paramsKeys
+			.map(
+				(k, i) =>
+					`${JSON.stringify(k)}: url.slice(${capturedVars[i].start}, ${capturedVars[i].end})`,
+			)
+			.join(",");
+		const idx = routeIndex(route);
+		return `return {
       matched: true,
       method: method,
       route: url,
@@ -132,38 +135,49 @@ export function compileSonicTrieMatcher<R extends RouteLike>(
       middlewares: deps.routes[${idx}].middlewares,
       store: deps.routes[${idx}]
     };`;
-  }
+	}
 
-  function gen(node: TrieNode, cursorExpr: string, capturedVars: {start: string, end: string}[]): string {
-    const id = nextId();
-    let code = ``;
+	let idCounter = 0;
 
-    function compileLiteralCheck(str: string, baseCursor: string): string {
-      if (str.length === 0) return "true";
-      let checks = [];
-      for (let i = 0; i < str.length; i++) {
-         checks.push(`url.charCodeAt(${baseCursor} + ${i}) === ${str.charCodeAt(i)}`);
-      }
-      return checks.join(" && ");
-    }
+	function gen(
+		node: TrieNode,
+		cursorExpr: string,
+		capturedVars: { start: string; end: string }[],
+	): string {
+		let code = "";
+		const id = idCounter++;
 
-    if (node.literal.size > 0) {
-      code += `switch (url.charCodeAt(${cursorExpr})) {\n`;
-      const byFirstChar = new Map<number, {lit: string, child: TrieNode}[]>();
-      for (const [lit, child] of node.literal) {
-         if (lit.length === 0) continue;
-         const char = lit.charCodeAt(0);
-         let arr = byFirstChar.get(char);
-         if (!arr) { arr = []; byFirstChar.set(char, arr); }
-         arr.push({lit, child});
-      }
+		function compileLiteralCheck(str: string, baseCursor: string): string {
+			if (str.length === 0) return "true";
+			const checks = [];
+			for (let i = 0; i < str.length; i++) {
+				checks.push(
+					`url.charCodeAt(${baseCursor} + ${i}) === ${str.charCodeAt(i)}`,
+				);
+			}
+			return checks.join(" && ");
+		}
 
-      for (const [char, entries] of byFirstChar) {
-         code += `        case ${char}:\n`;
-         for (const {lit, child} of entries) {
-            const rest = lit.slice(1);
-            if (rest.length > 0) {
-              code += `
+		if (node.literal.size > 0) {
+			const byFirstChar = new Map<number, { lit: string; child: TrieNode }[]>();
+			for (const [lit, child] of node.literal) {
+				if (lit.length === 0) continue;
+				const char = lit.charCodeAt(0);
+				let arr = byFirstChar.get(char);
+				if (!arr) {
+					arr = [];
+					byFirstChar.set(char, arr);
+				}
+				arr.push({ lit, child });
+			}
+
+			if (byFirstChar.size === 1) {
+				const [char, entries] = Array.from(byFirstChar.entries())[0];
+				code += `      if (url.charCodeAt(${cursorExpr}) === ${char}) {\n`;
+				for (const { lit, child } of entries) {
+					const rest = lit.slice(1);
+					if (rest.length > 0) {
+						code += `
                 if (${compileLiteralCheck(rest, `${cursorExpr} + 1`)}) {
                   const endLit${id} = ${cursorExpr} + ${lit.length};
                   const isEnd${id} = endLit${id} === _e;
@@ -176,8 +190,8 @@ export function compileSonicTrieMatcher<R extends RouteLike>(
                   }
                 }
               `;
-            } else {
-              code += `
+					} else {
+						code += `
                 {
                   const endLit${id} = ${cursorExpr} + 1;
                   const isEnd${id} = endLit${id} === _e;
@@ -190,22 +204,63 @@ export function compileSonicTrieMatcher<R extends RouteLike>(
                   }
                 }
               `;
-            }
-         }
-         code += `          break;\n`;
-      }
-      code += `      }\n`;
-    }
+					}
+				}
+				code += `      }\n`;
+			} else {
+				code += `      switch (url.charCodeAt(${cursorExpr})) {\n`;
+				for (const [char, entries] of byFirstChar) {
+					code += `        case ${char}:\n`;
+					for (const { lit, child } of entries) {
+						const rest = lit.slice(1);
+						if (rest.length > 0) {
+							code += `
+                   if (${compileLiteralCheck(rest, `${cursorExpr} + 1`)}) {
+                     const endLit${id} = ${cursorExpr} + ${lit.length};
+                     const isEnd${id} = endLit${id} === _e;
+                     if (isEnd${id} || url.charCodeAt(endLit${id}) === 47) {
+                       if (isEnd${id}) {
+                         ${child.route ? buildReturn(child.route, capturedVars) : ""}
+                       } else {
+                         ${gen(child, `endLit${id} + 1`, capturedVars)}
+                       }
+                     }
+                   }
+                 `;
+						} else {
+							code += `
+                   {
+                     const endLit${id} = ${cursorExpr} + 1;
+                     const isEnd${id} = endLit${id} === _e;
+                     if (isEnd${id} || url.charCodeAt(endLit${id}) === 47) {
+                       if (isEnd${id}) {
+                         ${child.route ? buildReturn(child.route, capturedVars) : ""}
+                       } else {
+                         ${gen(child, `endLit${id} + 1`, capturedVars)}
+                       }
+                     }
+                   }
+                 `;
+						}
+					}
+					code += `          break;\n`;
+				}
+				code += `      }\n`;
+			}
+		}
 
-    if (node.param) {
-      code += `
+		if (node.param) {
+			code += `
         {
           const n${id} = url.indexOf('/', ${cursorExpr});
           const isEndParam${id} = n${id} === -1 || n${id} >= _e;
           const endParam${id} = isEndParam${id} ? _e : n${id};
       `;
-      const newCaptured = [...capturedVars, { start: cursorExpr, end: `endParam${id}` }];
-      code += `
+			const newCaptured = [
+				...capturedVars,
+				{ start: cursorExpr, end: `endParam${id}` },
+			];
+			code += `
           if (isEndParam${id}) {
             ${node.param.route ? buildReturn(node.param.route, newCaptured) : ""}
           } else {
@@ -213,40 +268,43 @@ export function compileSonicTrieMatcher<R extends RouteLike>(
           }
         }
       `;
-    }
+		}
 
-    if (node.wildcard) {
-      const newCaptured = [...capturedVars, { start: cursorExpr, end: "_e" }];
-      code += `
+		if (node.wildcard) {
+			const newCaptured = [...capturedVars, { start: cursorExpr, end: "_e" }];
+			code += `
         ${buildReturn(node.wildcard.route, newCaptured)}
       `;
-    }
+		}
 
-    return code;
-  }
+		return code;
+	}
 
-  const body = gen(trie, "_s", []);
+	const body = gen(trie, "_s", []);
 
-  const deps = { routes };
+	const deps = { routes };
 
-  const matchFn = new Function(
-    "deps",
-    `
+	const matchFn = new Function(
+		"deps",
+		`
     return function(url, method) {
       let _s = 0, _e = url.length;
       if (url.charCodeAt(0) === 47) _s = 1;
       if (_e > _s && url.charCodeAt(_e - 1) === 47) _e -= 1;
       
       if (_s === _e) {
-          ${trie.literal.get("")?.route ? buildReturn(trie.literal.get("")!.route!, []) : ""}
+        ${
+          trie.literal.get("")?.route ? buildReturn(
+            trie.literal.get("")?.route as RouteLike, []) : ""
+        }
       }
       
       ${body}
       return null;
     };
     //# sourceURL=servex-jit/sonic-router/${method}
-    `
-  )(deps);
+    `,
+	)(deps);
 
-  return { matchFn, routes: deps.routes };
+	return { matchFn, routes: deps.routes };
 }

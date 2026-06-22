@@ -1,460 +1,463 @@
 import $$path from "node:path";
-import type { Coerce, DynamicSegmentsRemoved, RouteMatch } from "./types";
-import {
-  TrieSegmentNode,
-  type HTTPMethod,
-  orderTrieSegmentByType,
-  type Route,
-  type MatchedRoute,
-  type IRouter,
-} from "./base";
 import type { Context } from "../context";
 import type { MiddlewareHandler } from "../types";
+import {
+	type HTTPMethod,
+	type IRouter,
+	type MatchedRoute,
+	orderTrieSegmentByType,
+	type Route,
+	TrieSegmentNode,
+} from "./base";
+import type { DynamicSegmentsRemoved, } from "./types";
 
 export class TrieRouter<Routes extends Route[]> implements IRouter<Routes> {
-  private root = new TrieSegmentNode("/");
-  private subTries: Map<string, TrieRouter<Routes>> = new Map();
-  #routes = new Set<Route<Routes[number]["data"]>>();
+	private root = new TrieSegmentNode("/");
+	private subTries: Map<string, TrieRouter<Routes>> = new Map();
+	#routes = new Set<Route<Routes[number]["data"]>>();
 
-  /**
-   * @property routes - A list of all the routes added to the trie
-   */
-  get routes() {
-    return Array.from(this.#routes);
-  }
+	/**
+	 * @property routes - A list of all the routes added to the trie
+	 */
+	get routes() {
+		return Array.from(this.#routes);
+	}
 
-  addSubTrie(path: string, subTrie: TrieRouter<Routes>) {
-    const sanitizedPath = this.sanitizeRoute(path);
-    if (this.subTries.has(sanitizedPath)) {
-      console.warn(
-        `SubTrie for path "${sanitizedPath}" already exists. Overwriting...`
-      );
-    }
-    const routes = subTrie.routes.map((route) => {
-      route.path = $$path.join(sanitizedPath, route.path);
-      return route;
-    });
+	addSubTrie(path: string, subTrie: TrieRouter<Routes>) {
+		const sanitizedPath = this.sanitizeRoute(path);
+		if (this.subTries.has(sanitizedPath)) {
+			console.warn(
+				`SubTrie for path "${sanitizedPath}" already exists. Overwriting...`,
+			);
+		}
+		const routes = subTrie.routes.map((route) => {
+			route.path = $$path.join(sanitizedPath, route.path);
+			return route;
+		});
 
-    for (const route of routes) {
-      this.addRoute(route);
-    }
+		for (const route of routes) {
+			this.addRoute(route);
+		}
 
-    return this;
-  }
+		return this;
+	}
 
-  pushMiddlewares<C extends Context>(
-    path: string,
-    middleware: MiddlewareHandler<C>[]
-  ): void {
-    const sanitizedPath = this.sanitizeRoute(path);
+	pushMiddlewares<C extends Context>(
+		path: string,
+		middleware: MiddlewareHandler<C>[],
+	): void {
+		const sanitizedPath = this.sanitizeRoute(path);
 
-    if (sanitizedPath === "*") {
-      // Apply middleware to all existing routes
-      for (const route of this.#routes) {
-        this.addMiddlewareToPath(route.path, middleware);
-      }
-      // Apply middleware to all future routes by setting a global middleware
-      this.addGlobalMiddleware(middleware);
-    } else {
-      this.addMiddlewareToPath(sanitizedPath, middleware);
-    }
-  }
+		if (sanitizedPath === "*") {
+			// Apply middleware to all existing routes
+			for (const route of this.#routes) {
+				this.addMiddlewareToPath(route.path, middleware);
+			}
+			// Apply middleware to all future routes by setting a global middleware
+			this.addGlobalMiddleware(middleware);
+		} else {
+			this.addMiddlewareToPath(sanitizedPath, middleware);
+		}
+	}
 
+	private addMiddlewareToPath<C extends Context>(
+		path: string,
+		middlewares: MiddlewareHandler<C>[],
+	): void {
+		const segments = path === "/" ? [path] : path.split("/");
+		let currentTrieSegment = this.root;
 
-  private addMiddlewareToPath<C extends Context>(
-    path: string,
-    middlewares: MiddlewareHandler<C>[]
-  ): void {
-    const segments = path === "/" ? [path] : path.split("/");
-    let currentTrieSegment = this.root;
-  
-    for (let i = 0; i < segments.length; i++) {
-      const seg = segments[i];
-      const isLastSegment = i === segments.length - 1;
-  
-      if (seg === "*") {
-        // Apply middleware to all child segments recursively
-        this.applyMiddlewareToAllChildren(currentTrieSegment, middlewares);
-        break; // Wildcard applies to all subsequent paths
-      }
-  
-      if (!currentTrieSegment.children.has(seg)) {
-        const trieSegment = new TrieSegmentNode(seg);
-        trieSegment.prevTrieSegment = currentTrieSegment;
-        currentTrieSegment.children.set(seg, trieSegment);
-      }
-  
-      currentTrieSegment = currentTrieSegment.children.get(seg)!;
-  
-      if (isLastSegment) {
-        // Attach middlewares to the specific segment
-        currentTrieSegment.middlewares.push(...middlewares as MiddlewareHandler<Context>[]);
-      }
-    }
-  }
+		for (let i = 0; i < segments.length; i++) {
+			const seg = segments[i];
+			const isLastSegment = i === segments.length - 1;
 
-  private applyMiddlewareToAllChildren<C extends Context>(
-    segment: TrieSegmentNode,
-    middlewares: MiddlewareHandler<C>[]
-  ): void {
-    // Apply middleware to the current segment
-    segment.middlewares.push(...middlewares as MiddlewareHandler<Context>[]);
-  
-    // Recursively apply middleware to all child segments
-    for (const child of segment.children.values()) {
-      this.applyMiddlewareToAllChildren(child, middlewares);
-    }
-  }
-  
+			if (seg === "*") {
+				// Apply middleware to all child segments recursively
+				this.applyMiddlewareToAllChildren(currentTrieSegment, middlewares);
+				break; // Wildcard applies to all subsequent paths
+			}
 
-  private addGlobalMiddleware<C extends Context>(
-    middlewares: MiddlewareHandler<C>[]
-  ): void {
-    const applyMiddlewareToSegment = (segment: TrieSegmentNode) => {
-      segment.middlewares.push(...middlewares as MiddlewareHandler<Context>[]);
-      for (const child of segment.children.values()) {
-        applyMiddlewareToSegment(child);
-      }
-    };
-    applyMiddlewareToSegment(this.root);
-  }
+			if (!currentTrieSegment.children.has(seg)) {
+				const trieSegment = new TrieSegmentNode(seg);
+				trieSegment.prevTrieSegment = currentTrieSegment;
+				currentTrieSegment.children.set(seg, trieSegment);
+			}
 
-  addRoute(route: Route<Routes[number]["data"]>) {
-    const { method, path, data } = route;
-    const routeKey = `${method.toUpperCase()} ${path}`;
-    if (this.#routes.has(route)) {
-      console.warn(`Route ${routeKey} already exists. Overwriting...`);
-    }
+			currentTrieSegment = currentTrieSegment.children.get(seg)!;
 
-    const sanitizedRoute = this.sanitizeRoute(path);
-    const routeSegments =
-      sanitizedRoute === "/" ? [sanitizedRoute] : sanitizedRoute.split("/");
-    let currentTrieSegment = this.root;
+			if (isLastSegment) {
+				// Attach middlewares to the specific segment
+				currentTrieSegment.middlewares.push(
+					...(middlewares as MiddlewareHandler<Context>[]),
+				);
+			}
+		}
+	}
 
-    for (const seg of routeSegments) {
-      if (!this.resolveWildCard(currentTrieSegment, method, seg, path)) break;
-      if (!this.resolveDynamicSegment(currentTrieSegment, method, seg, path))
-        break;
+	private applyMiddlewareToAllChildren<C extends Context>(
+		segment: TrieSegmentNode,
+		middlewares: MiddlewareHandler<C>[],
+	): void {
+		// Apply middleware to the current segment
+		segment.middlewares.push(...(middlewares as MiddlewareHandler<Context>[]));
 
-      if (!currentTrieSegment.children.has(seg)) {
-        const trieSegment = new TrieSegmentNode(seg);
-        trieSegment.prevTrieSegment = currentTrieSegment;
-        currentTrieSegment.children.set(seg, trieSegment);
-      }
+		// Recursively apply middleware to all child segments
+		for (const child of segment.children.values()) {
+			this.applyMiddlewareToAllChildren(child, middlewares);
+		}
+	}
 
-      const child = currentTrieSegment.children.get(seg)!;
+	private addGlobalMiddleware<C extends Context>(
+		middlewares: MiddlewareHandler<C>[],
+	): void {
+		const applyMiddlewareToSegment = (segment: TrieSegmentNode) => {
+			segment.middlewares.push(
+				...(middlewares as MiddlewareHandler<Context>[]),
+			);
+			for (const child of segment.children.values()) {
+				applyMiddlewareToSegment(child);
+			}
+		};
+		applyMiddlewareToSegment(this.root);
+	}
 
-      if (this.isDynamicSegment(seg)) {
-        child.type = "dynamic";
-      }
-      if (this.isWildCard(seg)) {
-        child.type = "wildcard";
-      }
+	addRoute(route: Route<Routes[number]["data"]>) {
+		const { method, path, data } = route;
+		const routeKey = `${method.toUpperCase()} ${path}`;
+		if (this.#routes.has(route)) {
+			console.warn(`Route ${routeKey} already exists. Overwriting...`);
+		}
 
-      currentTrieSegment = child;
-    }
+		const sanitizedRoute = this.sanitizeRoute(path);
+		const routeSegments =
+			sanitizedRoute === "/" ? [sanitizedRoute] : sanitizedRoute.split("/");
+		let currentTrieSegment = this.root;
 
-    currentTrieSegment.isEndOfRoute = true;
-    // Assign data based on the HTTP method
-    currentTrieSegment.data[method.toUpperCase() as HTTPMethod] = data!;
-    this.#routes.add(route);
-    return this;
-  }
+		for (const seg of routeSegments) {
+			if (!this.resolveWildCard(currentTrieSegment, method, seg, path)) break;
+			if (!this.resolveDynamicSegment(currentTrieSegment, method, seg, path))
+				break;
 
-  private resolveWildCard(
-    currentTrieSegment: TrieSegmentNode,
-    method: HTTPMethod,
-    seg: string,
-    route: string
-  ): currentTrieSegment is TrieSegmentNode {
-    function childHasWildCard(children: Map<string, TrieSegmentNode>): boolean {
-      return Array.from(children).some(
-        ([key, child]) => child.type === "wildcard"
-      );
-    }
+			if (!currentTrieSegment.children.has(seg)) {
+				const trieSegment = new TrieSegmentNode(seg);
+				trieSegment.prevTrieSegment = currentTrieSegment;
+				currentTrieSegment.children.set(seg, trieSegment);
+			}
 
-    if (this.isWildCard(seg) && currentTrieSegment.children.size > 0) {
-      // slice of `seg` from `route`
-      const lastRoute = route.slice(0, route.indexOf(seg));
-      // warn that the route is not added
-      console.info(
-        `\x1b[33m[WARN]\x1b[0m Wildcard route \x1b[1m\x1b[36m${route}\x1b[0m will override the following routes`,
-        this.lookup(lastRoute).map((r) => $$path.join(...r.map((r) => r.value)))
-      );
+			const child = currentTrieSegment.children.get(seg)!;
 
-      currentTrieSegment.children.clear();
-      return true;
-    }
-    if (childHasWildCard(currentTrieSegment.children)) {
-      let lastTrieSeg = currentTrieSegment.children.get("*")!;
-      let lastRoute = lastTrieSeg.value;
+			if (this.isDynamicSegment(seg)) {
+				child.type = "dynamic";
+			}
+			if (this.isWildCard(seg)) {
+				child.type = "wildcard";
+			}
 
-      while (lastTrieSeg.prevTrieSegment) {
-        lastTrieSeg = lastTrieSeg.prevTrieSegment;
-        lastRoute = $$path.join(lastTrieSeg.value, lastRoute);
-      }
-      // warn that the route is not added
-      console.info(
-        "\x1b[33m[WARN]\x1b[0m Cannot add a route after a wild card segment",
-        `"route": \x1b[1m\x1b[36m${route}\x1b[0m\n`,
-        `This route will be ignored, route "${lastRoute?.[0]}" is the last route before the wildcard`
-      );
-      return false;
-    }
+			currentTrieSegment = child;
+		}
 
-    if (currentTrieSegment.type === "wildcard") {
-      // try to warn the user, then fix this
-      console.info(
-        "\x1b[33m[WARN]\x1b[0m Cannot add a route after a wild card segment",
-        `"route": \x1b[1m\x1b[36m${route}\x1b[0m`
-      );
-      return false;
-    }
-    return true;
-  }
+		currentTrieSegment.isEndOfRoute = true;
+		// Assign data based on the HTTP method
+		currentTrieSegment.data[method.toUpperCase() as HTTPMethod] = data!;
+		this.#routes.add(route);
+		return this;
+	}
 
-  private resolveDynamicSegment(
-    currentTrieSegment: TrieSegmentNode,
-    method: HTTPMethod,
-    seg: string,
-    route: string
-  ) {
-    function childHasDynamicSegment(
-      children: Map<string, TrieSegmentNode>
-    ): boolean {
-      return Array.from(children).some(([, child]) => child.type === "dynamic");
-    }
+	private resolveWildCard(
+		currentTrieSegment: TrieSegmentNode,
+		_method: HTTPMethod,
+		seg: string,
+		route: string,
+	): currentTrieSegment is TrieSegmentNode {
+		function childHasWildCard(children: Map<string, TrieSegmentNode>): boolean {
+			return Array.from(children).some(
+				([_key, child]) => child.type === "wildcard",
+			);
+		}
 
-    if (
-      this.isDynamicSegment(seg) &&
-      childHasDynamicSegment(currentTrieSegment.children) &&
-      currentTrieSegment.data[method]
-    ) {
-      // slice of `seg` from `route`
-      const lastRoute = route.slice(0, route.indexOf(seg));
-      // warn that the route is not added
-      console.info(
-        `\x1b[33m[WARN]\x1b[0m Dynamic route \x1b[1m\x1b[36m${route}\x1b[0m might conflict with the following routes`,
-        this.lookup(lastRoute).map((r) => "/" + r.map((r) => r.value).join("/"))
-      );
+		if (this.isWildCard(seg) && currentTrieSegment.children.size > 0) {
+			// slice of `seg` from `route`
+			const lastRoute = route.slice(0, route.indexOf(seg));
+			// warn that the route is not added
+			console.info(
+				`\x1b[33m[WARN]\x1b[0m Wildcard route \x1b[1m\x1b[36m${route}\x1b[0m will override the following routes`,
+				this.lookup(lastRoute).map((r) =>
+					$$path.join(...r.map((r) => r.value)),
+				),
+			);
 
-      return false;
-    }
+			currentTrieSegment.children.clear();
+			return true;
+		}
+		if (childHasWildCard(currentTrieSegment.children)) {
+			let lastTrieSeg = currentTrieSegment.children.get("*")!;
+			let lastRoute = lastTrieSeg.value;
 
-    return true;
-  }
+			while (lastTrieSeg.prevTrieSegment) {
+				lastTrieSeg = lastTrieSeg.prevTrieSegment;
+				lastRoute = $$path.join(lastTrieSeg.value, lastRoute);
+			}
+			// warn that the route is not added
+			console.info(
+				"\x1b[33m[WARN]\x1b[0m Cannot add a route after a wild card segment",
+				`"route": \x1b[1m\x1b[36m${route}\x1b[0m\n`,
+				`This route will be ignored, route "${lastRoute?.[0]}" is the last route before the wildcard`,
+			);
+			return false;
+		}
 
-  /**
-   * @method lookup - Lookup a route in the trie
-   * @param route - The route to lookup
-   * @returns {TrieSegmentNode[][]} - A list of all the routes that match the given route
-   */
-  lookup(route: Routes[number]["path"]) {
-    const routes: TrieSegmentNode[][] = [];
-    const sanitizedRoute = this.sanitizeRoute(route);
-    const routeSegments =
-      sanitizedRoute === "/" ? [sanitizedRoute] : sanitizedRoute.split("/");
-    let currentTrieSegment = this.root;
+		if (currentTrieSegment.type === "wildcard") {
+			// try to warn the user, then fix this
+			console.info(
+				"\x1b[33m[WARN]\x1b[0m Cannot add a route after a wild card segment",
+				`"route": \x1b[1m\x1b[36m${route}\x1b[0m`,
+			);
+			return false;
+		}
+		return true;
+	}
 
-    for (const seg of routeSegments) {
-      const dynamicChildren = orderTrieSegmentByType(
-        currentTrieSegment.children
-      ).filter(([key, child]) => key === seg || child.type === "dynamic") as [
-        string,
-        TrieSegmentNode
-      ][];
+	private resolveDynamicSegment(
+		currentTrieSegment: TrieSegmentNode,
+		method: HTTPMethod,
+		seg: string,
+		route: string,
+	) {
+		function childHasDynamicSegment(
+			children: Map<string, TrieSegmentNode>,
+		): boolean {
+			return Array.from(children).some(([, child]) => child.type === "dynamic");
+		}
 
-      if (!dynamicChildren.length) return routes; // No match found
+		if (
+			this.isDynamicSegment(seg) &&
+			childHasDynamicSegment(currentTrieSegment.children) &&
+			currentTrieSegment.data[method]
+		) {
+			// slice of `seg` from `route`
+			const lastRoute = route.slice(0, route.indexOf(seg));
+			// warn that the route is not added
+			console.info(
+				`\x1b[33m[WARN]\x1b[0m Dynamic route \x1b[1m\x1b[36m${route}\x1b[0m might conflict with the following routes`,
+				this.lookup(lastRoute).map(
+					(r) => `/${r.map((r) => r.value).join("/")}`,
+				),
+			);
 
-      currentTrieSegment = dynamicChildren[0][1]; // Move to matched child
-    }
+			return false;
+		}
 
-    this.findAllRoutes(currentTrieSegment, [currentTrieSegment], routes);
-    return routes;
-  }
+		return true;
+	}
 
-  match<RoutePath extends DynamicSegmentsRemoved<Routes[number]["path"]>>(
-    method: HTTPMethod,
-    _route: RoutePath
-  ): MatchedRoute<Routes, boolean> | null {
-    const route = this.sanitizeRoute(_route) as RoutePath;
-    const segments = route === "/" ? [route] : route.split("/");
-    const matched_route: MatchedRoute<Routes, boolean> = {
-      matched: false,
-      method: method,
-      route: _route,
-      matched_route: "",
-      params: {} as MatchedRoute<Routes, boolean>["params"],
-      data: null!,
-      middlewares: [], // Initialize middleware array
-    };
+	/**
+	 * @method lookup - Lookup a route in the trie
+	 * @param route - The route to lookup
+	 * @returns {TrieSegmentNode[][]} - A list of all the routes that match the given route
+	 */
+	lookup(route: Routes[number]["path"]) {
+		const routes: TrieSegmentNode[][] = [];
+		const sanitizedRoute = this.sanitizeRoute(route);
+		const routeSegments =
+			sanitizedRoute === "/" ? [sanitizedRoute] : sanitizedRoute.split("/");
+		let currentTrieSegment = this.root;
 
-    return this.matchAll<RoutePath>(
-      matched_route,
-      segments,
-      method
-    ) as MatchedRoute<Routes, boolean> | null;
-  }
+		for (const seg of routeSegments) {
+			const dynamicChildren = orderTrieSegmentByType(
+				currentTrieSegment.children,
+			).filter(([key, child]) => key === seg || child.type === "dynamic") as [
+				string,
+				TrieSegmentNode,
+			][];
 
-  private matchAll<R extends DynamicSegmentsRemoved<Routes[number]["path"]>>(
-    matched_route: MatchedRoute<Routes, boolean>,
-    segments: string[],
-    method: HTTPMethod,
-    paths: string[] = [segments[0]],
-    index: number = 0
-  ): MatchedRoute<Routes, boolean> | null {
-    const nextSegment = segments[index + 1];
-    const path = paths.join("/") as R;
-    const routes = this.lookup(path);
+			if (!dynamicChildren.length) return routes; // No match found
 
-    if (routes.length === 0) {
-      //@ts-ignore
-      return null; // No match found
-    }
+			currentTrieSegment = dynamicChildren[0][1]; // Move to matched child
+		}
 
-    const route = routes[0][0] as TrieSegmentNode;
+		this.findAllRoutes(currentTrieSegment, [currentTrieSegment], routes);
+		return routes;
+	}
 
-    // I don't think this will ever hit
-    if (!route) {
-      // @ts-ignore
-      return matched_route; // No route at current index
-    }
+	match<RoutePath extends DynamicSegmentsRemoved<Routes[number]["path"]>>(
+		method: HTTPMethod,
+		_route: RoutePath,
+	): MatchedRoute<Routes, boolean> | null {
+		const route = this.sanitizeRoute(_route) as RoutePath;
+		const segments = route === "/" ? [route] : route.split("/");
+		const matched_route: MatchedRoute<Routes, boolean> = {
+			matched: false,
+			method: method,
+			route: _route,
+			matched_route: "",
+			params: {} as MatchedRoute<Routes, boolean>["params"],
+			data: null,
+			middlewares: [], // Initialize middleware array
+		};
 
-    matched_route.matched_route += `/${route.value}`;
+		return this.matchAll<RoutePath>(
+			matched_route,
+			segments,
+			method,
+		) as MatchedRoute<Routes, boolean> | null;
+	}
 
-    // Collect middlewares from the current node
-    this.collectMiddlewares(route, matched_route.middlewares);
+	private matchAll<R extends DynamicSegmentsRemoved<Routes[number]["path"]>>(
+		matched_route: MatchedRoute<Routes, boolean>,
+		segments: string[],
+		method: HTTPMethod,
+		paths: string[] = [segments[0]],
+		index: number = 0,
+	): MatchedRoute<Routes, boolean> | null {
+		const nextSegment = segments[index + 1];
+		const path = paths.join("/") as R;
+		const routes = this.lookup(path);
 
-    if (!nextSegment && route.isEndOfRoute) {
-      if (route.data[method]) {
-        matched_route.matched = true;
-        matched_route.data = route.data[method] as any;
-        //@ts-ignore
-        return matched_route;
-      } else {
-        // @ts-ignore
-        return null; // Method not allowed for this route
-      }
-    }
+		if (routes.length === 0) {
+			return null; // No match found
+		}
 
-    // Check if the next segment is a child of the current route
-    if (route.children.has(nextSegment)) {
-      // Move to the next segment
-      return this.matchAll(
-        matched_route,
-        segments,
-        method,
-        [...paths, nextSegment],
-        index + 1
-      );
-    }
-    // Handle dynamic segments and wild cards
-    if (!nextSegment) {
-      //@ts-ignore
-      return null; // No match found
-    }
+		const route = routes[0][0] as TrieSegmentNode;
 
-    const orderedTrieSegments = orderTrieSegmentByType(route.children) as [
-      string,
-      TrieSegmentNode
-    ][];
+		// I don't think this will ever hit
+		if (!route) {
+			return matched_route; // No route at current index
+		}
 
-    for (const [seg, trieSegment] of orderedTrieSegments) {
-      // Switch on the current trie segment type of the route child
-      switch (trieSegment.type) {
-        case "dynamic":
-          matched_route.params[seg.slice(1)] = nextSegment;
-          return this.matchAll(
-            matched_route,
-            segments,
-            method,
-            [...paths, nextSegment],
-            index + 1
-          );
+		matched_route.matched_route += `/${route.value}`;
 
-        case "wildcard":
-          const isNamedWildcard = seg.startsWith("*") && seg.length > 1;
-          const routeSegArr = this.sanitizeRoute(
-            matched_route.matched_route
-          ).split("/");
-          // segments - routeSegArr = params
-          const params = segments.slice(routeSegArr.length);
-          // add the params to the matched_route.params
-          if (isNamedWildcard) {
-            matched_route.params[seg.slice(1)] = params.join("/");
-          } else {
-            for (let i = 0; i < params.length; i++) {
-              matched_route.params[i] = params[i];
-            }
-          }
+		// Collect middlewares from the current node
+		this.collectMiddlewares(route, matched_route.middlewares);
 
-          matched_route.matched_route += `/${seg}`;
-          if (trieSegment.data[method]) {
-            matched_route.matched = true;
-            matched_route.data = trieSegment.data[method] as any;
-            this.collectMiddlewares(trieSegment, matched_route.middlewares);
-            //@ts-ignore
-            return matched_route;
-          }
-          continue;
+		if (!nextSegment && route.isEndOfRoute) {
+			if (route.data[method]) {
+				matched_route.matched = true;
+				matched_route.data = route.data[method] as Routes[number]["data"];
+				return matched_route;
+			} else {
+				return null; // Method not allowed for this route
+			}
+		}
 
-        case "static":
-          // do a plain check
-          if (seg !== nextSegment) continue;
-          return this.matchAll(
-            matched_route,
-            segments,
-            method,
-            [...paths, nextSegment],
-            index + 1
-          );
-      }
-    }
+		// Check if the next segment is a child of the current route
+		if (route.children.has(nextSegment)) {
+			// Move to the next segment
+			return this.matchAll(
+				matched_route,
+				segments,
+				method,
+				[...paths, nextSegment],
+				index + 1,
+			);
+		}
+		// Handle dynamic segments and wild cards
+		if (!nextSegment) {
+			return null; // No match found
+		}
 
-    // @ts-ignore
-    return matched_route;
-  }
+		const orderedTrieSegments = orderTrieSegmentByType(route.children) as [
+			string,
+			TrieSegmentNode,
+		][];
 
-  private collectMiddlewares(
-    node: TrieSegmentNode,
-    middlewares: MiddlewareHandler<Context>[]
-  ) {
-    const stack: MiddlewareHandler<Context>[] = [];
-    let current: TrieSegmentNode | null = node;
-    while (current) {
-      if (current.middlewares.length > 0) {
-        stack.push(...current.middlewares);
-      }
-      current = current.prevTrieSegment;
-    }
-    // Middlewares should be executed from root to leaf, so reverse the stack
-    stack.reverse().forEach((middleware) => middlewares.push(middleware));
-  }
+		for (const [seg, trieSegment] of orderedTrieSegments) {
+			// Switch on the current trie segment type of the route child
+			switch (trieSegment.type) {
+				case "dynamic":
+					matched_route.params[seg.slice(1)] = nextSegment;
+					return this.matchAll(
+						matched_route,
+						segments,
+						method,
+						[...paths, nextSegment],
+						index + 1,
+					);
 
-  private isDynamicSegment(seg: string) {
-    return seg.startsWith(":");
-  }
+				case "wildcard": {
+					const isNamedWildcard = seg.startsWith("*") && seg.length > 1;
+					const routeSegArr = this.sanitizeRoute(
+						matched_route.matched_route,
+					).split("/");
+					// segments - routeSegArr = params
+					const params = segments.slice(routeSegArr.length);
+					// add the params to the matched_route.params
+					if (isNamedWildcard) {
+						matched_route.params[seg.slice(1)] = params.join("/");
+					} else {
+						for (let i = 0; i < params.length; i++) {
+							matched_route.params[i] = params[i];
+						}
+					}
 
-  private isWildCard(seg: string) {
-    return seg === "*" || seg.startsWith("*"); // unnamed & named wildcards
-  }
+					matched_route.matched_route += `/${seg}`;
+					if (trieSegment.data[method]) {
+						matched_route.matched = true;
+						matched_route.data = trieSegment.data[method] as Routes[number]["data"];
+						this.collectMiddlewares(trieSegment, matched_route.middlewares);
+						return matched_route;
+					}
+					continue;
+				}
 
-  private findAllRoutes(
-    currentTrieSegment: TrieSegmentNode,
-    route: TrieSegmentNode[],
-    routes: TrieSegmentNode[][]
-  ) {
-    if (currentTrieSegment.isEndOfRoute) {
-      routes.push(route);
-    }
+				case "static":
+					// do a plain check
+					if (seg !== nextSegment) continue;
+					return this.matchAll(
+						matched_route,
+						segments,
+						method,
+						[...paths, nextSegment],
+						index + 1,
+					);
+			}
+		}
 
-    for (const child of currentTrieSegment.children.values()) {
-      this.findAllRoutes(child, [...route, child], routes);
-    }
-  }
+		return matched_route;
+	}
 
-  private sanitizeRoute(r: string) {
-    if (r === "/") return r;
-    return encodeURI(r.replace(/^\/|\/$/g, "")); // Remove leading and trailing slashes
-  }
+	private collectMiddlewares(
+		node: TrieSegmentNode,
+		middlewares: MiddlewareHandler<Context>[],
+	) {
+		const stack: MiddlewareHandler<Context>[] = [];
+		let current: TrieSegmentNode | null = node;
+		while (current) {
+			if (current.middlewares.length > 0) {
+				stack.push(...current.middlewares);
+			}
+			current = current.prevTrieSegment;
+		}
+		// Middlewares should be executed from root to leaf
+		let m: MiddlewareHandler<Context> | undefined;
+		while ((m = stack.pop())) {
+			middlewares.push(m);
+		}
+	}
+
+	private isDynamicSegment(seg: string) {
+		return seg.startsWith(":");
+	}
+
+	private isWildCard(seg: string) {
+		return seg === "*" || seg.startsWith("*"); // unnamed & named wildcards
+	}
+
+	private findAllRoutes(
+		currentTrieSegment: TrieSegmentNode,
+		route: TrieSegmentNode[],
+		routes: TrieSegmentNode[][],
+	) {
+		if (currentTrieSegment.isEndOfRoute) {
+			routes.push(route);
+		}
+
+		for (const child of currentTrieSegment.children.values()) {
+			this.findAllRoutes(child, [...route, child], routes);
+		}
+	}
+
+	private sanitizeRoute(r: string) {
+		if (r === "/") return r;
+		return encodeURI(r.replace(/^\/|\/$/g, "")); // Remove leading and trailing slashes
+	}
 }

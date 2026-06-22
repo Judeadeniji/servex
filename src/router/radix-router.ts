@@ -1,300 +1,324 @@
 import $$path from "node:path";
-import {
-  orderTrieSegmentByType,
-  RadixSegmentNode,
-  type HTTPMethod,
-  type IRouter,
-  type MatchedRoute,
-  type Route,
-  type SegmentType,
-} from "./base";
-import type { DynamicSegmentsRemoved, RouteMatch, ExtractUrl } from "./types";
 import type { Context } from "../context";
 import type { MiddlewareHandler } from "../types";
+import {
+	type HTTPMethod,
+	type IRouter,
+	type MatchedRoute,
+	RadixSegmentNode,
+	type Route,
+	type SegmentType,
+} from "./base";
+import type { DynamicSegmentsRemoved, ExtractUrl, } from "./types";
 
 /**
  * Radix Tree implementation for route matching.
  */
 export class RadixRouteTrie<Routes extends Route[]> implements IRouter<Routes> {
-  private root = new RadixSegmentNode("/");
-  private subTries = new Map<string, RadixRouteTrie<Routes>>();
-  #routes: Set<Route<Routes[number]["data"]>> = new Set();
+	private root = new RadixSegmentNode("/");
+	private subTries = new Map<string, RadixRouteTrie<Routes>>();
+	#routes: Set<Route<Routes[number]["data"]>> = new Set();
 
-  /**
-   * Retrieves all registered routes.
-   */
-  get routes() {
-    return Array.from(this.#routes);
-  }
+	/**
+	 * Retrieves all registered routes.
+	 */
+	get routes() {
+		return Array.from(this.#routes);
+	}
 
-  pushMiddlewares<C extends Context>(
-    path: string,
-    middlewares: MiddlewareHandler<C>[]
-  ): void {
-    const sanitizedPath = this.sanitizeRoute(path);
+	pushMiddlewares<C extends Context>(
+		path: string,
+		middlewares: MiddlewareHandler<C>[],
+	): void {
+		const sanitizedPath = this.sanitizeRoute(path);
 
-    if (sanitizedPath === "*") {
-      for (const route of this.#routes) {
-        this.addMiddlewareToPath(route.path, middlewares);
-      }
-      this.addGlobalMiddleware(middlewares);
-    } else {
-      this.addMiddlewareToPath(sanitizedPath, middlewares);
-    }
-  }
+		if (sanitizedPath === "*") {
+			for (const route of this.#routes) {
+				this.addMiddlewareToPath(route.path, middlewares);
+			}
+			this.addGlobalMiddleware(middlewares);
+		} else {
+			this.addMiddlewareToPath(sanitizedPath, middlewares);
+		}
+	}
 
-  private addMiddlewareToPath<C extends Context>(
-    path: string,
-    middlewares: MiddlewareHandler<C>[]
-  ): void {
-    const segments = path === "/" ? [path] : path.split("/");
-    let currentRadixSegment = this.root;
+	private addMiddlewareToPath<C extends Context>(
+		path: string,
+		middlewares: MiddlewareHandler<C>[],
+	): void {
+		const segments = path === "/" ? [path] : path.split("/");
+		let currentRadixSegment = this.root;
 
-    for (let i = 0; i < segments.length; i++) {
-      const seg = segments[i];
-      const isLastSegment = i === segments.length - 1;
+		for (let i = 0; i < segments.length; i++) {
+			const seg = segments[i];
+			const isLastSegment = i === segments.length - 1;
 
-      if (seg === "*") {
-        this.applyMiddlewareToAllChildren(currentRadixSegment, middlewares);
-        break; // Wildcard applies to all subsequent paths
-      }
+			if (seg === "*") {
+				this.applyMiddlewareToAllChildren(currentRadixSegment, middlewares);
+				break; // Wildcard applies to all subsequent paths
+			}
 
-      if (!currentRadixSegment.children.has(seg)) {
-        const radixSegment = new RadixSegmentNode(seg);
-        radixSegment.previousRadixSegment = currentRadixSegment;
-        currentRadixSegment.children.set(seg, radixSegment);
-      }
+			if (!currentRadixSegment.children.has(seg)) {
+				const radixSegment = new RadixSegmentNode(seg);
+				radixSegment.previousRadixSegment = currentRadixSegment;
+				currentRadixSegment.children.set(seg, radixSegment);
+			}
 
-      currentRadixSegment = currentRadixSegment.children.get(seg)!;
+			currentRadixSegment = currentRadixSegment.children.get(seg)!;
 
-      if (isLastSegment) {
-        currentRadixSegment.middlewares.push(...middlewares as MiddlewareHandler<Context>[]);
-      }
-    }
-  }
+			if (isLastSegment) {
+				currentRadixSegment.middlewares.push(
+					...(middlewares as MiddlewareHandler<Context>[]),
+				);
+			}
+		}
+	}
 
-  private applyMiddlewareToAllChildren<C extends Context>(
-    segment: RadixSegmentNode,
-    middlewares: MiddlewareHandler<C>[]
-  ): void {
-    segment.middlewares.push(...middlewares as MiddlewareHandler<Context>[]);
+	private applyMiddlewareToAllChildren<C extends Context>(
+		segment: RadixSegmentNode,
+		middlewares: MiddlewareHandler<C>[],
+	): void {
+		segment.middlewares.push(...(middlewares as MiddlewareHandler<Context>[]));
 
-    for (const child of segment.children.values()) {
-      this.applyMiddlewareToAllChildren(child, middlewares);
-    }
-  }
+		for (const child of segment.children.values()) {
+			this.applyMiddlewareToAllChildren(child, middlewares);
+		}
+	}
 
-  private addGlobalMiddleware<C extends Context>(
-    middlewares: MiddlewareHandler<C>[]
-  ): void {
-    const applyMiddlewareToSegment = (segment: RadixSegmentNode) => {
-      segment.middlewares.push(...middlewares as MiddlewareHandler<Context>[]);
-      for (const child of segment.children.values()) {
-        applyMiddlewareToSegment(child);
-      }
-    };
-    applyMiddlewareToSegment(this.root);
-  }
+	private addGlobalMiddleware<C extends Context>(
+		middlewares: MiddlewareHandler<C>[],
+	): void {
+		const applyMiddlewareToSegment = (segment: RadixSegmentNode) => {
+			segment.middlewares.push(
+				...(middlewares as MiddlewareHandler<Context>[]),
+			);
+			for (const child of segment.children.values()) {
+				applyMiddlewareToSegment(child);
+			}
+		};
+		applyMiddlewareToSegment(this.root);
+	}
 
-  private collectMiddlewares(node: RadixSegmentNode) {
-    const arrays: MiddlewareHandler<Context>[][] = [];
-    let current: RadixSegmentNode | null = node;
-    let size = 0;
-    while (current) {
-      if (current.middlewares.length > 0) {
-        arrays.push(current.middlewares);
-        size += current.middlewares.length;
-      }
-      current = current.previousRadixSegment;
-    }
-    const result = new Array<MiddlewareHandler<Context>>(size);
-    let idx = 0;
-    for (let i = arrays.length - 1; i >= 0; i--) {
-      const arr = arrays[i];
-      for (let j = 0; j < arr.length; j++) {
-        result[idx++] = arr[j];
-      }
-    }
-    return result;
-  }
+	private collectMiddlewares(node: RadixSegmentNode) {
+		const arrays: MiddlewareHandler<Context>[][] = [];
+		let current: RadixSegmentNode | null = node;
+		let size = 0;
+		while (current) {
+			if (current.middlewares.length > 0) {
+				arrays.push(current.middlewares);
+				size += current.middlewares.length;
+			}
+			current = current.previousRadixSegment;
+		}
+		const result = new Array<MiddlewareHandler<Context>>(size);
+		let idx = 0;
+		for (let i = arrays.length - 1; i >= 0; i--) {
+			const arr = arrays[i];
+			for (let j = 0; j < arr.length; j++) {
+				result[idx++] = arr[j];
+			}
+		}
+		return result;
+	}
 
-  /**
-   * Adds a new route to the Radix Tree.
-   * @param route - The route to add.
-   */
-  addRoute(route: Route<Routes[number]["data"]>): void {
-    const { method, path: routePath, data } = route;
-    const sanitizedPath = this.sanitizeRoute(routePath);
-    const segments = sanitizedPath === "/" ? [""] : sanitizedPath.split("/");
+	/**
+	 * Adds a new route to the Radix Tree.
+	 * @param route - The route to add.
+	 */
+	addRoute(route: Route<Routes[number]["data"]>): void {
+		const { method, path: routePath, data } = route;
+		const sanitizedPath = this.sanitizeRoute(routePath);
+		const segments = sanitizedPath === "/" ? [""] : sanitizedPath.split("/");
 
-    let currentNode = this.root;
+		let currentNode = this.root;
 
-    for (let i = 0; i < segments.length; i++) {
-      const segment = segments[i];
-      const isLastSegment = i === segments.length - 1;
+		for (let i = 0; i < segments.length; i++) {
+			const segment = segments[i];
+			const isLastSegment = i === segments.length - 1;
 
-      // Determine segment type
-      let type: SegmentType = "static";
-      let segmentKey = segment;
+			// Determine segment type
+			let type: SegmentType = "static";
+			let segmentKey = segment;
 
-      if (this.isWildcard(segment)) {
-        type = "wildcard";
-      } else if (this.isDynamic(segment)) {
-        type = "dynamic";
-        segmentKey = "*"; // Use a placeholder for dynamic segments
-      }
+			if (this.isWildcard(segment)) {
+				type = "wildcard";
+			} else if (this.isDynamic(segment)) {
+				type = "dynamic";
+				segmentKey = "*"; // Use a placeholder for dynamic segments
+			}
 
-      // Insert or retrieve the child node
-      const childNode = currentNode.insertChild(segmentKey, type);
+			// Insert or retrieve the child node
+			const childNode = currentNode.insertChild(segmentKey, type);
 
-      // For dynamic segments, store the parameter name
-      if (type === "dynamic") {
-        const paramName = segment.slice(1);
-        childNode.paramsKeys.push(paramName);
-      }
+			// For dynamic segments, store the parameter name
+			if (type === "dynamic") {
+				const paramName = segment.slice(1);
+				childNode.paramsKeys.push(paramName);
+			}
 
-      currentNode = childNode;
+			currentNode = childNode;
 
-      // Prevent adding routes after a wildcard segment
-      if (currentNode.type === "wildcard" && !isLastSegment) {
-        console.warn(
-          `Cannot add route "${routePath}" after a wildcard segment. Route will be ignored.`
-        );
-        return;
-      }
-    }
+			// Prevent adding routes after a wildcard segment
+			if (currentNode.type === "wildcard" && !isLastSegment) {
+				console.warn(
+					`Cannot add route "${routePath}" after a wildcard segment. Route will be ignored.`,
+				);
+				return;
+			}
+		}
 
-    if (currentNode.isEndOfRoute) {
-      console.warn(
-        `Route "${routePath}" for method "${method}" is being overwritten.`
-      );
-    }
+		if (currentNode.isEndOfRoute) {
+			console.warn(
+				`Route "${routePath}" for method "${method}" is being overwritten.`,
+			);
+		}
 
-    currentNode.isEndOfRoute = true;
-    currentNode.data[method.toUpperCase() as HTTPMethod] = data;
-    this.#routes.add(route);
-  }
+		currentNode.isEndOfRoute = true;
+		currentNode.data[method.toUpperCase() as HTTPMethod] = data;
+		this.#routes.add(route);
+	}
 
+	addSubTrie(parent: string, trie: RadixRouteTrie<Routes>) {
+		const sanitizedPath = this.sanitizeRoute(parent);
+		if (this.subTries.has(sanitizedPath)) {
+			console.warn(
+				`SubTrie for path "${sanitizedPath}" already exists. Overwriting...`,
+			);
+		}
+		const routes = trie.routes.map((route) => {
+			route.path = $$path.join(sanitizedPath, route.path);
+			return route;
+		});
 
-  addSubTrie(parent: string, trie: RadixRouteTrie<Routes>) {
-    const sanitizedPath = this.sanitizeRoute(parent);
-    if (this.subTries.has(sanitizedPath)) {
-      console.warn(
-        `SubTrie for path "${sanitizedPath}" already exists. Overwriting...`
-      );
-    }
-    const routes = trie.routes.map((route) => {
-      route.path = $$path.join(sanitizedPath, route.path);
-      return route;
-    });
+		for (const route of routes) {
+			this.addRoute(route);
+		}
 
-    for (const route of routes) {
-      this.addRoute(route);
-    }
+		return this;
+	}
 
-    return this;
-  }
+	private buildMatchResult(
+		node: RadixSegmentNode,
+		method: HTTPMethod,
+		url: string,
+		matchedRoute: string,
+		params: ExtractUrl<Routes[number]["path"]>["params"] &
+			Record<string, string>,
+	): MatchedRoute<Routes, boolean> {
+		return {
+			matched: true,
+			method,
+			route: url as Routes[number]["path"],
+			matched_route: matchedRoute,
+			params: params,
+			data: node.data[method] as Routes[number]["data"],
+			middlewares: this.collectMiddlewares(node),
+		};
+	}
 
-  private buildMatchResult(
-    node: RadixSegmentNode,
-    method: HTTPMethod,
-    url: string,
-    matchedRoute: string,
-    params: ExtractUrl<Routes[number]["path"]>["params"] & Record<string, string>
-  ): MatchedRoute<Routes, boolean> {
-    return {
-      matched: true,
-      method,
-      route: url as Routes[number]["path"],
-      matched_route: matchedRoute,
-      params: params,
-      data: node.data[method] as Routes[number]["data"],
-      middlewares: this.collectMiddlewares(node),
-    };
-  }
+	match<RoutePath extends DynamicSegmentsRemoved<Routes[number]["path"]>>(
+		method: HTTPMethod,
+		url: RoutePath,
+	): MatchedRoute<Routes, boolean> | null {
+		let sanitizedPath = url as unknown as string;
+		if (sanitizedPath.charCodeAt(0) === 47)
+			sanitizedPath = sanitizedPath.slice(1);
+		if (
+			sanitizedPath.length > 0 &&
+			sanitizedPath.charCodeAt(sanitizedPath.length - 1) === 47
+		) {
+			sanitizedPath = sanitizedPath.slice(0, -1);
+		}
+		const segments = sanitizedPath === "" ? [""] : sanitizedPath.split("/");
+		const params = {} as ExtractUrl<Routes[number]["path"]>["params"] &
+			Record<string, string>;
+		let currentNode = this.root;
+		let matchedRoute = "";
+		const methodUpper = method.toUpperCase() as HTTPMethod;
 
-  match<RoutePath extends DynamicSegmentsRemoved<Routes[number]["path"]>>(method: HTTPMethod, url: RoutePath): MatchedRoute<Routes, boolean> | null {
-    let sanitizedPath = url as unknown as string;
-    if (sanitizedPath.charCodeAt(0) === 47) sanitizedPath = sanitizedPath.slice(1);
-    if (sanitizedPath.length > 0 && sanitizedPath.charCodeAt(sanitizedPath.length - 1) === 47) {
-      sanitizedPath = sanitizedPath.slice(0, -1);
-    }
-    const segments = sanitizedPath === "" ? [""] : sanitizedPath.split("/");
-    const params = {} as ExtractUrl<Routes[number]["path"]>["params"] & Record<string, string>;
-    let currentNode = this.root;
-    let matchedRoute = "";
-    let methodUpper = method.toUpperCase() as HTTPMethod;
+		for (let i = 0; i < segments.length; i++) {
+			const segment = segments[i];
 
-    for (let i = 0; i < segments.length; i++) {
-      const segment = segments[i];
+			const staticChild = currentNode.children.get(segment);
+			if (staticChild && staticChild.type === "static") {
+				matchedRoute += `/${staticChild.value}`;
+				currentNode = staticChild;
+				continue;
+			}
 
-      const staticChild = currentNode.children.get(segment);
-      if (staticChild && staticChild.type === "static") {
-        matchedRoute += `/${staticChild.value}`;
-        currentNode = staticChild;
-        continue;
-      }
+			const dynamicChild = currentNode.children.get("*");
+			if (dynamicChild && dynamicChild.type === "dynamic") {
+				const paramName = dynamicChild.paramsKeys[0];
+				params[paramName] = segment;
+				matchedRoute += `/${segment}`;
+				currentNode = dynamicChild;
+				continue;
+			}
 
-      const dynamicChild = currentNode.children.get("*");
-      if (dynamicChild && dynamicChild.type === "dynamic") {
-        const paramName = dynamicChild.paramsKeys[0];
-        params[paramName] = segment;
-        matchedRoute += `/${segment}`;
-        currentNode = dynamicChild;
-        continue;
-      }
+			let wildcardMatched = false;
+			for (const child of currentNode.children.values()) {
+				if (child.type === "wildcard") {
+					matchedRoute += `/${child.value}`;
+					if (child.isEndOfRoute && child.data[methodUpper]) {
+						const remainingSegments = segments.slice(i).join("/");
+						const paramName =
+							child.value.length > 1 ? child.value.slice(1) : String(i);
+						params[paramName] = remainingSegments;
+						return this.buildMatchResult(
+							child,
+							method,
+							url as string,
+							matchedRoute,
+							params,
+						);
+					}
+					wildcardMatched = true;
+					currentNode = child;
+					break;
+				}
+			}
 
-      let wildcardMatched = false;
-      for (const child of currentNode.children.values()) {
-        if (child.type === "wildcard") {
-          matchedRoute += `/${child.value}`;
-          if (child.isEndOfRoute && child.data[methodUpper]) {
-            const remainingSegments = segments.slice(i).join("/");
-            const paramName = child.value.length > 1 ? child.value.slice(1) : String(i);
-            params[paramName] = remainingSegments;
-            return this.buildMatchResult(child, method, url as string, matchedRoute, params);
-          }
-          wildcardMatched = true;
-          currentNode = child;
-          break;
-        }
-      }
+			if (!wildcardMatched) return null;
+		}
 
-      if (!wildcardMatched) return null;
-    }
+		if (currentNode.isEndOfRoute && currentNode.data[methodUpper]) {
+			return this.buildMatchResult(
+				currentNode,
+				method,
+				url as string,
+				matchedRoute,
+				params,
+			);
+		}
 
-    if (currentNode.isEndOfRoute && currentNode.data[methodUpper]) {
-      return this.buildMatchResult(currentNode, method, url as string, matchedRoute, params);
-    }
+		return null;
+	}
 
-    return null;
-  }
+	/**
+	 * Sanitizes a route by removing leading/trailing slashes and encoding URI components.
+	 * @param route - The route to sanitize.
+	 * @returns The sanitized route.
+	 */
+	private sanitizeRoute(route: string): string {
+		if (route === "/") return "";
+		return encodeURI(route.replace(/^\/|\/$/g, ""));
+	}
 
-  /**
-   * Sanitizes a route by removing leading/trailing slashes and encoding URI components.
-   * @param route - The route to sanitize.
-   * @returns The sanitized route.
-   */
-  private sanitizeRoute(route: string): string {
-    if (route === "/") return "";
-    return encodeURI(route.replace(/^\/|\/$/g, ""));
-  }
+	/**
+	 * Checks if a segment is dynamic (e.g., ":id").
+	 * @param segment - The segment to check.
+	 * @returns True if dynamic, else false.
+	 */
+	private isDynamic(segment: string): boolean {
+		return segment.startsWith(":");
+	}
 
-  /**
-   * Checks if a segment is dynamic (e.g., ":id").
-   * @param segment - The segment to check.
-   * @returns True if dynamic, else false.
-   */
-  private isDynamic(segment: string): boolean {
-    return segment.startsWith(":");
-  }
-
-  /**
-   * Checks if a segment is a wildcard (e.g., "*" or "*path").
-   * @param segment - The segment to check.
-   * @returns True if wildcard, else false.
-   */
-  private isWildcard(segment: string): boolean {
-    return segment === "*" || segment.startsWith("*");
-  }
+	/**
+	 * Checks if a segment is a wildcard (e.g., "*" or "*path").
+	 * @param segment - The segment to check.
+	 * @returns True if wildcard, else false.
+	 */
+	private isWildcard(segment: string): boolean {
+		return segment === "*" || segment.startsWith("*");
+	}
 }

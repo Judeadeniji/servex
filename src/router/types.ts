@@ -1,52 +1,54 @@
-export type UnionToTuple<U, T extends any[] = []> = 
-    [U] extends [never] ? T : 
-    UnionToTuple<Exclude<U, U>, [...T, U]>;
-
+export type UnionToTuple<U, T extends unknown[] = []> = [U] extends [never]
+	? T
+	: UnionToTuple<Exclude<U, U>, [...T, U]>;
 
 export type Split<
-  S extends string,
-  D extends string
+	S extends string,
+	D extends string,
 > = S extends `${infer T}${D}${infer U}` ? [T, ...Split<U, D>] : [S];
 
+// biome-ignore lint/complexity/noBannedTypes: We need a catch-all for functions here
 export type Coerce<T> = T extends Function
-  ? T
-  : T extends object
-  ? { [K in keyof T]: Coerce<T[K]> }
-  : T;
-
+	? T
+	: T extends object
+		? { [K in keyof T]: Coerce<T[K]> }
+		: T;
 
 // Get path part of URL
-type GetPath<T extends string> = T extends `${infer Path}?${string}`
-  ? Path
-  : T;
+type GetPath<T extends string> = T extends `${infer Path}?${string}` ? Path : T;
 
 // Get query part of URL
 type GetQuery<T extends string> = T extends `${string}?${infer Query}`
-  ? Query
-  : "";
+	? Query
+	: "";
 
 // Extract path parameters
-type PathParams<Path extends string> = Path extends `${string}:${infer Param}/${infer Rest}`
-  ? { [K in Param]: string } & PathParams<Rest>
-  : Path extends `${string}:${infer Param}`
-    ? { [K in Param]: string }
-    : Path extends `${string}*${infer Param}/${infer Rest}`
-      ? { [K in Param]: string } & PathParams<Rest>
-      : Path extends `${string}*${infer Param}`
-        ? { [K in Param]: string }
-        : {};
+type PathParams<Path extends string> =
+	Path extends `${string}:${infer Param}/${infer Rest}`
+		? { [K in Param]: string } & PathParams<Rest>
+		: Path extends `${string}:${infer Param}`
+			? { [K in Param]: string }
+			: Path extends `${string}*${infer Param}/${infer Rest}`
+				? { [K in Param]: string } & PathParams<Rest>
+				: Path extends `${string}*${infer Param}`
+					? { [K in Param]: string }
+					// biome-ignore lint/complexity/noBannedTypes: empty schema requires {}
+					: {};
 
 // Extract query parameters
-type QueryParams<Query extends string> = Query extends `${infer Param}=${string}${infer Rest}`
-  ? { [K in Param]: string } & (Rest extends `&${infer Next}`
-    ? QueryParams<Next>
-    : {})
-  : {};
+type QueryParams<Query extends string> =
+	Query extends `${infer Param}=${string}${infer Rest}`
+		? { [K in Param]: string } & (Rest extends `&${infer Next}`
+				? QueryParams<Next>
+				// biome-ignore lint/complexity/noBannedTypes: empty schema requires {}
+				: {})
+		// biome-ignore lint/complexity/noBannedTypes: empty schema requires {}
+		: {};
 
 // Main type to extract both path and query parameters
 export type ExtractUrl<T extends string> = Coerce<{
-  params: PathParams<GetPath<T>>;
-  queries: QueryParams<GetQuery<T>>;
+	params: PathParams<GetPath<T>>;
+	queries: QueryParams<GetQuery<T>>;
 }>;
 
 // Example usage
@@ -88,71 +90,80 @@ type Test3 = ResultSingleParam extends {
 */
 
 // Type to replace dynamic segments with `${string}` and prevent double slashes
-type ReplaceDynamicSegments<T extends string[]> = 
-  T extends [] 
-    ? ""
-    : T extends [infer F extends string, ...infer R extends string[]]
-      ? F extends "" // Handle leading empty segments
-        ? `/${ReplaceDynamicSegments<R>}` // Skip leading empty segments
-        : F extends `:${infer Param}` // Dynamic segment
-          ? `${string}${R extends [] ? "" : "/"}` // Replace with ${string} and handle trailing slash
-          : F extends `*` // Wildcard segment
-            ? `${string}${R extends [] ? "" : "/"}` // Replace with ${string} and handle trailing slash
-            : `${F}${R extends [] ? "" : "/"}` | `${F}/${ReplaceDynamicSegments<R>}` // Normal segment
-      : never;
+type ReplaceDynamicSegments<T extends string[]> = T extends []
+	? ""
+	: T extends [infer F extends string, ...infer R extends string[]]
+		? F extends "" // Handle leading empty segments
+			? `/${ReplaceDynamicSegments<R>}` // Skip leading empty segments
+			: F extends `:${infer Param}` // Dynamic segment
+				? `${string}${R extends [] ? "" : "/"}` // Replace with ${string} and handle trailing slash
+				: F extends `*` // Wildcard segment
+					? `${string}${R extends [] ? "" : "/"}` // Replace with ${string} and handle trailing slash
+					:
+							| `${F}${R extends [] ? "" : "/"}`
+							| `${F}/${ReplaceDynamicSegments<R>}` // Normal segment
+		: never;
 
-
-export type DynamicSegmentsRemoved<Routes extends string> = ReplaceDynamicSegments<Split<Routes, "/">>;
+export type DynamicSegmentsRemoved<Routes extends string> =
+	ReplaceDynamicSegments<Split<Routes, "/">>;
 
 type ExtractSegments<T extends string> = Split<GetPath<T>, "/">;
 
-type MatchSegment<Route extends string, Actual extends string> = 
-  Route extends `:${string}` ? true :
-  Route extends Actual ? true :
-  false;
+type MatchSegment<
+	Route extends string,
+	Actual extends string,
+> = Route extends `:${string}` ? true : Route extends Actual ? true : false;
 
 type MatchPath<
-  RouteParts extends string[],
-  ActualParts extends string[],
-> = RouteParts extends [infer RouteFirst extends string, ...infer RouteRest extends string[]]
-  ? ActualParts extends [infer ActualFirst extends string, ...infer ActualRest extends string[]]
-    ? MatchSegment<RouteFirst, ActualFirst> extends true
-      ? MatchPath<RouteRest, ActualRest>
-      : false
-    : false
-  : RouteParts["length"] extends ActualParts["length"]
-    ? true
-    : false;
+	RouteParts extends string[],
+	ActualParts extends string[],
+> = RouteParts extends [
+	infer RouteFirst extends string,
+	...infer RouteRest extends string[],
+]
+	? ActualParts extends [
+			infer ActualFirst extends string,
+			...infer ActualRest extends string[],
+		]
+		? MatchSegment<RouteFirst, ActualFirst> extends true
+			? MatchPath<RouteRest, ActualRest>
+			: false
+		: false
+	: RouteParts["length"] extends ActualParts["length"]
+		? true
+		: false;
 
 type MatchQuery<RouteQuery extends string, ActualQuery extends string> =
-  QueryParams<RouteQuery> extends QueryParams<ActualQuery>
-    ? QueryParams<ActualQuery> extends QueryParams<RouteQuery>
-      ? true
-      : false
-    : false;
+	QueryParams<RouteQuery> extends QueryParams<ActualQuery>
+		? QueryParams<ActualQuery> extends QueryParams<RouteQuery>
+			? true
+			: false
+		: false;
 
 // Main route matching type
 export type RouteMatch<Route extends string, Actual extends string> =
-  MatchPath<ExtractSegments<Route>, ExtractSegments<Actual>> extends true
-    ? GetQuery<Route> extends ""
-      ? GetQuery<Actual> extends ""
-        ? true
-        : false
-      : MatchQuery<GetQuery<Route>, GetQuery<Actual>>
-    : false;
+	MatchPath<ExtractSegments<Route>, ExtractSegments<Actual>> extends true
+		? GetQuery<Route> extends ""
+			? GetQuery<Actual> extends ""
+				? true
+				: false
+			: MatchQuery<GetQuery<Route>, GetQuery<Actual>>
+		: false;
 
 // Helper type to ensure the paths are correctly formatted
 type TrimSlash<T extends string> = T extends `/${infer U}` ? U : T;
 
 // Main type to merge two paths
-export type MergePaths<P1 extends string, P2 extends string> = 
-  P1 extends `${infer R1}/`
-    ? P2 extends `/${infer R2}`
-      ? `/${R1}/${R2}`
-      : `/${R1}/${TrimSlash<P2>}`
-    : P2 extends `/${infer R2}`
-      ? `/${TrimSlash<P1>}/${R2}`
-      : `/${TrimSlash<P1>}/${TrimSlash<P2>}`;
+export type MergePaths<
+	P1 extends string,
+	P2 extends string,
+> = P1 extends `${infer R1}/`
+	? P2 extends `/${infer R2}`
+		? `/${R1}/${R2}`
+		: `/${R1}/${TrimSlash<P2>}`
+	: P2 extends `/${infer R2}`
+		? `/${TrimSlash<P1>}/${R2}`
+		: `/${TrimSlash<P1>}/${TrimSlash<P2>}`;
 
 /**
  * Type-level mirror of the `normalisePath()` runtime function.
@@ -161,13 +172,15 @@ export type MergePaths<P1 extends string, P2 extends string> =
  * - Leaves the root `"/"` unchanged.
  */
 type TrimTrailingSlash<S extends string> = S extends `${infer R}/`
-  ? TrimTrailingSlash<R>
-  : S;
-type EnsureLeadingSlash<S extends string> = S extends `/${string}` ? S : `/${S}`;
+	? TrimTrailingSlash<R>
+	: S;
+type EnsureLeadingSlash<S extends string> = S extends `/${string}`
+	? S
+	: `/${S}`;
 
 export type NormalisePath<B extends string> = B extends "/"
-  ? "/"
-  : EnsureLeadingSlash<TrimTrailingSlash<B>>;
+	? "/"
+	: EnsureLeadingSlash<TrimTrailingSlash<B>>;
 
 /**
  * Produces the absolute path for a route with relative path `P` on an app
@@ -177,5 +190,5 @@ export type NormalisePath<B extends string> = B extends "/"
  * `MergePaths<"/", "/users">` would produce the incorrect `"//users"`.
  */
 export type AbsolutePath<B extends string, P extends string> = B extends "/"
-  ? P
-  : MergePaths<B, P>;
+	? P
+	: MergePaths<B, P>;
