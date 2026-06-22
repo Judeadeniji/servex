@@ -336,7 +336,11 @@ export interface ServeXRouter<
 	 * Natively injected static responses (if nativeStaticResponse is enabled).
 	 * Strictly typed with all known route paths.
 	 */
-	static?: Record<string, Response> & { [K in keyof S]?: Response };
+	static?: Record<string, Response> & { 
+		[K in keyof S]?: S[K] extends { GET: infer R }
+			? R extends Response ? R : Response & TypedResponse<R, 200>
+			: Response
+	};
 
 	/**
 	 * Handle an incoming `Request` — compatible with Cloudflare Workers, Bun,
