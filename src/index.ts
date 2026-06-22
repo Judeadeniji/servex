@@ -528,7 +528,6 @@ export class ServeXApp<E extends Env = Env, S = {}, B extends string = "/"> exte
         trace: []
     };
     public compiledCache = new Map<string, (context: Context) => Promise<Response | undefined>>();
-    private aotCompiled = false;
 
     /**
      * The literal base path this app is scoped to.
