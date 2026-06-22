@@ -52,6 +52,13 @@ export interface ServerOptions<B extends string = "/"> {
 	 */
 	basePath?: B;
 	/**
+	 * Enable Ahead-Of-Time (AOT) / Just-In-Time (JIT) compilation of handler chains.
+	 * If true, handler chains are compiled into highly optimized synchronous fast-paths.
+	 * If false, it falls back to the native recursive loop execution.
+	 * Default: true
+	 */
+	aot?: boolean;
+	/**
 	 * Enable debug mode. If true, full stack traces will be returned in 500 error responses,
 	 * and the `context.debug` flag will be set to true for use in middlewares.
 	 * Default: false

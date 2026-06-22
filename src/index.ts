@@ -72,20 +72,25 @@ export function baseFetch(
   compiledCache: Map<string, (context: Context) => Promise<Response | undefined>>,
   envBindings?: Record<string, unknown>,
   executionCtx?: unknown,
-  debug: boolean = false
+  debug: boolean = false,
+  aot: boolean = true
 ): Response | Promise<Response> {
   // ── Fast Path (No Hooks) ───────────────────────────────────────────────────
   if (hooks.onRequest.length === 0 && hooks.onBeforeHandle.length === 0 && hooks.onAfterHandle.length === 0 && hooks.onError.length === 0 && hooks.trace.length === 0) {
     const route = router.match(method, pathname);
     if (route?.matched) {
-      let executor = route.store?.executor as ((context: Context) => Promise<Response | undefined>) | undefined;
-      if (!executor) {
-        executor = compiledCache.get(method + route.matched_route);
+      const handlers = [...middlewares, ...route.middlewares, ...route.data];
+      let executor: ((context: Context) => Promise<Response | undefined>) | undefined;
+      
+      if (aot) {
+        executor = route.store?.executor as ((context: Context) => Promise<Response | undefined>) | undefined;
         if (!executor) {
-          const handlers = [...middlewares, ...route.middlewares, ...route.data];
-          executor = compileHandlerChain(handlers);
-          if (route.store) route.store.executor = executor;
-          compiledCache.set(method + route.matched_route, executor!);
+          executor = compiledCache.get(method + route.matched_route);
+          if (!executor) {
+            executor = compileHandlerChain(handlers);
+            if (route.store) route.store.executor = executor;
+            compiledCache.set(method + route.matched_route, executor);
+          }
         }
       }
       
@@ -127,11 +132,17 @@ export function baseFetch(
       };
 
       try {
-        const res = executor!(context);
-        if (res instanceof Promise) {
-          return res.then(handleValue).catch(error => handleValue(resolveError(error)));
+        let res: Response | Promise<Response | void> | void;
+        if (aot) {
+          res = executor!(context);
+        } else {
+          res = executeHandlers(context, handlers);
         }
-        return handleValue(res);
+        
+        if (res instanceof Promise) {
+          return res.then((r) => handleValue(r as Response | undefined)).catch(error => handleValue(resolveError(error)));
+        }
+        return handleValue(res as Response | undefined);
       } catch (error) {
         return handleValue(resolveError(error));
       }
@@ -152,7 +163,8 @@ async function baseFetchSlow(
   compiledCache: Map<string, (context: Context) => Promise<Response | undefined>>,
   envBindings?: Record<string, unknown>,
   executionCtx?: unknown,
-  debug: boolean = false
+  debug: boolean = false,
+  aot: boolean = true
 ): Promise<Response> {
   let context: Context | undefined ;
   let response: Response | undefined;
@@ -281,21 +293,30 @@ async function baseFetchSlow(
 
     let _result: Response | undefined ;
 
+    const handlers = [...middlewares, ...routeMids, ...routeData];
+
     // ── 3. Execute handlers ───────────────────────────────────────────────────
-    let executor = route.store?.executor as ((context: Context) => Promise<Response | undefined>) | undefined;
-    if (!executor) {
-      executor = compiledCache.get(method + route.matched_route);
+    let executor: ((context: Context) => Promise<Response | undefined>) | undefined;
+    if (aot) {
+      executor = route.store?.executor as ((context: Context) => Promise<Response | undefined>) | undefined;
       if (!executor) {
-        const handlers = [...middlewares, ...routeMids, ...routeData];
-        executor = compileHandlerChain(handlers);
-        if (route.store) route.store.executor = executor;
-        compiledCache.set(method + route.matched_route, executor!);
+        executor = compiledCache.get(method + route.matched_route);
+        if (!executor) {
+          executor = compileHandlerChain(handlers);
+          if (route.store) route.store.executor = executor;
+          compiledCache.set(method + route.matched_route, executor);
+        }
       }
     }
 
     const executeHandle = async () => {
-      const result = await executor?.(context!);
-      return result || new Response("Not Found", { status: 404 });
+      let result;
+      if (aot) {
+        result = await executor?.(context!);
+      } else {
+        result = await executeHandlers(context!, handlers);
+      }
+      return (result as Response | undefined) || new Response("Not Found", { status: 404 });
     };
     response = await runTracePhase(traceListeners?.handle, executeHandle);
 
@@ -507,6 +528,7 @@ export class ServeXApp<E extends Env = Env, S = {}, B extends string = "/"> exte
         trace: []
     };
     public compiledCache = new Map<string, (context: Context) => Promise<Response | undefined>>();
+    private aotCompiled = false;
 
     /**
      * The literal base path this app is scoped to.
@@ -519,7 +541,8 @@ export class ServeXApp<E extends Env = Env, S = {}, B extends string = "/"> exte
         router: RouterAdapter<ServerRoute[]>,
         private middlewares: Handler<Context>[],
         basePath: B = "/" as B,
-        public debug: boolean = false
+        public debug: boolean = false,
+        public aot: boolean = true
     ) {
         super(router);
         // normalisePath at runtime; cast to B since the normalised form is the
@@ -574,7 +597,7 @@ export class ServeXApp<E extends Env = Env, S = {}, B extends string = "/"> exte
 
         const method = request.method as Method;
 
-        return baseFetch(this.routerAdapter, request, method, pathname, this.middlewares, this.hooks, this.compiledCache, env, executionCtx, this.debug);
+        return baseFetch(this.routerAdapter, request, method, pathname, this.middlewares, this.hooks, this.compiledCache, env, executionCtx, this.debug, this.aot);
     };
 
     request = (input: RequestInfo, init?: RequestInit): Promise<Response> | Response => {
@@ -585,7 +608,7 @@ export class ServeXApp<E extends Env = Env, S = {}, B extends string = "/"> exte
 export function createServer<E extends Env = Env, B extends string = "/">(
     options: ServerOptions<B> = {} as ServerOptions<B>
 ): ServeXRouter<E, {}, NormalisePath<B>> & ServeXApp<E, {}, NormalisePath<B>> {
-  const { router = RouterType.SONIC, middlewares = [], basePath, debug = false } = options;
+  const { router = RouterType.SONIC, middlewares = [], basePath, debug = false, aot = true } = options;
   const routerAdapter = new RouterAdapter<ServerRoute[]>({
     type: router,
   });
@@ -594,7 +617,8 @@ export function createServer<E extends Env = Env, B extends string = "/">(
     routerAdapter,
     middlewares,
     basePath as NormalisePath<B>,
-    debug
+    debug,
+    aot
   ) as ServeXRouter<E, {}, NormalisePath<B>> & ServeXApp<E, {}, NormalisePath<B>>;
 }
 
