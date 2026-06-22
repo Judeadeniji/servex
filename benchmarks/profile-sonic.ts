@@ -11,7 +11,7 @@
 import type { Route } from "../src/router/base";
 import { SonicRouter } from "../src/router/sonic-router";
 
-const routes: Route<any>[] = [
+const routes: Route<number>[] = [
 	{ method: "GET", path: "/", data: 1 },
 	{ method: "GET", path: "/about", data: 2 },
 	{ method: "GET", path: "/api/health", data: 3 },
@@ -67,20 +67,12 @@ for (const r of routes) router.addRoute(r);
 // Force compile
 router.match("GET", "/api/users/1");
 
-// @ts-expect-error
-const staticRoutes = router._staticRoutes?.GET || new Map();
-const matchFn = (router as unknown as { _matchFns: { GET: unknown } })._matchFns.GET;
-// @ts-expect-error
-const compiledRegex = router._matchers.GET;
-
-const dynamicRequests = requestMix.filter((u) => !staticRoutes?.[u]);
-const staticRequests = requestMix.filter((u) => !!staticRoutes?.[u]);
+const matchFn = router._matchFns.GET;
 
 console.log(`Routes: ${routes.length} (10 static, 15 param, 5 wildcard)`);
 console.log(
-	`Request mix: ${requestMix.length} URLs (${staticRequests.length} static hits, ${dynamicRequests.length} dynamic/404)\n`,
+	`Request mix: ${requestMix.length} URLs\n`,
 );
-console.log(`Compiled regex length: ${compiledRegex?.source.length} chars\n`);
 
 const ITERS = 1_000_000;
 
@@ -99,51 +91,26 @@ function bench(label: string, fn: () => void, calls: number): number {
 
 console.log("─".repeat(75));
 
-// 1. Baseline: full match() over all 10 URLs
+// 1. Baseline: full match() over all URLs
 const fullTime = bench(
-	"Full router.match() — all 10 URLs",
+	"Full router.match() — all URLs",
 	() => {
 		for (const u of requestMix) router.match("GET", u);
 	},
 	requestMix.length,
 );
 
-// 2. Static map lookup alone (all 10)
-const staticTime = bench(
-	"Static map lookup only — all 10",
+// 2. JIT matchFn alone
+const jitTime = bench(
+	"JIT matchFn() — all URLs",
 	() => {
-		for (const u of requestMix) {
-			const _ = staticRoutes?.[u];
-		}
+		for (const u of requestMix) matchFn(u, u, "GET");
 	},
 	requestMix.length,
 );
 
-// 3. JIT matchFn alone — dynamic URLs only (8 of 10 in our mix)
-const jitTime = bench(
-	"JIT matchFn() — dynamic/404 only",
-	() => {
-		// @ts-expect-error
-		for (const u of dynamicRequests) matchFn(u, u, "GET");
-	},
-	dynamicRequests.length,
-);
-
-// 4. regex.exec() alone — dynamic URLs only
-const regexTime = bench(
-	"regex.exec() alone — dynamic/404 only",
-	() => {
-		for (const u of dynamicRequests) compiledRegex.exec(u);
-	},
-	dynamicRequests.length,
-);
-
 console.log("─".repeat(75));
-const dispatchOverhead = (((jitTime - regexTime) / jitTime) * 100).toFixed(1);
-const regexShare = ((regexTime / jitTime) * 100).toFixed(1);
-console.log(`\nBreakdown within JIT matchFn:`);
-console.log(`  regex.exec() share:    ${regexShare}% of JIT fn time`);
-console.log(`  Post-match dispatch:   ${dispatchOverhead}% of JIT fn time`);
-console.log(
-	`\nStatic lookup cost:      ${((staticTime / fullTime) * 100).toFixed(1)}% of full match time`,
-);
+const routerOverhead = (((fullTime - jitTime) / fullTime) * 100).toFixed(1);
+console.log(`\nBreakdown:`);
+console.log(`  JIT fn time:           ${jitTime.toFixed(1)}ms`);
+console.log(`  Router wrapper cost:   ${routerOverhead}% of full match time`);
