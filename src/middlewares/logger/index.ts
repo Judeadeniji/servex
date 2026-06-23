@@ -53,7 +53,7 @@ export const logger = (options: LoggerOptions = {}) => {
 			// Defer the actual logging until the response is sent to the client.
 			c.defer(() => {
 				const durationMs = performance.now() - start;
-				const status = c.finalResponse.status || 200;
+				const status = c.finalResponse?.status || 200;
 
 				print(
 					format({

@@ -8,10 +8,24 @@ import type { StatusCode } from "./http-status";
 import type { ExtractUrl } from "./router/types";
 import type { Env, HeaderRecord, JSONValue } from "./types";
 
+/**
+ * An extended Fetch Request object used by ServeX.
+ * Adds performance-optimized body parsing utilities directly to the request.
+ */
 export interface ServeXRequest extends Request {
+	/**
+	 * Parses and returns the request body as JSON.
+	 * 
+	 * @template T Expected return type of the parsed JSON
+	 * @returns A promise that resolves to the parsed JSON
+	 */
 	json<T = JSONValue>(): Promise<T>;
 }
 
+/**
+ * Lightweight internal representation of the parsed request context.
+ * @internal
+ */
 export type RequestContext = {
 	params: Record<string, string>;
 };
@@ -639,21 +653,35 @@ const contextHelpers = {
 	},
 };
 
+/**
+ * Factory function to create a new ServeX Context.
+ * Uses `__proto__` injection to attach methods without the overhead of class instantiation,
+ * ensuring monomorphic inline caches for V8.
+ * 
+ * @internal
+ * @param request The incoming Fetch Request.
+ * @param env Environment variables and bindings.
+ * @param params Matched route parameters.
+ * @param executionCtx The underlying execution context (e.g. from Cloudflare Workers).
+ * @param debug Whether debug mode is active.
+ * @returns An optimized Context instance.
+ */
 export function createContext(
 	request: Request,
 	env: Record<string, unknown>,
-	ctxParams: RequestContext,
+	params: Record<string, string>,
 	executionCtx?: unknown,
 	debug: boolean = false,
 ) {
-	return {
+	const ctx = {
+		__proto__: contextHelpers,
 		req: request as ServeXRequest,
 		env,
 		executionCtx,
 		debug,
-		_params: ctxParams?.params || {},
+		_params: params || {},
 		_status: 200,
 		_isFinished: false,
-		...contextHelpers,
-	} as Context;
+	} as unknown as Context;
+	return ctx;
 }

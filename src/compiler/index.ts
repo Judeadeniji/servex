@@ -18,8 +18,7 @@ export function buildCompilerSource<C extends Context>(
 		return `return () => Promise.resolve(undefined);\n`;
 	}
 
-	let code = `return function(context) {\n`;
-	code += `  function dispatch(i) {\n`;
+	let code = `  function dispatch(i, context) {\n`;
 	code += `    if (i >= ${handlers.length}) return undefined;\n`;
 	code += `    let res;\n`;
 	code += `    switch(i) {\n`;
@@ -34,7 +33,7 @@ export function buildCompilerSource<C extends Context>(
 			code += `          const next = () => {\n`;
 			code += `            if (nextCalled) throw new Error("next() called multiple times");\n`;
 			code += `            nextCalled = true;\n`;
-			code += `            let p = dispatch(${j + 1});\n`;
+			code += `            let p = dispatch(${j + 1}, context);\n`;
 			code += `            nextPromise = p instanceof Promise ? p : Promise.resolve(p);\n`;
 			code += `            return nextPromise;\n`;
 			code += `          };\n`;
@@ -62,9 +61,9 @@ export function buildCompilerSource<C extends Context>(
 	code += `    }\n`;
 	code += `    return undefined;\n`;
 	code += `  }\n`;
-	code += `  let finalRes = dispatch(0);\n`;
-	code += `  return finalRes instanceof Promise ? finalRes : Promise.resolve(finalRes);\n`;
-	code += `};\n`;
+	code += `  return function(context) {\n`;
+	code += `    return dispatch(0, context);\n`;
+	code += `  };\n`;
 
 	return code;
 }
@@ -73,7 +72,9 @@ export function compileHandlerChain<
 	E extends import("../types").Env = import("../types").Env,
 >(
 	handlers: Handler<Context<E>>[],
-): (context: Context<E>) => Promise<Response | undefined> {
+): (
+	context: Context<E>,
+) => Response | undefined | Promise<Response | undefined> {
 	if (handlers.length === 0) {
 		return async () => undefined;
 	}

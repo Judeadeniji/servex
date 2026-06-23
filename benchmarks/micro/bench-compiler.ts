@@ -5,7 +5,7 @@ import type { Handler } from "../../src/types";
 
 // Dummy Context
 const req = new Request("http://localhost/");
-const ctx = createContext(req, {}, { params: {} });
+const ctx = createContext(req, {}, {});
 
 // Dummy Handlers
 const syncHandler: Handler<Context> = (_c, next) => next();

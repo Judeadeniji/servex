@@ -26,6 +26,7 @@
 	"homepage": "https://github.com/judeadeniji/servex#readme",
 	"devDependencies": {
 		"@biomejs/biome": "^2.5.0",
+		"@mitata/counters": "^0.0.8",
 		"@types/autocannon": "^7.12.7",
 		"@types/bun": "latest",
 		"autocannon": "^8.0.0",

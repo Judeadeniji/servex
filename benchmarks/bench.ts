@@ -11,7 +11,7 @@ function generateChain(length: number): Handler<any>[] {
 	const chain: Handler<any>[] = [];
 	for (let i = 0; i < length - 1; i++) {
 		chain.push(
-			async (ctx: Context, next: () => Promise<undefined | Response>) => {
+			async (ctx: Context, next: () => Promise<Response | void>) => {
 				ctx.executionCtx = ((ctx.executionCtx as number) || 0) + 1;
 				await next();
 			},
@@ -41,11 +41,11 @@ group("JIT Boot Time Cost", () => {
 
 // Set up Non-JIT App (by manually filling compiledCache with executeHandlers wrapper)
 const middlewares = [
-	async (ctx: Context, next: () => Promise<undefined | Response>) => {
+	async (ctx: Context, next: () => Promise<Response | void>) => {
 		ctx.executionCtx = 1;
 		await next();
 	},
-	async (ctx: Context, next: () => Promise<undefined | Response>) => {
+	async (ctx: Context, next: () => Promise<Response | void>) => {
 		ctx.executionCtx = 2;
 		await next();
 	},
@@ -69,7 +69,7 @@ appNonJit.compiledCache.set("GET/api/test", (ctx: Context) =>
 );
 const r = (
 	appNonJit as unknown as {
-		routerAdapter: { match: (m: string, p: string) => unknown };
+		routerAdapter: import("../src/router/adapter").RouterAdapter<import("../src/types").ServerRoute[]>;
 	}
 ).routerAdapter.match("GET", "/api/test");
 if (r?.store)

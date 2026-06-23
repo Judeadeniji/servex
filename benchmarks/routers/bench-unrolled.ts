@@ -64,7 +64,7 @@ function generateChain(length: number): Handler<Context>[] {
 	const chain: Handler<Context>[] = [];
 	for (let i = 0; i < length - 1; i++) {
 		chain.push(
-			async (ctx: Context, next: () => Promise<undefined | Response>) => {
+			async (ctx: Context, next: () => Promise<Response | void>) => {
 				(ctx as unknown as { count: number }).count =
 					((ctx as unknown as { count: number }).count || 0) + 1;
 				await next();
@@ -92,7 +92,7 @@ async function testCorrectness() {
 	// Test 2: short-circuit at position 0 (auth-style)
 	let afterAuth = false;
 	const chainAuth = [
-		async (_ctx: Context, _next: () => Promise<undefined | Response>) =>
+		async (_ctx: Context, _next: () => Promise<Response | void>) =>
 			new Response("Unauthorized", { status: 401 }),
 		async (_ctx: Context) => {
 			afterAuth = true;
@@ -110,10 +110,10 @@ async function testCorrectness() {
 
 	// Test 3: short-circuit at position 1
 	const chainMid = [
-		async (_ctx: Context, next: () => Promise<undefined | Response>) => {
+		async (_ctx: Context, next: () => Promise<Response | void>) => {
 			await next();
 		},
-		async (_ctx: Context, _next: () => Promise<undefined | Response>) =>
+		async (_ctx: Context, _next: () => Promise<Response | void>) =>
 			new Response("Stopped"),
 		async (_ctx: Context) => new Response("Never reached"),
 	];

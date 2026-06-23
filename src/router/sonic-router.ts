@@ -104,6 +104,11 @@ export class SonicRouter<Routes extends Route<unknown>[] = Route<unknown>[]>
 		(url: string, method: string) => MatchedRoute<Routes, boolean> | null
 	> = {};
 
+	private staticRoutes: Record<
+		string,
+		Record<string, MatchedRoute<Routes, boolean>>
+	> = {};
+
 	private isDirty: Record<string, boolean> = {};
 
 	private pathMiddlewares: {
@@ -173,10 +178,39 @@ export class SonicRouter<Routes extends Route<unknown>[] = Route<unknown>[]>
 		const rawRoutes = this.routesByMethod[method] || [];
 		if (rawRoutes.length === 0) return;
 
+		this.staticRoutes[method] = {};
+		const dynamicRoutes: SonicRouteNode[] = [];
+
+		for (const route of rawRoutes) {
+			if (route.paramsKeys.length === 0) {
+				const matchObj = {
+					matched: true,
+					method: method as HTTPMethod,
+					route: route.path,
+					matched_route: route.path,
+					params: {},
+					data: route.data,
+					middlewares: route.middlewares,
+					store: route,
+					executor: undefined,
+				} as unknown as MatchedRoute<Routes, boolean>;
+
+				const p = route.path;
+				if (p === "") {
+					this.staticRoutes[method]["/"] = matchObj;
+				} else {
+					this.staticRoutes[method][`/${p}`] = matchObj;
+					this.staticRoutes[method][`/${p}/`] = matchObj;
+				}
+			} else {
+				dynamicRoutes.push(route);
+			}
+		}
+
 		// Sort a COPY by specificity — see compareRouteSpecificity's docblock
 		// for why this is kept even though the trie also enforces precedence
 		// structurally.
-		const sortedRoutes = rawRoutes.slice().sort(compareRouteSpecificity);
+		const sortedRoutes = dynamicRoutes.slice().sort(compareRouteSpecificity);
 
 		const { matchFn } = compileSonicTrieMatcher<SonicRouteNode>(
 			method as HTTPMethod,
@@ -191,6 +225,10 @@ export class SonicRouter<Routes extends Route<unknown>[] = Route<unknown>[]>
 		url: RoutePath,
 	): MatchedRoute<Routes, boolean> | null {
 		this.compile(method);
+
+		const staticMatch = this.staticRoutes[method]?.[url as string];
+		if (staticMatch) return staticMatch;
+
 		const dynamicMatchFn = this.matchFns[method];
 		if (dynamicMatchFn) {
 			return dynamicMatchFn(url as string, method);

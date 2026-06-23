@@ -1,9 +1,10 @@
 import { bench, run } from "mitata";
 import { RouterAdapter, RouterType } from "../../src/router/adapter";
 import type { Route } from "../../src/router/base";
+import type { Context } from "../../src/context";
 
 // Create dummy routes (realistic mix)
-const routes: Route<Context>[] = [
+const routes: Route<import("../../src/types").Handler<Context>[]>[] = [
 	// 10 Static routes
 	{ method: "GET", path: "/", data: [() => new Response("Root")] },
 	{ method: "GET", path: "/about", data: [() => new Response("About")] },

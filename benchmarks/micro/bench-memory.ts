@@ -27,7 +27,7 @@ function runNative(handlers: Function[], ctx: Context) {
 	handlers[0](ctx, next);
 }
 
-const ctx = createContext(new Request("http://localhost/"), {}, { params: {} });
+const ctx = createContext(new Request("http://localhost/"), {}, {});
 
 // Short Chain (3)
 const shortHandlers = [handler, handler, terminalHandler];

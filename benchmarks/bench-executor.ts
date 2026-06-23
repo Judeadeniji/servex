@@ -8,7 +8,7 @@ function generateChain(length: number): Handler<Context>[] {
 	const chain: Handler<Context>[] = [];
 	for (let i = 0; i < length - 1; i++) {
 		chain.push(
-			async (ctx: Context, next: () => Promise<undefined | Response>) => {
+			async (ctx: Context, next: () => Promise<Response | void>) => {
 				(ctx as any).count = ((ctx as any).count || 0) + 1;
 				await next();
 			},

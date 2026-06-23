@@ -55,6 +55,51 @@ const ALL_METHODS: Method[] = [
 	"HEAD",
 ];
 
+function sharedHandleValue(
+	r: Response | undefined,
+	context: Context,
+	hooks: import("../types").Hooks,
+	executionCtx: unknown,
+): Response {
+	const res = r || new Response("Not Found", { status: 404 });
+	context.finalResponse = res;
+	const postProcessPromise = executePostProcess(hooks, context);
+	if (
+		executionCtx &&
+		typeof (executionCtx as Record<string, unknown>).waitUntil === "function"
+	) {
+		((executionCtx as Record<string, unknown>).waitUntil as (
+			p: Promise<unknown> | unknown,
+		) => void)(postProcessPromise);
+	} else {
+		postProcessPromise.catch(console.error);
+	}
+	return res;
+}
+
+function sharedResolveError(
+	error: unknown,
+	debug: boolean,
+): Response {
+	if (error instanceof HttpException) return error.getResponse();
+	console.error("Unhandled error:", error);
+
+	const payload: Record<string, unknown> = {
+		statusCode: 500,
+		error: "Internal Server Error",
+		message: "An unexpected error occurred",
+	};
+	if (debug) {
+		payload.message = error instanceof Error ? error.message : String(error);
+		payload.stack = error instanceof Error ? error.stack : undefined;
+	}
+
+	return new Response(JSON.stringify(payload), {
+		status: 500,
+		headers: { "Content-Type": "application/json; charset=UTF-8" },
+	});
+}
+
 export function baseFetch(
 	router: RouterAdapter<ServerRoute[]>,
 	request: Request,
@@ -64,7 +109,7 @@ export function baseFetch(
 	hooks: import("../types").Hooks,
 	compiledCache: Map<
 		string,
-		(context: Context) => Promise<Response | undefined>
+		(context: Context) => Response | Promise<Response | undefined> | undefined
 	>,
 	envBindings?: Record<string, unknown>,
 	executionCtx?: unknown,
@@ -83,12 +128,12 @@ export function baseFetch(
 		if (route?.matched) {
 			const handlers = [...middlewares, ...route.middlewares, ...route.data];
 			let executor:
-				| ((context: Context) => Promise<Response | undefined>)
+				| ((context: Context) => Response | Promise<Response | undefined> | undefined)
 				| undefined;
 
 			if (aot) {
-				executor = route.store?.executor as
-					| ((context: Context) => Promise<Response | undefined>)
+				executor = route.executor || route.store?.executor as
+					| ((context: Context) => Response | Promise<Response | undefined> | undefined)
 					| undefined;
 				if (!executor) {
 					executor = compiledCache.get(method + route.matched_route);
@@ -97,65 +142,21 @@ export function baseFetch(
 						if (route.store) route.store.executor = executor;
 						compiledCache.set(method + route.matched_route, executor);
 					}
+					route.executor = executor;
 				}
 			}
 
-			let context = createContext(
+			let context: Context | undefined = createContext(
 				request,
 				envBindings ??
 					((typeof process !== "undefined" ? process.env : {}) as Record<
 						string,
 						unknown
 					>),
-				{ params: route.params },
+				route.params,
 				executionCtx,
 				debug,
 			);
-
-			const handleValue = (r: Response | undefined) => {
-				const res = r || new Response("Not Found", { status: 404 });
-				context!.finalResponse = res;
-				const postProcessPromise = ((ctx) => executePostProcess(hooks, ctx))(
-					context!,
-				);
-				if (
-					executionCtx &&
-					typeof (executionCtx as Record<string, unknown>).waitUntil ===
-						"function"
-				) {
-					(
-						(executionCtx as Record<string, unknown>).waitUntil as (
-							p: Promise<unknown> | unknown,
-						) => void
-					)(postProcessPromise);
-				} else {
-					postProcessPromise.catch(console.error);
-				}
-
-				context = undefined;
-				return res;
-			};
-
-			const resolveError = (error: unknown): Response => {
-				if (error instanceof HttpException) return error.getResponse();
-				console.error("Unhandled error:", error);
-
-				const payload: Record<string, unknown> = {
-					statusCode: 500,
-					error: "Internal Server Error",
-					message: "An unexpected error occurred",
-				};
-				if (debug) {
-					payload.message =
-						error instanceof Error ? error.message : String(error);
-					payload.stack = error instanceof Error ? error.stack : undefined;
-				}
-
-				return new Response(JSON.stringify(payload), {
-					status: 500,
-					headers: { "Content-Type": "application/json; charset=UTF-8" },
-				});
-			};
 
 			try {
 				let res: Response | Promise<Response | undefined> | undefined;
@@ -167,12 +168,24 @@ export function baseFetch(
 
 				if (res instanceof Promise) {
 					return res
-						.then((r) => handleValue(r))
-						.catch((error) => handleValue(resolveError(error)));
+						.then((r) => {
+							const result = sharedHandleValue(r, context!, hooks, executionCtx);
+							context = undefined;
+							return result;
+						})
+						.catch((error) => {
+							const result = sharedHandleValue(sharedResolveError(error, debug), context!, hooks, executionCtx);
+							context = undefined;
+							return result;
+						});
 				}
-				return handleValue(res);
+				const finalRes = sharedHandleValue(res, context!, hooks, executionCtx);
+				context = undefined;
+				return finalRes;
 			} catch (error) {
-				return handleValue(resolveError(error));
+				const finalRes = sharedHandleValue(sharedResolveError(error, debug), context!, hooks, executionCtx);
+				context = undefined;
+				return finalRes;
 			}
 		}
 	}
@@ -201,7 +214,7 @@ async function baseFetchSlow(
 	hooks: import("../types").Hooks,
 	compiledCache: Map<
 		string,
-		(context: Context) => Promise<Response | undefined>
+		(context: Context) => Response | Promise<Response | undefined> | undefined
 	>,
 	envBindings?: Record<string, unknown>,
 	executionCtx?: unknown,
@@ -229,7 +242,7 @@ async function baseFetchSlow(
 						string,
 						unknown
 					>),
-				{ params: {} },
+				{},
 				executionCtx,
 				debug,
 			);
@@ -301,7 +314,7 @@ async function baseFetchSlow(
 							string,
 							unknown
 						>),
-					{ params: {} },
+					{},
 					executionCtx,
 					debug,
 				);
@@ -338,7 +351,7 @@ async function baseFetchSlow(
 						string,
 						unknown
 					>),
-				{ params: route.params },
+				route.params,
 				executionCtx,
 				debug,
 			);
@@ -373,11 +386,11 @@ async function baseFetchSlow(
 
 		// ── 3. Execute handlers ───────────────────────────────────────────────────
 		let executor:
-			| ((context: Context) => Promise<Response | undefined>)
+			| ((context: Context) => Response | Promise<Response | undefined> | undefined)
 			| undefined;
 		if (aot) {
-			executor = route.store?.executor as
-				| ((context: Context) => Promise<Response | undefined>)
+			executor = route.executor || route.store?.executor as
+				| ((context: Context) => Response | Promise<Response | undefined> | undefined)
 				| undefined;
 			if (!executor) {
 				executor = compiledCache.get(method + route.matched_route);
@@ -386,6 +399,7 @@ async function baseFetchSlow(
 					if (route.store) route.store.executor = executor;
 					compiledCache.set(method + route.matched_route, executor);
 				}
+				route.executor = executor;
 			}
 		}
 

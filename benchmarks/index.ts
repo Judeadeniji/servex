@@ -116,11 +116,11 @@ group("SignalCtx", () => {
 group("5. CORE CONTEXT", () => {
 	const dummyReq = new Request("http://localhost/");
 	bench("Context: Instantiation", () => {
-		createContext(dummyReq, {}, { params: {} });
+		createContext(dummyReq, {}, {});
 	});
 
 	const ctxReq = new Request("http://localhost/");
-	const ctxInstance = createContext(ctxReq, {}, { params: {} });
+	const ctxInstance = createContext(ctxReq, {}, {});
 	bench("Context: Response Creation (JSON)", () => {
 		ctxInstance.json({ test: true }, 200, { "X-Test": "yes" });
 	});

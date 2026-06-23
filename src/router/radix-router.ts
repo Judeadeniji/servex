@@ -213,6 +213,8 @@ export class RadixRouteTrie<Routes extends Route[]> implements IRouter<Routes> {
 			params: params,
 			data: node.data[method] as Routes[number]["data"],
 			middlewares: this.collectMiddlewares(node),
+			store: undefined,
+			executor: undefined,
 		};
 	}
 

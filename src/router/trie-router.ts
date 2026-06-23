@@ -293,6 +293,8 @@ export class TrieRouter<Routes extends Route[]> implements IRouter<Routes> {
 			params: {} as MatchedRoute<Routes, boolean>["params"],
 			data: null,
 			middlewares: [], // Initialize middleware array
+			store: undefined,
+			executor: undefined,
 		};
 
 		return this.matchAll<RoutePath>(

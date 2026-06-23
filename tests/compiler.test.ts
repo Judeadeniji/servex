@@ -8,7 +8,7 @@ import type { Handler } from "../src/types";
 
 describe("JIT Compiler", () => {
 	const req = new Request("http://localhost/");
-	const ctx = createContext(req, {}, { params: {} });
+	const ctx = createContext(req, {}, {});
 
 	describe("buildCompilerSource (Code Generation)", () => {
 		test("should generate empty async function for 0 handlers", () => {

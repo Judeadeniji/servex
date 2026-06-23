@@ -61,6 +61,10 @@ export type MatchedRoute<
 	 * @property store - A mutable reference object (usually the router node) used for caching JIT executors.
 	 */
 	store?: Record<string, unknown>;
+	/**
+	 * @property executor - A cached execution chain function to bypass compiling handlers on every request.
+	 */
+	executor?: ((context: Context) => Response | undefined | Promise<Response | undefined>);
 };
 
 /**

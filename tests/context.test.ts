@@ -4,7 +4,7 @@ import { createContext } from "../src/context";
 describe("Context", () => {
 	it("should create JSON response", () => {
 		const req = new Request("http://localhost/");
-		const ctx = createContext(req, {}, { params: {} });
+		const ctx = createContext(req, {}, {});
 
 		const res = ctx.json({ message: "Success" }, 201, { "X-Custom": "1" });
 
@@ -17,7 +17,7 @@ describe("Context", () => {
 
 	it("should create HTML response", () => {
 		const req = new Request("http://localhost/");
-		const ctx = createContext(req, {}, { params: {} });
+		const ctx = createContext(req, {}, {});
 
 		const res = ctx.html("<h1>Hello</h1>");
 
@@ -27,7 +27,7 @@ describe("Context", () => {
 
 	it("should set cookies", () => {
 		const req = new Request("http://localhost/");
-		const ctx = createContext(req, {}, { params: {} });
+		const ctx = createContext(req, {}, {});
 
 		ctx.setCookie("session", "12345");
 		const res = ctx.text("OK");
@@ -37,7 +37,7 @@ describe("Context", () => {
 
 	it("should redirect", () => {
 		const req = new Request("http://localhost/");
-		const ctx = createContext(req, {}, { params: {} });
+		const ctx = createContext(req, {}, {});
 
 		const res = ctx.redirect("/login", 301);
 
@@ -54,7 +54,7 @@ describe("Context", () => {
 			body: formData,
 		});
 
-		const ctx = createContext(req, {}, { params: {} });
+		const ctx = createContext(req, {}, {});
 		const parsed = await ctx.formData();
 		expect(parsed.get("key")).toBe("value");
 	});
@@ -66,7 +66,7 @@ describe("Context", () => {
 			headers: { "Content-Type": "application/x-www-form-urlencoded" },
 		});
 
-		const ctx = createContext(req, {}, { params: {} });
+		const ctx = createContext(req, {}, {});
 		const parsed = await ctx.urlEncoded();
 		expect(parsed.get("key")).toBe("value");
 		expect(parsed.get("foo")).toBe("bar");
@@ -74,7 +74,7 @@ describe("Context", () => {
 
 	it("should create stream response", () => {
 		const req = new Request("http://localhost/");
-		const ctx = createContext(req, {}, { params: {} });
+		const ctx = createContext(req, {}, {});
 
 		const stream = new ReadableStream({
 			start(controller) {

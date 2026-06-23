@@ -133,7 +133,8 @@ export function compileSonicTrieMatcher<_T>(
       params: {${paramsObj}},
       data: deps.routes[${idx}].data,
       middlewares: deps.routes[${idx}].middlewares,
-      store: deps.routes[${idx}]
+      store: deps.routes[${idx}],
+      executor: undefined
     };`;
 	}
 
