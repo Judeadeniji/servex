@@ -1,3 +1,4 @@
+import { bench, group, run } from "mitata";
 import { compileHandlerChain } from "../src/compiler/index";
 import type { Context } from "../src/context";
 import { executeHandlers } from "../src/core/response";
@@ -5,16 +6,16 @@ import { createServer } from "../src/index";
 import { RouterType } from "../src/router/adapter";
 import type { Handler } from "../src/types";
 
-const ITERATIONS = 1_000_000;
-
 // Helper to generate N handlers
 function generateChain(length: number): Handler<any>[] {
 	const chain: Handler<any>[] = [];
 	for (let i = 0; i < length - 1; i++) {
-		chain.push(async (ctx: Context, next: () => Promise<void | Response>) => {
-			ctx.executionCtx = ((ctx.executionCtx as number) || 0) + 1;
-			await next();
-		});
+		chain.push(
+			async (ctx: Context, next: () => Promise<undefined | Response>) => {
+				ctx.executionCtx = ((ctx.executionCtx as number) || 0) + 1;
+				await next();
+			},
+		);
 	}
 	chain.push((_ctx: Context) => new Response("OK"));
 	return chain;
@@ -29,86 +30,73 @@ const _createMockContext = () =>
 		deferred: [],
 	}) as unknown as Context;
 
-async function testBootTime() {
-	console.log("=== JIT Boot Time Cost ===");
+group("JIT Boot Time Cost", () => {
 	const handlers = generateChain(5);
-	const start = performance.now();
-	for (let i = 0; i < 1000; i++) {
-		compileHandlerChain(handlers);
+	bench("Compiling 1000 routes (len 5)", () => {
+		for (let i = 0; i < 1000; i++) {
+			compileHandlerChain(handlers);
+		}
+	});
+});
+
+// Set up Non-JIT App (by manually filling compiledCache with executeHandlers wrapper)
+const middlewares = [
+	async (ctx: Context, next: () => Promise<undefined | Response>) => {
+		ctx.executionCtx = 1;
+		await next();
+	},
+	async (ctx: Context, next: () => Promise<undefined | Response>) => {
+		ctx.executionCtx = 2;
+		await next();
+	},
+	(_ctx: Context) => new Response("Hello"),
+];
+const appNonJit = createServer({
+	router: RouterType.SONIC,
+	middlewares: [middlewares[0], middlewares[1]],
+});
+appNonJit.get("/api/test", middlewares[2]);
+
+// Force Non-JIT behavior by pre-filling the executor cache
+// But wait, router.match returns a route with a store.executor property too!
+// It's easier to just warm it up to let it populate the route, then overwrite it.
+for (let i = 0; i < 50; i++)
+	await appNonJit.fetch(new Request("http://localhost/api/test"));
+
+// Now overwrite the cached executor with the non-JIT loop
+appNonJit.compiledCache.set("GET/api/test", (ctx: Context) =>
+	executeHandlers(ctx, middlewares),
+);
+const r = (
+	appNonJit as unknown as {
+		routerAdapter: { match: (m: string, p: string) => unknown };
 	}
-	const end = performance.now();
-	console.log(
-		`Compiling 1000 routes (len 5) took: ${(end - start).toFixed(2)}ms (${((end - start) / 1000).toFixed(3)}ms per route)\n`,
-	);
-}
+).routerAdapter.match("GET", "/api/test");
+if (r?.store)
+	r.store.executor = (ctx: Context) => executeHandlers(ctx, middlewares);
 
-async function testE2E() {
-	console.log("=== End-to-End Realism Test (3 handlers) ===");
+// Set up JIT App
+const appJit = createServer({ router: RouterType.SONIC });
+appJit.get("/api/test", middlewares[2]);
+// biome-ignore lint/suspicious/noExplicitAny: Internal router access for benchmark warmup
+(appJit as any).middlewares.push(middlewares[0], middlewares[1]);
 
-	// Set up Non-JIT App (by manually filling compiledCache with executeHandlers wrapper)
-	const appNonJit = createServer({ router: RouterType.SONIC });
-	const middlewares = [
-		async (ctx: Context, next: () => Promise<void | Response>) => {
-			ctx.executionCtx = 1;
-			await next();
-		},
-		async (ctx: Context, next: () => Promise<void | Response>) => {
-			ctx.executionCtx = 2;
-			await next();
-		},
-		(_ctx: Context) => new Response("Hello"),
-	];
-	appNonJit.get("/api/test", middlewares[2]);
-	(appNonJit as any).middlewares.push(middlewares[0], middlewares[1]);
+// Warmup JIT
+for (let i = 0; i < 5000; i++)
+	await appJit.fetch(new Request("http://localhost/api/test"));
 
-	// Force Non-JIT behavior by pre-filling the executor cache
-	// But wait, router.match returns a route with a store.executor property too!
-	// It's easier to just warm it up to let it populate the route, then overwrite it.
-	for (let i = 0; i < 50; i++)
+// Full Warmup for Non-JIT now that it's patched
+for (let i = 0; i < 5000; i++)
+	await appNonJit.fetch(new Request("http://localhost/api/test"));
+
+group("End-to-End Realism Test (3 handlers)", () => {
+	bench("E2E Non-JIT", async () => {
 		await appNonJit.fetch(new Request("http://localhost/api/test"));
+	});
 
-	// Now overwrite the cached executor with the non-JIT loop
-	appNonJit.compiledCache.set("GET/api/test", (ctx: Context) =>
-		executeHandlers(ctx, middlewares),
-	);
-	const r = (appNonJit as unknown as { routerAdapter: { match: (m: string, p: string) => any } }).routerAdapter.match("GET", "/api/test");
-	if (r?.store)
-		r.store.executor = (ctx: Context) => executeHandlers(ctx, middlewares);
-
-	// Set up JIT App
-	const appJit = createServer({ router: RouterType.SONIC });
-	appJit.get("/api/test", middlewares[2]);
-	(appJit as any).middlewares.push(middlewares[0], middlewares[1]);
-	// Warmup JIT
-	for (let i = 0; i < 5000; i++)
+	bench("E2E JIT", async () => {
 		await appJit.fetch(new Request("http://localhost/api/test"));
+	});
+});
 
-	// Full Warmup for Non-JIT now that it's patched
-	for (let i = 0; i < 5000; i++)
-		await appNonJit.fetch(new Request("http://localhost/api/test"));
-
-	// Run Non-JIT E2E
-	const startNonJit = performance.now();
-	for (let i = 0; i < ITERATIONS; i++) {
-		await appNonJit.fetch(new Request("http://localhost/api/test"));
-	}
-	const timeNonJit = performance.now() - startNonJit;
-
-	// Run JIT E2E
-	const startJit = performance.now();
-	for (let i = 0; i < ITERATIONS; i++) {
-		await appJit.fetch(new Request("http://localhost/api/test"));
-	}
-	const timeJit = performance.now() - startJit;
-
-	console.log(`E2E Non-JIT: ${timeNonJit.toFixed(2)}ms`);
-	console.log(`E2E JIT:     ${timeJit.toFixed(2)}ms`);
-	console.log(`E2E Speedup: ${(timeNonJit / timeJit).toFixed(2)}x\n`);
-}
-
-async function runAll() {
-	await testBootTime();
-	await testE2E();
-}
-
-runAll().catch(console.error);
+await run();

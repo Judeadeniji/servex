@@ -1,11 +1,14 @@
-import { expect, test, describe } from "bun:test";
-import { buildCompilerSource, compileHandlerChain } from "../src/compiler/index";
-import { Context } from "../src/context";
+import { describe, expect, test } from "bun:test";
+import {
+	buildCompilerSource,
+	compileHandlerChain,
+} from "../src/compiler/index";
+import { createContext } from "../src/context";
 import type { Handler } from "../src/types";
 
 describe("JIT Compiler", () => {
 	const req = new Request("http://localhost/");
-	const ctx = new Context(req, {}, { params: {} });
+	const ctx = createContext(req, {}, { params: {} });
 
 	describe("buildCompilerSource (Code Generation)", () => {
 		test("should generate empty async function for 0 handlers", () => {
@@ -14,17 +17,17 @@ describe("JIT Compiler", () => {
 		});
 
 		test("should use localized next closures and nextCalled variables", () => {
-			const handlers: Handler<any>[] = Array(5).fill((c: any, n: any) => n());
+			const handlers: Handler<any>[] = Array(5).fill((_c: any, n: any) => n());
 			const source = buildCompilerSource(handlers);
 			expect(source).toContain("let nextCalled = false;");
 			expect(source).toContain("const next = () => {");
 		});
 
 		test("should omit 'next' arg for terminal handlers", () => {
-			const syncNext: Handler<any> = (c, next) => next();
-			const terminal: Handler<any> = (c) => new Response("OK");
+			const syncNext: Handler<any> = (_c, next) => next();
+			const terminal: Handler<any> = (_c) => new Response("OK");
 			const source = buildCompilerSource([syncNext, terminal]);
-			
+
 			// Handler 0 (syncNext) should pass 'next'
 			expect(source).toContain("deps.handlers[0](context, next)");
 			// Handler 1 (terminal) should NOT pass 'next'
@@ -38,7 +41,7 @@ describe("JIT Compiler", () => {
 				c.set("m1", true);
 				return await next();
 			};
-			const m2: Handler<any> = (c) => new Response("OK");
+			const m2: Handler<any> = (_c) => new Response("OK");
 
 			const fn = compileHandlerChain([m1, m2]);
 			const res = await fn(ctx);
@@ -49,8 +52,10 @@ describe("JIT Compiler", () => {
 		});
 
 		test("should short-circuit if next() is not called", async () => {
-			const m1: Handler<any> = (c) => new Response("Short Circuit");
-			const m2: Handler<any> = () => { throw new Error("Should not run"); };
+			const m1: Handler<any> = (_c) => new Response("Short Circuit");
+			const m2: Handler<any> = () => {
+				throw new Error("Should not run");
+			};
 
 			const fn = compileHandlerChain([m1, m2]);
 			const res = await fn(ctx);
@@ -60,21 +65,21 @@ describe("JIT Compiler", () => {
 		});
 
 		test("should throw if next() is called multiple times", async () => {
-			const m1: Handler<any> = async (c, next) => {
+			const m1: Handler<any> = async (_c, next) => {
 				await next();
 				await next();
 			};
-			const m2: Handler<any> = (c) => new Response("OK");
+			const m2: Handler<any> = (_c) => new Response("OK");
 
 			const fn = compileHandlerChain([m1, m2]);
-			
+
 			let error: unknown;
 			try {
 				await fn(ctx);
 			} catch (e) {
 				error = e;
 			}
-			
+
 			expect(error).toBeDefined();
 			expect((error as Error).message).toBe("next() called multiple times");
 		});

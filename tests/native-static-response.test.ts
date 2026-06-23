@@ -1,9 +1,9 @@
-import { describe, it, expect } from "bun:test";
+import { describe, expect, it } from "bun:test";
 import { createServer } from "../src/index";
 
 describe("Native Static Response Injection", () => {
 	it("should convert inline values to route handlers", async () => {
-		const app = createServer()
+		const app = createServer({})
 			.get("/string", "hello")
 			.get("/number", 42)
 			.get("/boolean", true)
@@ -49,13 +49,17 @@ describe("Native Static Response Injection", () => {
 		const app = createServer({ nativeStaticResponse: true })
 			.get("/version", "1.0.0")
 			.get("/api/status", { status: "ok" });
-		
+
 		const resStr = app.static?.["/version"] as Response;
 		expect(await resStr.clone().text()).toBe("1.0.0");
-		expect(resStr.headers.get("Content-Type")).toBe("text/plain; charset=UTF-8");
+		expect(resStr.headers.get("Content-Type")).toBe(
+			"text/plain; charset=UTF-8",
+		);
 
 		const resObj = app.static?.["/api/status"] as Response;
 		expect(await resObj.clone().json()).toEqual({ status: "ok" });
-		expect(resObj.headers.get("Content-Type")).toBe("application/json; charset=UTF-8");
+		expect(resObj.headers.get("Content-Type")).toBe(
+			"application/json; charset=UTF-8",
+		);
 	});
 });

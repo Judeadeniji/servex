@@ -41,7 +41,6 @@ function runAutocannon(url: string): Promise<Result> {
 				url,
 				connections: CONNECTIONS,
 				duration: DURATION,
-
 			},
 			(err, result) => {
 				if (err) reject(err);

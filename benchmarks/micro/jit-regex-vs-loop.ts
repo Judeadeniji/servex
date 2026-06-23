@@ -1,4 +1,4 @@
-const { SonicRouter } = require("../../src/router/sonic-router");
+import { bench, group, run } from "mitata";
 
 function createMockNode(path: string, paramsKeys: string[]) {
 	return { path, paramsKeys, data: { handler: 1 }, middlewares: [] };
@@ -53,29 +53,14 @@ const jitMatch = new Function(
 `,
 )(regex, matchMaps);
 
-// Warmup
-for (let i = 0; i < 1000; i++) {
-	currentMatch("/api/posts/123/comments/456");
-	jitMatch("/api/posts/123/comments/456");
-}
+group("Regex vs JIT Loop", () => {
+	bench("Current SonicRouter (Regex loop)", () => {
+		currentMatch("/api/posts/123/comments/456");
+	});
 
-const iters = 10_000_000;
-let start = performance.now();
-for (let i = 0; i < iters; i++) {
-	currentMatch("/api/posts/123/comments/456");
-}
-console.log(
-	"Current SonicRouter (Regex loop):",
-	performance.now() - start,
-	"ms",
-);
+	bench("JIT SonicRouter (Regex unrolled)", () => {
+		jitMatch("/api/posts/123/comments/456");
+	});
+});
 
-start = performance.now();
-for (let i = 0; i < iters; i++) {
-	jitMatch("/api/posts/123/comments/456");
-}
-console.log(
-	"JIT SonicRouter (Regex unrolled):",
-	performance.now() - start,
-	"ms",
-);
+await run();

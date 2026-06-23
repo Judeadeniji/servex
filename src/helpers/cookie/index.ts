@@ -24,7 +24,7 @@ export const setCookie = (
 	options: CookieOptions = {},
 ) => {
 	const cookieStr = serialize(name, value, options);
-	c.header.append("Set-Cookie", cookieStr);
+	c.header().append("Set-Cookie", cookieStr);
 };
 
 /**

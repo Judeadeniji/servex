@@ -1,4 +1,5 @@
 import { Memoirist } from "memoirist";
+import { bench, run } from "mitata";
 import { SonicRouter } from "../../src/router/sonic-router";
 
 // 1. Setup Memoirist
@@ -92,35 +93,16 @@ const URLS = [
 	"/this/does/not/exist",
 ];
 
-const ITERS = 1_000_000;
-
-// Warmup
-for (let i = 0; i < 1000; i++) {
-	for (const url of URLS) {
-		memoirist.find("GET", url);
-		sonic.match("GET", url);
-	}
-}
-
-// Benchmark
-let start = performance.now();
-for (let i = 0; i < ITERS; i++) {
+bench("Memoirist", () => {
 	for (const url of URLS) {
 		memoirist.find("GET", url);
 	}
-}
-const memTime = performance.now() - start;
-console.log(`Memoirist:            ${memTime.toFixed(2)}ms`);
+});
 
-start = performance.now();
-for (let i = 0; i < ITERS; i++) {
+bench("SonicRouter (Trie)", () => {
 	for (const url of URLS) {
 		sonic.match("GET", url);
 	}
-}
-const sonicTime = performance.now() - start;
-console.log(`SonicRouter (Trie):   ${sonicTime.toFixed(2)}ms`);
+});
 
-console.log(
-	`\nSonic (Trie) is ${(memTime / sonicTime).toFixed(2)}x ${sonicTime < memTime ? "faster" : "slower"} than Memoirist`,
-);
+await run();

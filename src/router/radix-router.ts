@@ -9,7 +9,7 @@ import {
 	type Route,
 	type SegmentType,
 } from "./base";
-import type { DynamicSegmentsRemoved, ExtractUrl, } from "./types";
+import type { DynamicSegmentsRemoved, ExtractUrl } from "./types";
 
 /**
  * Radix Tree implementation for route matching.

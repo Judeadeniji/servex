@@ -99,7 +99,9 @@ export const verify = async (
 	return payload;
 };
 
-export const decode = (token: string): { header: unknown; payload: unknown } => {
+export const decode = (
+	token: string,
+): { header: unknown; payload: unknown } => {
 	const parts = token.split(".");
 	if (parts.length !== 3) throw new Error("Invalid JWT format");
 	return {

@@ -318,14 +318,21 @@ async function main() {
 		3001,
 	);
 
-	const servexSummaryRegex = await benchFramework(
-		"ServeX (Regex)",
-		path.join(ROOT, "benchmarks/servers/servex-server-regex.ts"),
-		3002,
+	const servexSummaryNoAot = await benchFramework(
+		"ServeX (No AOT)",
+		path.join(ROOT, "benchmarks/servers/servex-server-no-aot.ts"),
+		3003,
 	);
 
-	printTable(servexSummary, servexSummaryRegex);
+	const elysiaSummaryNoAot = await benchFramework(
+		"Elysia (No AOT)",
+		path.join(ROOT, "benchmarks/servers/elysia-server-no-aot.ts"),
+		3005,
+	);
+
 	printTable(servexSummary, elysiaSummary);
+	printTable(servexSummary, servexSummaryNoAot);
+	printTable(elysiaSummary, elysiaSummaryNoAot);
 }
 
 main().catch((e) => {

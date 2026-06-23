@@ -18,7 +18,7 @@ describe("Context Lifetime", () => {
 		// The request is fully completed, executePostProcess has marked it finished.
 		expect(capturedContext).not.toBeNull();
 		expect(capturedContext!.req.method).toBe("GET");
-		
+
 		const originalWarn = console.warn;
 		let warningCalled = false;
 		console.warn = (msg) => {
@@ -30,7 +30,7 @@ describe("Context Lifetime", () => {
 		// Modifying the context after response should warn
 		capturedContext!.setHeaders({ "X-Late": "true" });
 		capturedContext!.json({ hello: "world" });
-		
+
 		console.warn = originalWarn;
 		expect(warningCalled).toBe(true);
 	});

@@ -1,3 +1,4 @@
+import { bench, run } from "mitata";
 import {
 	compareRouteSpecificity,
 	type SonicRouteNode,
@@ -300,12 +301,8 @@ for (const u of URLS) {
 	console.log(u, "=>", r ? r.matched_route : "null");
 }
 
-const ITERS = 1_000_000;
-const start = performance.now();
-for (let i = 0; i < ITERS; i++) {
+bench("TrieWalk", () => {
 	for (const url of URLS) matchFn(url, `/${url}`, "GET");
-}
-const time = performance.now() - start;
-console.log(
-	`TrieWalk: ${time.toFixed(2)}ms for ${ITERS * URLS.length} lookups`,
-);
+});
+
+await run();

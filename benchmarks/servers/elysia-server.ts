@@ -11,7 +11,7 @@ import { Elysia } from "elysia";
 
 const PORT = Number(process.env.PORT ?? 3001);
 
-new Elysia()
+new Elysia({ nativeStaticResponse: true })
 	// ── Static routes (10) ────────────────────────────────────────────────
 	.get("/", () => "ok")
 	.get("/about", () => "ok")

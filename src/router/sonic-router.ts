@@ -2,7 +2,7 @@ import * as $$path from "node:path";
 import type { Context, MiddlewareHandler } from "../types";
 import type { HTTPMethod, IRouter, MatchedRoute, Route } from "./base";
 import { compileSonicTrieMatcher } from "./sonic-trie-jit";
-import type { DynamicSegmentsRemoved, } from "./types";
+import type { DynamicSegmentsRemoved } from "./types";
 
 export type SonicRouteNode<Data = unknown> = {
 	method: HTTPMethod;
@@ -51,7 +51,10 @@ function segmentRank(segment: string): 0 | 1 | 2 {
  * tested contract — removing it is a separate decision from the regex ->
  * trie migration and shouldn't be bundled into this change.
  */
-export function compareRouteSpecificity(a: SonicRouteNode, b: SonicRouteNode): number {
+export function compareRouteSpecificity(
+	a: SonicRouteNode,
+	b: SonicRouteNode,
+): number {
 	const aSegs = a.path === "" ? [""] : a.path.split("/");
 	const bSegs = b.path === "" ? [""] : b.path.split("/");
 	const len = Math.min(aSegs.length, bSegs.length);

@@ -1,4 +1,5 @@
-const iters = 10_000_000;
+import { bench, group, run } from "mitata";
+
 const map = {
 	"GET/hello": 1,
 	"GET/world": 2,
@@ -21,22 +22,14 @@ const switchFunc = new Function(
 `,
 ) as (key: string) => number | undefined;
 
-// Warmup
-for (let i = 0; i < 1000; i++) {
-	mapFunc("GET/foo");
-	switchFunc("GET/foo");
-}
+group("JIT vs Map", () => {
+	bench("Map", () => {
+		mapFunc("GET/foo");
+	});
 
-let start = performance.now();
-let _sum1 = 0;
-for (let i = 0; i < iters; i++) {
-	_sum1 += mapFunc("GET/foo")!;
-}
-console.log("Map:", performance.now() - start);
+	bench("Switch", () => {
+		switchFunc("GET/foo");
+	});
+});
 
-start = performance.now();
-let _sum2 = 0;
-for (let i = 0; i < iters; i++) {
-	_sum2 += switchFunc("GET/foo")!;
-}
-console.log("Switch:", performance.now() - start);
+await run();

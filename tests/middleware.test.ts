@@ -23,7 +23,7 @@ describe("Middleware", () => {
 	it("should execute route-specific middleware", async () => {
 		const app = createServer();
 
-		const authMiddleware: Handler<Context<any, any>> = async (c, next) => {
+		const authMiddleware: Handler<Context> = async (c, next) => {
 			if (c.req.headers.get("Authorization") !== "Bearer token") {
 				return c.text("Unauthorized", 401);
 			}

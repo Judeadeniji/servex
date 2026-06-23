@@ -96,7 +96,7 @@ export const serveStatic = (options: ServeStaticOptions = {}) => {
 
 			return new Response(data as unknown as BodyInit, {
 				status: 200,
-				headers: c.header,
+				headers: c.header(),
 			});
 		}
 
@@ -147,7 +147,7 @@ export const serveStatic = (options: ServeStaticOptions = {}) => {
 
 			return new Response(fileBuffer as unknown as BodyInit, {
 				status: 200,
-				headers: c.header,
+				headers: c.header(),
 			});
 		} catch (error: unknown) {
 			// File not found, let the next middleware/handler run

@@ -9,7 +9,7 @@ import {
 	type Route,
 	TrieSegmentNode,
 } from "./base";
-import type { DynamicSegmentsRemoved, } from "./types";
+import type { DynamicSegmentsRemoved } from "./types";
 
 export class TrieRouter<Routes extends Route[]> implements IRouter<Routes> {
 	private root = new TrieSegmentNode("/");
@@ -392,7 +392,9 @@ export class TrieRouter<Routes extends Route[]> implements IRouter<Routes> {
 					matched_route.matched_route += `/${seg}`;
 					if (trieSegment.data[method]) {
 						matched_route.matched = true;
-						matched_route.data = trieSegment.data[method] as Routes[number]["data"];
+						matched_route.data = trieSegment.data[
+							method
+						] as Routes[number]["data"];
 						this.collectMiddlewares(trieSegment, matched_route.middlewares);
 						return matched_route;
 					}

@@ -71,8 +71,7 @@ export class FileSystemStorage implements StorageAdapter {
 		let filename = this.keyMap.get(key);
 		if (!filename) {
 			// Create a safe, unique filename using a hash of the key
-			filename =
-				`${this.crypto.createHash("sha256").update(key).digest("hex")}.bin`;
+			filename = `${this.crypto.createHash("sha256").update(key).digest("hex")}.bin`;
 			this.keyMap.set(key, filename);
 		}
 		return this.path.join(this.baseDir, filename);

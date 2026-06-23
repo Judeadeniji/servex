@@ -26,5 +26,8 @@ memoirist.add("GET", "/public/*", "wild");
 memoirist.add("GET", "/assets/*", "wild");
 memoirist.add("GET", "/api/legacy/*", "wild");
 
-console.log((memoirist as any).compile());
-fs.writeFileSync("memoirist-code.js", (memoirist as any).compile());
+console.log((memoirist as unknown as { compile: () => string }).compile());
+fs.writeFileSync(
+	"memoirist-code.js",
+	(memoirist as unknown as { compile: () => string }).compile(),
+);

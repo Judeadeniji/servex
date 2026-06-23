@@ -1,3 +1,4 @@
+import { bench, run } from "mitata";
 import { SonicRouter } from "../../src/router/sonic-router";
 
 const sonic = new SonicRouter();
@@ -55,16 +56,8 @@ const URLS = [
 	"/this/does/not/exist",
 ];
 
-for (let i = 0; i < 1000; i++) {
+bench("SonicRouter", () => {
 	for (const url of URLS) sonic.match("GET", url);
-}
+});
 
-const ITERS = 1_000_000;
-const start = performance.now();
-for (let i = 0; i < ITERS; i++) {
-	for (const url of URLS) sonic.match("GET", url);
-}
-const time = performance.now() - start;
-console.log(
-	`SonicRouter: ${time.toFixed(2)}ms for ${ITERS * URLS.length} lookups`,
-);
+await run();

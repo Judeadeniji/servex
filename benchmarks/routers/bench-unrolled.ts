@@ -23,11 +23,10 @@
  * feature, not a correctness feature for correct programs) in exchange for the perf win.
  */
 
+import { bench, group, run } from "mitata";
 import type { Context } from "../../src/context";
 import { executeHandlers } from "../../src/core/response";
 import type { Handler } from "../../src/types";
-
-const ITERS = 1_000_000;
 
 function compileUnrolled(
 	handlers: Handler<Context>[],
@@ -64,10 +63,13 @@ function compileUnrolled(
 function generateChain(length: number): Handler<Context>[] {
 	const chain: Handler<Context>[] = [];
 	for (let i = 0; i < length - 1; i++) {
-		chain.push(async (ctx: Context, next: () => Promise<void | Response>) => {
-			(ctx as any).count = ((ctx as any).count || 0) + 1;
-			await next();
-		});
+		chain.push(
+			async (ctx: Context, next: () => Promise<undefined | Response>) => {
+				(ctx as unknown as { count: number }).count =
+					((ctx as unknown as { count: number }).count || 0) + 1;
+				await next();
+			},
+		);
 	}
 	chain.push(async () => new Response("OK"));
 	return chain;
@@ -90,14 +92,14 @@ async function testCorrectness() {
 	// Test 2: short-circuit at position 0 (auth-style)
 	let afterAuth = false;
 	const chainAuth = [
-		async (_ctx: Context, _next: () => Promise<void | Response>) =>
+		async (_ctx: Context, _next: () => Promise<undefined | Response>) =>
 			new Response("Unauthorized", { status: 401 }),
 		async (_ctx: Context) => {
 			afterAuth = true;
 			return new Response("OK");
 		},
 	];
-	const fnAuth = compileUnrolled(chainAuth as any);
+	const fnAuth = compileUnrolled(chainAuth as unknown as Handler<Context>[]);
 	const rAuth = await fnAuth(ctx);
 	console.log(
 		"Short-circuit at 0:",
@@ -108,10 +110,11 @@ async function testCorrectness() {
 
 	// Test 3: short-circuit at position 1
 	const chainMid = [
-		async (_ctx: Context, next: () => Promise<void | Response>) => {
+		async (_ctx: Context, next: () => Promise<undefined | Response>) => {
 			await next();
 		},
-		async (_ctx: Context, _next: () => Promise<void | Response>) => new Response("Stopped"),
+		async (_ctx: Context, _next: () => Promise<undefined | Response>) =>
+			new Response("Stopped"),
 		async (_ctx: Context) => new Response("Never reached"),
 	];
 	const fnMid = compileUnrolled(chainMid as any);
@@ -124,40 +127,23 @@ async function testCorrectness() {
 	console.log("");
 }
 
-async function runBench() {
-	await testCorrectness();
+await testCorrectness();
 
-	const mockContext = { count: 0 } as unknown as Context;
+const mockContext = { count: 0 } as unknown as Context;
 
-	for (const len of [1, 3, 8, 20]) {
-		console.log(`=== Chain Length: ${len} ===`);
-		const handlers = generateChain(len);
-		const unrolled = compileUnrolled(handlers);
+for (const len of [1, 3, 8, 20]) {
+	const handlers = generateChain(len);
+	const unrolled = compileUnrolled(handlers);
 
-		// Warmup
-		for (let i = 0; i < 1000; i++) {
+	group(`Chain Length: ${len}`, () => {
+		bench("executeHandlers", async () => {
 			await executeHandlers(mockContext, handlers);
-			await unrolled(mockContext);
-		}
+		});
 
-		let start = performance.now();
-		for (let i = 0; i < ITERS; i++) {
-			await executeHandlers(mockContext, handlers);
-		}
-		const nonJitTime = performance.now() - start;
-		console.log(`executeHandlers:       ${nonJitTime.toFixed(2)}ms`);
-
-		start = performance.now();
-		for (let i = 0; i < ITERS; i++) {
+		bench("Unrolled (no guard)", async () => {
 			await unrolled(mockContext);
-		}
-		const unrolledTime = performance.now() - start;
-		console.log(`Unrolled (no guard):   ${unrolledTime.toFixed(2)}ms`);
-		console.log(
-			`Speedup:               ${(nonJitTime / unrolledTime).toFixed(2)}x`,
-		);
-		console.log("");
-	}
+		});
+	});
 }
 
-runBench();
+await run();

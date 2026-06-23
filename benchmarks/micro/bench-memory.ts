@@ -1,8 +1,9 @@
+import { bench, group, run } from "mitata";
 import { compileHandlerChain } from "../../src/compiler/index";
-import { Context } from "../../src/context";
+import { type Context, createContext } from "../../src/context";
 
 // A mock handler that simulates real work (allocating objects)
-const handler = (c: any, next: any) => {
+const handler = (c: Context, next: () => void) => {
 	// Allocate some memory to generate garbage
 	const obj = { data: new Array(100).fill(Math.random()) };
 	c.set("obj", obj);
@@ -10,80 +11,52 @@ const handler = (c: any, next: any) => {
 	return new Response("OK");
 };
 
-const terminalHandler = (c: any) => {
+const terminalHandler = (c: Context) => {
 	const obj = { data: new Array(100).fill(Math.random()) };
 	c.set("obj", obj);
 	return new Response("OK");
 };
 
-function runNative(handlers: any[], iterations: number, ctx: any) {
+function runNative(handlers: Function[], ctx: Context) {
 	let i = 0;
 	const next = () => {
 		i++;
 		if (i >= handlers.length) return undefined;
 		return handlers[i](ctx, next);
 	};
-	for (let j = 0; j < iterations; j++) {
-		i = 0;
-		handlers[0](ctx, next);
-	}
+	handlers[0](ctx, next);
 }
 
-async function measure(name: string, fn: () => void | Promise<void>) {
-	Bun.gc(true); // Force GC before test
-	const startMemory = process.memoryUsage().heapUsed;
-	
-	const start = performance.now();
-	
-	// Start event loop lag tracker to proxy GC pauses
-	let maxLag = 0;
-	let lastCheck = performance.now();
-	const interval = setInterval(() => {
-		const now = performance.now();
-		const lag = now - lastCheck - 1; // 1ms interval
-		if (lag > maxLag) maxLag = lag;
-		lastCheck = now;
-	}, 1);
+const ctx = createContext(new Request("http://localhost/"), {}, { params: {} });
 
-	await fn();
+// Short Chain (3)
+const shortHandlers = [handler, handler, terminalHandler];
+const compiledShort = compileHandlerChain(shortHandlers);
 
-	clearInterval(interval);
-	const endMemory = process.memoryUsage().heapUsed;
-	const duration = performance.now() - start;
-	
-	console.log(`| ${name.padEnd(30)} | ${(duration).toFixed(2)}ms | ${((endMemory - startMemory) / 1024 / 1024).toFixed(2)} MB | ${maxLag.toFixed(2)}ms max lag |`);
-}
+// Long Chain (9)
+const longHandlers = [
+	handler,
+	handler,
+	handler,
+	handler,
+	handler,
+	handler,
+	handler,
+	handler,
+	terminalHandler,
+];
+const compiledLong = compileHandlerChain(longHandlers);
 
-async function run() {
-	console.log("=======================================================================");
-	console.log("| Benchmark                      | Time       | Heap Diff  | Max Pause |");
-	console.log("|--------------------------------|------------|------------|-----------|");
-
-	const ctx = new Context(new Request("http://localhost/"), {}, { params: {} });
-	const ITERATIONS = 2_000_000;
-
-	// Short Chain (3)
-	const shortHandlers = [handler, handler, terminalHandler];
-	const compiledShort = compileHandlerChain(shortHandlers);
-	
-	await measure("Native Short Chain", () => runNative(shortHandlers, ITERATIONS, ctx));
-	await measure("Compiled Short Chain", async () => {
-		for (let i = 0; i < ITERATIONS; i++) {
-			await compiledShort(ctx);
-		}
+group("Memory", () => {
+	group("Short Chain", () => {
+		bench("Native", () => runNative(shortHandlers, ctx));
+		bench("Compiled", () => compiledShort(ctx));
 	});
 
-	// Long Chain (9)
-	const longHandlers = [handler, handler, handler, handler, handler, handler, handler, handler, terminalHandler];
-	const compiledLong = compileHandlerChain(longHandlers);
-
-	await measure("Native Long Chain", () => runNative(longHandlers, ITERATIONS, ctx));
-	await measure("Compiled Long Chain", async () => {
-		for (let i = 0; i < ITERATIONS; i++) {
-			await compiledLong(ctx);
-		}
+	group("Long Chain", () => {
+		bench("Native", () => runNative(longHandlers, ctx));
+		bench("Compiled", () => compiledLong(ctx));
 	});
-	console.log("=======================================================================");
-}
+});
 
-run();
+await run();

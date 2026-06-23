@@ -1,5 +1,4 @@
 import { describe, expect, it } from "bun:test";
-import type { Context } from "../src/context";
 import { createServer } from "../src/index";
 
 describe("Context State (set/get)", () => {

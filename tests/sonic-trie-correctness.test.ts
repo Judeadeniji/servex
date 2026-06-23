@@ -1,6 +1,11 @@
 import { compileSonicTrieMatcher } from "../src/router/sonic-trie-jit";
 
-type RouteLike = { path: string; paramsKeys: string[]; middlewares: unknown[]; data: unknown };
+type RouteLike = {
+	path: string;
+	paramsKeys: string[];
+	middlewares: unknown[];
+	data: unknown;
+};
 
 function route(path: string): RouteLike {
 	const paramsKeys: string[] = [];

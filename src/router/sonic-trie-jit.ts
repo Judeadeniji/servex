@@ -294,9 +294,10 @@ export function compileSonicTrieMatcher<_T>(
       
       if (_s === _e) {
         ${
-          trie.literal.get("")?.route ? buildReturn(
-            trie.literal.get("")?.route as RouteLike, []) : ""
-        }
+					trie.literal.get("")?.route
+						? buildReturn(trie.literal.get("")?.route as RouteLike, [])
+						: ""
+				}
       }
       
       ${body}

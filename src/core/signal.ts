@@ -124,7 +124,6 @@ abstract class ChildContext extends BaseContext {
 // ─── CancelContext ─────────────────────────────────────────────────────────────
 
 class CancelContextImpl extends ChildContext {
-
 	value<T = unknown>(key: string): T | undefined {
 		return this._parent.value<T>(key);
 	}

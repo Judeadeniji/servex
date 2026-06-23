@@ -51,12 +51,12 @@ describe("Signal Context", () => {
 		const app = createServer();
 
 		app.use("*", async (c, next) => {
-			c.routine = withValue(c.routine, "user", { id: 42 });
+			c.setRoutine(withValue(c.routine(), "user", { id: 42 }));
 			await next();
 		});
 
 		app.get("/user", (c) => {
-			const user = c.routine.value<{ id: number }>("user");
+			const user = c.routine().value<{ id: number }>("user");
 			return c.json(user!);
 		});
 
@@ -73,7 +73,7 @@ describe("Signal Context", () => {
 		app.get("/long", async (c) => {
 			// Simulate long polling
 			await new Promise((r) => setTimeout(r, 20));
-			isCancelled = c.routine.done;
+			isCancelled = c.routine().done;
 			return c.text("Done");
 		});
 

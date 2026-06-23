@@ -7,8 +7,12 @@ import type { ServeXRouter, TypedResponse } from "../src/types";
 // biome-ignore lint/suspicious/noExplicitAny: infer bounds require any
 type InferSchema<T> = T extends ServeXRouter<any, infer S, any> ? S : never;
 // Helper: extract the base path `B` from a ServeXRouter<E, S, B>
-// biome-ignore lint/suspicious/noExplicitAny: infer bounds require any
-type InferBase<T> = T extends { basePath: infer B } ? B : T extends ServeXRouter<any, any, infer B> ? B : never;
+type InferBase<T> = T extends { basePath: infer B }
+	? B
+	: // biome-ignore lint/suspicious/noExplicitAny: infer bounds require any
+		T extends ServeXRouter<any, any, infer B>
+		? B
+		: never;
 
 // ─── 0. NormalisePath sanity checks ──────────────────────────────────────────
 

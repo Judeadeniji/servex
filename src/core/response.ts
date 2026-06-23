@@ -1,4 +1,3 @@
-
 import type { Context } from "../context";
 import type { Handler } from "../types";
 
@@ -19,7 +18,9 @@ const _RESOLVED = Promise.resolve();
  * @returns The first Response returned by any handler, or undefined if none.
  * @throws  Re-throws any error from a handler for the caller to handle once.
  */
-export async function executeHandlers<E extends import("../types").Env = import("../types").Env>(
+export async function executeHandlers<
+	E extends import("../types").Env = import("../types").Env,
+>(
 	context: Context<E>,
 	handlers: Handler<Context<E>>[],
 ): Promise<Response | undefined> {

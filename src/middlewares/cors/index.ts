@@ -42,7 +42,7 @@ export function cors<C extends Context>(
 
 	return async function cors(ctx, next) {
 		function set(key: string, value: string) {
-			ctx.header.set(key, value);
+			ctx.header().set(key, value);
 		}
 
 		const allowOrigin = findAllowOrigin(
@@ -91,14 +91,14 @@ export function cors<C extends Context>(
 			}
 			if (headers?.length) {
 				set("Access-Control-Allow-Headers", headers.join(","));
-				ctx.header.append("Vary", "Access-Control-Request-Headers");
+				ctx.header().append("Vary", "Access-Control-Request-Headers");
 			}
 
-			ctx.header.delete("Content-Length");
-			ctx.header.delete("Content-Type");
+			ctx.header().delete("Content-Length");
+			ctx.header().delete("Content-Type");
 
 			return new Response(null, {
-				headers: ctx.header,
+				headers: ctx.header(),
 				status: 204,
 				statusText: "No Content",
 			});

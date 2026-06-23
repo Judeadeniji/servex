@@ -32,18 +32,18 @@ type PathParams<Path extends string> =
 				? { [K in Param]: string } & PathParams<Rest>
 				: Path extends `${string}*${infer Param}`
 					? { [K in Param]: string }
-					// biome-ignore lint/complexity/noBannedTypes: empty schema requires {}
-					: {};
+					: // biome-ignore lint/complexity/noBannedTypes: empty schema requires {}
+						{};
 
 // Extract query parameters
 type QueryParams<Query extends string> =
 	Query extends `${infer Param}=${string}${infer Rest}`
 		? { [K in Param]: string } & (Rest extends `&${infer Next}`
 				? QueryParams<Next>
-				// biome-ignore lint/complexity/noBannedTypes: empty schema requires {}
-				: {})
-		// biome-ignore lint/complexity/noBannedTypes: empty schema requires {}
-		: {};
+				: // biome-ignore lint/complexity/noBannedTypes: empty schema requires {}
+					{})
+		: // biome-ignore lint/complexity/noBannedTypes: empty schema requires {}
+			{};
 
 // Main type to extract both path and query parameters
 export type ExtractUrl<T extends string> = Coerce<{

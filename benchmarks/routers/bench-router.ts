@@ -1,10 +1,9 @@
+import { bench, run } from "mitata";
 import { RouterAdapter, RouterType } from "../../src/router/adapter";
 import type { Route } from "../../src/router/base";
 
-const iterations = 100_000;
-
 // Create dummy routes (realistic mix)
-const routes: Route<any>[] = [
+const routes: Route<Context>[] = [
 	// 10 Static routes
 	{ method: "GET", path: "/", data: [() => new Response("Root")] },
 	{ method: "GET", path: "/about", data: [() => new Response("About")] },
@@ -125,30 +124,26 @@ const requestMix = [
 	"/repo/owner-only/no-repo", // 404 partial match
 ];
 
-function runBench(type: RouterType) {
-	const router = new RouterAdapter({ type, routes });
+const radixRouter = new RouterAdapter({ type: RouterType.RADIX, routes });
+const trieRouter = new RouterAdapter({ type: RouterType.TRIE, routes });
+const sonicRouter = new RouterAdapter({ type: RouterType.SONIC, routes });
 
-	// Warmup
-	for (let i = 0; i < 1000; i++) {
-		for (const req of requestMix) {
-			router.match("GET", req);
-		}
+bench("RADIX Router", () => {
+	for (const req of requestMix) {
+		radixRouter.match("GET", req);
 	}
+});
 
-	const start = performance.now();
-	for (let i = 0; i < iterations; i++) {
-		for (const req of requestMix) {
-			router.match("GET", req);
-		}
+bench("TRIE Router", () => {
+	for (const req of requestMix) {
+		trieRouter.match("GET", req);
 	}
-	const end = performance.now();
+});
 
-	console.log(`${type} Router: ${(end - start).toFixed(2)} ms`);
-}
+bench("SONIC Router", () => {
+	for (const req of requestMix) {
+		sonicRouter.match("GET", req);
+	}
+});
 
-console.log(
-	`Running Realistic Mix Benchmark with ${iterations.toLocaleString()} iterations (${requestMix.length * iterations} total lookups)...\n`,
-);
-runBench(RouterType.RADIX);
-runBench(RouterType.TRIE);
-runBench(RouterType.SONIC);
+await run();

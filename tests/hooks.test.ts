@@ -1,5 +1,4 @@
-import { describe, expect, it, mock } from "bun:test";
-import { Context } from "../src/context";
+import { describe, expect, it } from "bun:test";
 import { createServer } from "../src/index";
 
 describe("Lifecycle Hooks", () => {

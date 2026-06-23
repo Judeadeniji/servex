@@ -1,4 +1,4 @@
-import { Context } from "./context";
+import type { Context } from "./context";
 import type { HttpException } from "./http-exception";
 import type { StatusCode } from "./http-status";
 import type { RouterType } from "./router/adapter";
@@ -21,13 +21,13 @@ export type ServerRoute<E extends Env = Env> = {
 export type Handler<C extends Context = Context> = (
 	ctx: C,
 	next: NextFunction,
-// biome-ignore lint/suspicious/noConfusingVoidType: handlers can return void
+	// biome-ignore lint/suspicious/noConfusingVoidType: handlers can return void
 ) => Promise<Response | void> | Response | void;
 
 export type RequestHandler<C extends Context = Context> = (
 	ctx: C,
 	next: NextFunction,
-// biome-ignore lint/suspicious/noConfusingVoidType: handlers can return void
+	// biome-ignore lint/suspicious/noConfusingVoidType: handlers can return void
 ) => Promise<Response | void> | Response | void;
 
 export type MiddlewareHandler<C extends Context> = Handler<C>;
@@ -66,14 +66,19 @@ export interface ServerOptions<B extends string = "/"> {
 	debug?: boolean;
 	/**
 	 * Enable native static response bypassing for inline values.
-	 * If true, routes defined with inline values (e.g. app.get('/version', 1)) 
+	 * If true, routes defined with inline values (e.g. app.get('/version', 1))
 	 * without middlewares will be injected into Bun.serve.static for maximum performance.
 	 * Default: false
 	 */
 	nativeStaticResponse?: boolean;
 }
 
-export type InlineHandler = string | number | boolean | Record<string, unknown> | Response;
+export type InlineHandler =
+	| string
+	| number
+	| boolean
+	| Record<string, unknown>
+	| Response;
 
 export type HookHandler<C extends Context> = (
 	ctx: C,
@@ -124,7 +129,10 @@ export type ExtractResponseType<T> = T extends (
 ) => infer R | Promise<infer R>
 	? R
 	: never;
-export type Last<T extends unknown[]> = T extends readonly [...unknown[], infer L]
+export type Last<T extends unknown[]> = T extends readonly [
+	...unknown[],
+	infer L,
+]
 	? L
 	: never;
 
@@ -145,7 +153,11 @@ export interface ServeXRouter<
 	get<P extends string, R extends InlineHandler>(
 		path: P,
 		handler: R,
-	): ServeXRouter<E, S & { [K in AbsolutePath<B, P>]: { GET: R, IS_STATIC: true } }, B>;
+	): ServeXRouter<
+		E,
+		S & { [K in AbsolutePath<B, P>]: { GET: R; IS_STATIC: true } },
+		B
+	>;
 	get<P extends string, R>(
 		path: P,
 		handler: (ctx: Context<E, P>, next: NextFunction) => R | Promise<R>,
@@ -431,7 +443,12 @@ export interface ServeXRouter<
 		) => ServeXRouter<E, ChildSchema, AbsolutePath<B, P>> | undefined,
 	): ServeXRouter<E, S & ChildSchema, B>;
 	// biome-ignore lint/complexity/noBannedTypes: schema requires empty object
-	route<P extends string, ChildSchema = {}, ChildEnv extends Env = Env, ChildBasePath extends string = string>(
+	route<
+		P extends string,
+		ChildSchema = {},
+		ChildEnv extends Env = Env,
+		ChildBasePath extends string = string,
+	>(
 		path: P,
 		app: ServeXRouter<ChildEnv, ChildSchema, ChildBasePath>,
 	): ServeXRouter<E, S & ChildSchema, B>;
@@ -460,14 +477,16 @@ export interface ServeXRouter<
 	 * Natively injected static responses (if nativeStaticResponse is enabled).
 	 * Strictly typed with all known route paths.
 	 */
-	static?: Record<string, Response> & { 
+	static?: Record<string, Response> & {
 		[K in keyof S as K extends `${string}:${string}` | `${string}*${string}`
 			? never
-			: S[K] extends { GET: unknown, IS_STATIC: true }
+			: S[K] extends { GET: unknown; IS_STATIC: true }
 				? K
 				: never]?: S[K] extends { GET: infer R }
-			? R extends Response ? R : Response & TypedResponse<R, 200>
-			: Response
+			? R extends Response
+				? R
+				: Response & TypedResponse<R, 200>
+			: Response;
 	};
 
 	/**
@@ -546,4 +565,4 @@ export type TypedResponse<
 export type NextFunction = () => Promise<Response | void>;
 export declare function fetch(request: Request): Promise<Response>;
 
-export { Context };
+export type { Context };

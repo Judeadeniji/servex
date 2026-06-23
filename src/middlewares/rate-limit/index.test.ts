@@ -1,4 +1,4 @@
-import { describe, expect, it, } from "bun:test";
+import { describe, expect, it } from "bun:test";
 import { createServer } from "../../../src";
 import { rateLimiter } from "./index";
 

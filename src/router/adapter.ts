@@ -4,7 +4,7 @@ import type { HTTPMethod, IRouter, MatchedRoute, Route } from "./base";
 import { RadixRouteTrie } from "./radix-router";
 import { SonicRouter } from "./sonic-router";
 import { TrieRouter } from "./trie-router";
-import type { DynamicSegmentsRemoved, } from "./types";
+import type { DynamicSegmentsRemoved } from "./types";
 
 /**
  * Enum to define available router types.

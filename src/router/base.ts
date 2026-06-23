@@ -1,5 +1,5 @@
 import type { Context, Method, MiddlewareHandler } from "../types";
-import type { DynamicSegmentsRemoved, ExtractUrl, } from "./types";
+import type { DynamicSegmentsRemoved, ExtractUrl } from "./types";
 
 export type HTTPMethod = Method;
 

@@ -12,7 +12,10 @@ import { RouterType } from "../../src/router/adapter";
 
 const PORT = Number(process.env.PORT ?? 3000);
 
-const app = createServer({ router: RouterType.SONIC });
+const app = createServer({
+	router: RouterType.SONIC,
+	nativeStaticResponse: true,
+});
 
 // ── Static routes (10) ─────────────────────────────────────────────────────
 app.get("/", () => new Response("ok"));
@@ -54,5 +57,5 @@ app.get("/public/*path", (_ctx) => new Response("file"));
 app.get("/assets/*path", (_ctx) => new Response("file"));
 app.get("/api/legacy/*path", (_ctx) => new Response("legacy"));
 
-Bun.serve({ port: PORT, fetch: app.fetch });
+Bun.serve({ port: PORT, fetch: app.fetch, static: app.static });
 console.log(`[servex] listening on :${PORT}`);

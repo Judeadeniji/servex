@@ -8,6 +8,7 @@
  *   5. Overhead = (3) - (4): cost of param extraction + object alloc
  */
 
+import { bench, run } from "mitata";
 import type { Route } from "../../src/router/base";
 import { SonicRouter } from "../../src/router/sonic-router";
 
@@ -70,47 +71,14 @@ router.match("GET", "/api/users/1");
 const matchFn = router._matchFns.GET;
 
 console.log(`Routes: ${routes.length} (10 static, 15 param, 5 wildcard)`);
-console.log(
-	`Request mix: ${requestMix.length} URLs\n`,
-);
+console.log(`Request mix: ${requestMix.length} URLs\n`);
 
-const ITERS = 1_000_000;
+bench("Full router.match() — all URLs", () => {
+	for (const u of requestMix) router.match("GET", u);
+});
 
-function bench(label: string, fn: () => void, calls: number): number {
-	// warmup
-	for (let i = 0; i < 2000; i++) fn();
-	const start = performance.now();
-	for (let i = 0; i < ITERS; i++) fn();
-	const ms = performance.now() - start;
-	const nsPerCall = ((ms / (ITERS * calls)) * 1e6).toFixed(0);
-	console.log(
-		`${label.padEnd(42)} ${ms.toFixed(1).padStart(8)}ms  (${nsPerCall}ns per URL)`,
-	);
-	return ms;
-}
+bench("JIT matchFn() — all URLs", () => {
+	for (const u of requestMix) matchFn(u, "GET");
+});
 
-console.log("─".repeat(75));
-
-// 1. Baseline: full match() over all URLs
-const fullTime = bench(
-	"Full router.match() — all URLs",
-	() => {
-		for (const u of requestMix) router.match("GET", u);
-	},
-	requestMix.length,
-);
-
-// 2. JIT matchFn alone
-const jitTime = bench(
-	"JIT matchFn() — all URLs",
-	() => {
-		for (const u of requestMix) matchFn(u, "GET");
-	},
-	requestMix.length,
-);
-
-console.log("─".repeat(75));
-const routerOverhead = (((fullTime - jitTime) / fullTime) * 100).toFixed(1);
-console.log(`\nBreakdown:`);
-console.log(`  JIT fn time:           ${jitTime.toFixed(1)}ms`);
-console.log(`  Router wrapper cost:   ${routerOverhead}% of full match time`);
+await run();

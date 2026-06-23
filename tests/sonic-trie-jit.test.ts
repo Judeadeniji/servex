@@ -152,7 +152,7 @@ describe("compileSonicTrieMatcher Correctness", () => {
 				"GET" as any,
 				c.routes as any[],
 			);
-			const result = matchFn(c.url, "/" + c.url, "GET");
+			const result = matchFn(c.url, `/${c.url}`, "GET");
 
 			const gotMatch = result ? result.matched_route : null;
 			expect(gotMatch).toBe(c.expectMatch);
