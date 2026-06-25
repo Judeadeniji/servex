@@ -1,3 +1,5 @@
+import type { JSONValue } from '../types';
+
 export type RPCErrorCode =
 	| 'VALIDATION_ERROR'
 	| 'NOT_FOUND'
@@ -9,13 +11,13 @@ export class RPCError extends Error {
 	constructor(
 		public code: RPCErrorCode,
 		message: string,
-		public data?: unknown,
+		public data?: JSONValue,
 	) {
 		super(message);
 		this.name = 'RPCError';
 	}
 
-	toJSON() {
+	toJSON(): JSONValue {
 		return {
 			ok: false,
 			error: {
@@ -27,7 +29,7 @@ export class RPCError extends Error {
 	}
 }
 
-export class RPCTypedError<T = unknown> extends RPCError {
+export class RPCTypedError<T extends JSONValue = JSONValue> extends RPCError {
 	constructor(public readonly typedData: T) {
 		super('TYPED_ERROR', 'Typed RPC error', typedData);
 		this.name = 'RPCTypedError';

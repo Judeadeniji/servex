@@ -3,8 +3,7 @@ import type { RPCFunctionDef, RPCMiddleware, RPCRegistry } from './types';
 export type CompiledRoute = {
 	path: string; // e.g. 'users.getUser'
 	httpPath: string; // e.g. '/rpc/users/getUser' (or hashed)
-	// biome-ignore lint/suspicious/noExplicitAny: Internal router handles all function definitions
-	fn: RPCFunctionDef<any, any, any>;
+	fn: RPCFunctionDef<unknown, unknown, unknown>;
 	middlewareChain: RPCMiddleware[]; // flattened, ordered: group -> fn-level
 };
 

@@ -22,33 +22,45 @@ class RPCFunctionBuilderImpl<TInput, TOutput, TError>
 	input<S extends StandardSchemaV1>(
 		schema: S,
 	): RPCFunctionBuilder<Infer<S>, TOutput, TError> {
-		this._inputSchema = schema;
-		// biome-ignore lint/suspicious/noExplicitAny: Fluent builder type casting
-		return this as any;
+		const next = new RPCFunctionBuilderImpl<Infer<S>, TOutput, TError>();
+		next._inputSchema = schema;
+		next._outputSchema = this._outputSchema;
+		next._errorSchema = this._errorSchema;
+		next._middlewares = [...this._middlewares];
+		return next;
 	}
 
 	output<S extends StandardSchemaV1>(
 		schema: S,
 	): RPCFunctionBuilder<TInput, Infer<S>, TError> {
-		this._outputSchema = schema;
-		// biome-ignore lint/suspicious/noExplicitAny: Fluent builder type casting
-		return this as any;
+		const next = new RPCFunctionBuilderImpl<TInput, Infer<S>, TError>();
+		next._inputSchema = this._inputSchema;
+		next._outputSchema = schema;
+		next._errorSchema = this._errorSchema;
+		next._middlewares = [...this._middlewares];
+		return next;
 	}
 
 	error<S extends StandardSchemaV1>(
 		schema: S,
 	): RPCFunctionBuilder<TInput, TOutput, Infer<S>> {
-		this._errorSchema = schema;
-		// biome-ignore lint/suspicious/noExplicitAny: Fluent builder type casting
-		return this as any;
+		const next = new RPCFunctionBuilderImpl<TInput, TOutput, Infer<S>>();
+		next._inputSchema = this._inputSchema;
+		next._outputSchema = this._outputSchema;
+		next._errorSchema = schema;
+		next._middlewares = [...this._middlewares];
+		return next;
 	}
 
 	middlewares(
 		...fns: RPCMiddleware[]
 	): RPCFunctionBuilder<TInput, TOutput, TError> {
-		this._middlewares.push(...fns);
-		// biome-ignore lint/suspicious/noExplicitAny: Fluent builder type casting
-		return this as any;
+		const next = new RPCFunctionBuilderImpl<TInput, TOutput, TError>();
+		next._inputSchema = this._inputSchema;
+		next._outputSchema = this._outputSchema;
+		next._errorSchema = this._errorSchema;
+		next._middlewares = [...this._middlewares, ...fns];
+		return next;
 	}
 
 	handler(

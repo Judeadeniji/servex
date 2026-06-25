@@ -11,10 +11,12 @@ export function createRPCClient<T>(
 	options: RPCClientOptions,
 ): T extends { registry: infer R extends RPCRegistry }
 	? InferClientFromRegistry<R>
-	// biome-ignore lint/suspicious/noExplicitAny: Any is required for fallback
-	: InferClientFromRegistry<any> {
-	// biome-ignore lint/suspicious/noExplicitAny: Recursive proxy needs any
-	return createProxy(options, []) as any;
+	: InferClientFromRegistry<Record<string, never>> {
+	return createProxy(options, []) as unknown as T extends {
+		registry: infer R extends RPCRegistry;
+	}
+		? InferClientFromRegistry<R>
+		: InferClientFromRegistry<Record<string, never>>;
 }
 
 function createProxy(options: RPCClientOptions, path: string[]): unknown {

@@ -9,16 +9,15 @@ export function createRPCGroup(): RPCGroupBuilder {
 	return new RPCGroupBuilderImpl();
 }
 
-// biome-ignore lint/complexity/noBannedTypes: Base registry type
-class RPCGroupBuilderImpl<T extends RPCRegistry = {}>
+class RPCGroupBuilderImpl<T extends RPCRegistry = Record<string, never>>
 	implements RPCGroupBuilder<T>
 {
 	private _middlewares: RPCMiddleware[] = [];
 
 	middlewares(...fns: RPCMiddleware[]): RPCGroupBuilder<T> {
-		this._middlewares.push(...fns);
-		// biome-ignore lint/suspicious/noExplicitAny: Fluent builder type casting
-		return this as any;
+		const next = new RPCGroupBuilderImpl<T>();
+		next._middlewares = [...this._middlewares, ...fns];
+		return next;
 	}
 
 	register<R extends RPCRegistry>(registry: R): RPCGroupDef<R> {

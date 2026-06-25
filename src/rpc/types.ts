@@ -1,5 +1,5 @@
 import type { StandardSchemaV1 } from '@standard-schema/spec';
-import type { Context as ServeXContext } from '../types';
+import type { Context as ServeXContext, Env, ServeXRouter } from '../types';
 
 export type RPCContext = ServeXContext & {
 	rpc: { fn: string; input: unknown };
@@ -17,19 +17,20 @@ export type RPCMiddleware = (
 export type RPCFunctionDef<
 	TInput = unknown,
 	TOutput = unknown,
-	TError = unknown,
+	_TError = unknown,
 > = {
 	_tag: 'RPCFunction';
 	inputSchema: StandardSchemaV1 | null;
 	outputSchema: StandardSchemaV1 | null;
 	errorSchema: StandardSchemaV1 | null;
 	middlewares: RPCMiddleware[];
-	handler: (input: TInput, ctx: RPCContext) => Promise<TOutput>;
+	handler(input: TInput, ctx: RPCContext): Promise<TOutput>;
 };
 
 export type RPCRegistry = {
-	// biome-ignore lint/suspicious/noExplicitAny: Required for recursive type definitions
-	[key: string]: RPCFunctionDef<any, any, any> | RPCGroupDef<any>;
+	[key: string]:
+		| RPCFunctionDef<unknown, unknown, unknown>
+		| RPCGroupDef<RPCRegistry>;
 };
 
 export type RPCGroupDef<T extends RPCRegistry = RPCRegistry> = {
@@ -41,15 +42,15 @@ export type RPCGroupDef<T extends RPCRegistry = RPCRegistry> = {
 export interface RPCFunctionBuilder<
 	TInput = unknown,
 	TOutput = unknown,
-	TError = unknown,
+	_TError = unknown,
 > {
 	input<S extends StandardSchemaV1>(
 		schema: S,
-	): RPCFunctionBuilder<Infer<S>, TOutput, TError>;
+	): RPCFunctionBuilder<Infer<S>, TOutput, _TError>;
 
 	output<S extends StandardSchemaV1>(
 		schema: S,
-	): RPCFunctionBuilder<TInput, Infer<S>, TError>;
+	): RPCFunctionBuilder<TInput, Infer<S>, _TError>;
 
 	error<S extends StandardSchemaV1>(
 		schema: S,
@@ -57,15 +58,14 @@ export interface RPCFunctionBuilder<
 
 	middlewares(
 		...fns: RPCMiddleware[]
-	): RPCFunctionBuilder<TInput, TOutput, TError>;
+	): RPCFunctionBuilder<TInput, TOutput, _TError>;
 
 	handler(
 		fn: (input: TInput, ctx: RPCContext) => Promise<TOutput>,
-	): RPCFunctionDef<TInput, TOutput, TError>;
+	): RPCFunctionDef<TInput, TOutput, _TError>;
 }
 
-// biome-ignore lint/complexity/noBannedTypes: Base registry type
-export interface RPCGroupBuilder<T extends RPCRegistry = {}> {
+export interface RPCGroupBuilder<T extends RPCRegistry = Record<string, never>> {
 	middlewares(...fns: RPCMiddleware[]): RPCGroupBuilder<T>;
 	register<R extends RPCRegistry>(registry: R): RPCGroupDef<R>;
 }
@@ -78,14 +78,14 @@ export type InferClientFromRegistry<T extends RPCRegistry> = {
 			: never;
 };
 
-export type RPCClientFn<TInput, TOutput, TError> = (
+export type RPCClientFn<TInput, TOutput, _TError> = (
 	input: TInput,
 ) => Promise<TOutput>;
 
 // Forward declaration of RPCPluginInstance from plugin.ts
 export type RPCPluginInstance<R extends RPCRegistry> = {
 	registry: R;
-	install(server: any): void;
+	install<E extends Env = Env>(server: ServeXRouter<E>): void;
 };
 
 export type InferAppRPC<T> = T extends RPCPluginInstance<infer R>

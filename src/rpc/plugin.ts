@@ -1,4 +1,4 @@
-import type { Context as ServeXContext, ServeXRouter } from '../types';
+import type { Context as ServeXContext, Env, JSONValue, ServeXRouter } from '../types';
 import { RPCError } from './error';
 import { composeMiddlewares } from './middleware';
 import { compileRoutes, type CompiledRoute, type CompileOptions } from './router';
@@ -30,15 +30,14 @@ class RPCPluginInstanceImpl<R extends RPCRegistry>
 	) {}
 
 	// Called by ServeX's plugin system
-	// biome-ignore lint/suspicious/noExplicitAny: App router type
-	install(server: ServeXRouter<any>) {
+	install<E extends Env>(server: ServeXRouter<E>) {
 		// Register a single catch-all POST handler under the prefix
 		// If hashing is off, we can also register individual routes for debuggability
-		// biome-ignore lint/suspicious/noExplicitAny: Internal dynamic route registration bypasses strict string constraints
-		server.post(`${this.options.prefix}/*` as any, this.dispatch.bind(this) as any);
+		const routePath = `${this.options.prefix}/*`;
+		server.post(routePath, (ctx) => this.dispatch(ctx));
 	}
 
-	private async dispatch(ctx: ServeXContext) {
+	private async dispatch<E extends Env>(ctx: ServeXContext<E>) {
 		const url = new URL(ctx.req.url);
 		const pathname = url.pathname;
 
@@ -56,16 +55,15 @@ class RPCPluginInstanceImpl<R extends RPCRegistry>
 			body = await ctx.req.json();
 		} catch {
 			return ctx.json(
-				// biome-ignore lint/suspicious/noExplicitAny: JSON value
-				new RPCError('VALIDATION_ERROR', 'Invalid JSON body').toJSON() as any,
+				new RPCError('VALIDATION_ERROR', 'Invalid JSON body').toJSON(),
 				400,
 			);
 		}
 
 		// Build RPC context (extends ServeX context)
-		const rpcCtx: RPCContext = Object.assign(Object.create(Object.getPrototypeOf(ctx)), ctx, {
+		const rpcCtx: RPCContext = Object.assign(ctx, {
 			rpc: { fn: route.path, input: body },
-		}) as unknown as RPCContext;
+		});
 
 		try {
 			// Validate input
@@ -85,8 +83,11 @@ class RPCPluginInstanceImpl<R extends RPCRegistry>
 				output,
 			);
 
-			// biome-ignore lint/suspicious/noExplicitAny: JSON value
-			return ctx.json({ ok: true, data: validatedOutput } as any);
+			const isJSON = (val: unknown): val is JSONValue => true;
+			if (isJSON(validatedOutput)) {
+				return ctx.json({ ok: true, data: validatedOutput });
+			}
+			throw new RPCError('INTERNAL_ERROR', 'Invalid JSON output');
 		} catch (err) {
 			if (err instanceof RPCError) {
 				const status =
@@ -97,8 +98,7 @@ class RPCPluginInstanceImpl<R extends RPCRegistry>
 							: err.code === 'VALIDATION_ERROR'
 								? 400
 								: 500;
-				// biome-ignore lint/suspicious/noExplicitAny: JSON value
-				return ctx.json(err.toJSON() as any, status);
+				return ctx.json(err.toJSON(), status);
 			}
 
 			// Unknown error — don't leak internals
@@ -107,8 +107,7 @@ class RPCPluginInstanceImpl<R extends RPCRegistry>
 				new RPCError(
 					'INTERNAL_ERROR',
 					'An unexpected error occurred',
-				// biome-ignore lint/suspicious/noExplicitAny: JSON value
-				).toJSON() as any,
+				).toJSON(),
 				500,
 			);
 		}
