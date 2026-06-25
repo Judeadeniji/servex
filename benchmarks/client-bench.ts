@@ -8,6 +8,7 @@ const app = createServer().get("/api/test", (c) => c.json({ ok: true }));
 type AppType = typeof app;
 
 // Setup custom client bypassing network
+// @ts-ignore: Excessively deep recursion
 const client = createClient<AppType>("http://localhost", { fetch: app.fetch });
 
 // Warmup
