@@ -32,6 +32,7 @@ export class RouterAdapter<Routes extends Route[] = Route[]>
 	private router: IRouter<Routes>;
 	public readonly type: RouterType;
 
+	// fallow-ignore-next-line unused-param Required by Router constructor signature
 	constructor(options: RouterAdapterOptions<Routes>) {
 		const { type, routes = [] } = options;
 		this.type = type;
@@ -58,7 +59,7 @@ export class RouterAdapter<Routes extends Route[] = Route[]>
 	 * Adds a new route by delegating to the underlying router.
 	 * @param route - The route to add.
 	 */
-	addRoute(route: Route<Routes[number]["data"]>): void {
+	addRoute(route: Route): void {
 		this.router.addRoute(route);
 	}
 
@@ -79,7 +80,7 @@ export class RouterAdapter<Routes extends Route[] = Route[]>
 	 * Retrieves all registered routes by delegating to the underlying router.
 	 * @returns An array of all routes.
 	 */
-	get routes(): Route<Routes[number]["data"]>[] {
+	get routes(): Route[] {
 		return this.router.routes;
 	}
 

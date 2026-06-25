@@ -1,70 +1,31 @@
-import type { Context, Method, MiddlewareHandler } from "../types";
+import type { Context, Handler, InternalHandler, Method, MiddlewareHandler } from "../types";
 import type { DynamicSegmentsRemoved, ExtractUrl } from "./types";
 
 export type HTTPMethod = Method;
 
-export type Route<T = unknown> = {
+export type Route = {
 	method: HTTPMethod;
 	path: string;
-	data: T;
+	handlers: InternalHandler[];
 };
 
 export type SegmentType = "static" | "dynamic" | "wildcard";
 export type SegmentNode<T = unknown> = TrieSegmentNode<T> | RadixSegmentNode<T>;
 
 export type MatchedRoute<
-	Routes extends Route<any>[] = Route<any>[],
-	M = boolean,
+	Routes extends Route[] = Route[],
+	M extends boolean = boolean,
 > = {
-	/**
-	 * @property matched - A boolean to indicate if the route was matched
-	 */
 	matched: M;
-	/**
-	 * @property method - The HTTP method of the matched route
-	 */
-	method: Routes[number]["method"];
-	/**
-	 * @property route - The url that was matched
-	 * @example
-	 * // Given the route "/heroes/:heroName/:action"
-	 * // and the url "/heroes/spiderman/save"
-	 * // route will be "/heroes/spiderman/save"
-	 */
-	route: Routes[number]["path"];
-	/**
-	 * @property matched_route - The route that was matched
-	 * @description This is the route that was matched, it may contain dynamic segments
-	 * @example
-	 * // Given the route "/heroes/:heroName/:action"
-	 * // and the url "/heroes/spiderman/save"
-	 * // matched_route will be "/heroes/:heroName/:action"
-	 * // route will be "/heroes/spiderman/save"
-	 */
-	matched_route: string;
-	/**
-	 * @property params - The parameters extracted from the route
-	 * @example
-	 * // Given the route "/heroes/:heroName/:action"
-	 * // and the url "/heroes/spiderman/save"
-	 * // params will be { heroName: "spiderman", action: "save" }
-	 */
-	params: ExtractUrl<Routes[number]["path"]>["params"] & Record<string, string>;
-	/**
-	 * @property data - The data associated with the route
-	 * @description This is the data associated with the route
-	 */
-	data: Routes[number]["data"];
-
-	middlewares: MiddlewareHandler<Context>[];
-	/**
-	 * @property store - A mutable reference object (usually the router node) used for caching JIT executors.
-	 */
-	store?: Record<string, unknown>;
-	/**
-	 * @property executor - A cached execution chain function to bypass compiling handlers on every request.
-	 */
-	executor?: ((context: Context) => Response | undefined | Promise<Response | undefined>);
+	method: Routes[number]["method"] | undefined;
+	route: Routes[number]["path"] | undefined;
+	matched_route: string | undefined;
+	params: ExtractUrl<Routes[number]["path"]>["params"] & Record<string, string> | {};
+	handlers: InternalHandler<Context>[] | undefined;
+	middlewares?: MiddlewareHandler<Context>[];
+	store?: Record<string, unknown> | undefined;
+	executor?: ((context: Context) => Response | undefined | Promise<Response | undefined>) | undefined;
+	is405?: boolean;
 };
 
 /**
@@ -103,7 +64,7 @@ export function orderTrieSegmentByType<T>(
 export class RadixSegmentNode<T = unknown> {
 	children: Map<string, RadixSegmentNode> = new Map();
 	isEndOfRoute: boolean = false;
-	data: Record<HTTPMethod, T> = {} as Record<HTTPMethod, T>;
+	handlers: Record<HTTPMethod, T> = {} as Record<HTTPMethod, T>;
 	type: SegmentType = "static";
 	paramsKeys: string[] = []; // Keys for dynamic segments
 	value: string;
@@ -140,9 +101,9 @@ export class TrieSegmentNode<T = unknown> {
 	 */
 	isEndOfRoute: boolean = false;
 	/**
-	 * @property data - A map of HTTP methods to their associated data
+	 * @property handlers - A map of HTTP methods to their associated handlers
 	 */
-	data: Record<HTTPMethod, T> = {} as Record<HTTPMethod, T>;
+	handlers: Record<HTTPMethod, T> = {} as Record<HTTPMethod, T>;
 	/**
 	 * @property type - The type of the current segment
 	 */
@@ -177,7 +138,7 @@ export interface IRouter<Routes extends Route[] = Route[]> {
 	 * Adds a new route to the router.
 	 * @param route - The route to add.
 	 */
-	addRoute(route: Route<Routes[number]["data"]>): void;
+	addRoute(route: Route): void;
 
 	/**
 	 * Matches a given URL against the registered routes.
@@ -194,7 +155,7 @@ export interface IRouter<Routes extends Route[] = Route[]> {
 	 * Retrieves all registered routes.
 	 * @returns An array of all routes.
 	 */
-	get routes(): Route<Routes[number]["data"]>[];
+	get routes(): Route[];
 
 	addSubTrie(parent: string, trie: IRouter<Routes>): IRouter<Routes>;
 

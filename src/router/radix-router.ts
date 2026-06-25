@@ -1,6 +1,6 @@
 import $$path from "node:path";
 import type { Context } from "../context";
-import type { MiddlewareHandler } from "../types";
+import type { Handler, MiddlewareHandler } from "../types";
 import {
 	type HTTPMethod,
 	type IRouter,
@@ -17,7 +17,7 @@ import type { DynamicSegmentsRemoved, ExtractUrl } from "./types";
 export class RadixRouteTrie<Routes extends Route[]> implements IRouter<Routes> {
 	private root = new RadixSegmentNode("/");
 	private subTries = new Map<string, RadixRouteTrie<Routes>>();
-	#routes: Set<Route<Routes[number]["data"]>> = new Set();
+	#routes: Set<Route> = new Set();
 
 	/**
 	 * Retrieves all registered routes.
@@ -125,8 +125,8 @@ export class RadixRouteTrie<Routes extends Route[]> implements IRouter<Routes> {
 	 * Adds a new route to the Radix Tree.
 	 * @param route - The route to add.
 	 */
-	addRoute(route: Route<Routes[number]["data"]>): void {
-		const { method, path: routePath, data } = route;
+	addRoute(route: Route): void {
+		const { method, path: routePath, handlers } = route;
 		const sanitizedPath = this.sanitizeRoute(routePath);
 		const segments = sanitizedPath === "/" ? [""] : sanitizedPath.split("/");
 
@@ -174,7 +174,14 @@ export class RadixRouteTrie<Routes extends Route[]> implements IRouter<Routes> {
 		}
 
 		currentNode.isEndOfRoute = true;
-		currentNode.data[method.toUpperCase() as HTTPMethod] = data;
+		if (Array.isArray(handlers)) {
+			currentNode.handlers[method.toUpperCase() as HTTPMethod] = [
+				...this.collectMiddlewares(currentNode),
+				...(handlers as Handler<Context>[])
+			] as Handler[];
+		} else {
+			currentNode.handlers[method.toUpperCase() as HTTPMethod] = handlers as Handler[];
+		}
 		this.#routes.add(route);
 	}
 
@@ -211,10 +218,10 @@ export class RadixRouteTrie<Routes extends Route[]> implements IRouter<Routes> {
 			route: url as Routes[number]["path"],
 			matched_route: matchedRoute,
 			params: params,
-			data: node.data[method] as Routes[number]["data"],
-			middlewares: this.collectMiddlewares(node),
+			handlers: node.handlers[method] as Handler<Context>[],
 			store: undefined,
 			executor: undefined,
+			is405: false,
 		};
 	}
 
@@ -261,7 +268,7 @@ export class RadixRouteTrie<Routes extends Route[]> implements IRouter<Routes> {
 			for (const child of currentNode.children.values()) {
 				if (child.type === "wildcard") {
 					matchedRoute += `/${child.value}`;
-					if (child.isEndOfRoute && child.data[methodUpper]) {
+					if (child.isEndOfRoute && child.handlers[methodUpper]) {
 						const remainingSegments = segments.slice(i).join("/");
 						const paramName =
 							child.value.length > 1 ? child.value.slice(1) : String(i);
@@ -283,7 +290,7 @@ export class RadixRouteTrie<Routes extends Route[]> implements IRouter<Routes> {
 			if (!wildcardMatched) return null;
 		}
 
-		if (currentNode.isEndOfRoute && currentNode.data[methodUpper]) {
+		if (currentNode.isEndOfRoute && currentNode.handlers[methodUpper]) {
 			return this.buildMatchResult(
 				currentNode,
 				method,

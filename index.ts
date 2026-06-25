@@ -48,7 +48,6 @@ export type {
 	HookHandler,
 	MiddlewareHandler,
 	NextFunction,
-	RequestHandler,
 	ServerOptions,
 	ServerRoute,
 	ServeXRouter,

@@ -1,3 +1,4 @@
+import type { Handler } from "../src/types";
 import { describe, expect, it } from "bun:test";
 import { RouterAdapter, RouterType } from "../src/router/adapter";
 import type { Route } from "../src/router/base";
@@ -7,30 +8,30 @@ describe("RouterAdapter", () => {
 		{
 			method: "GET",
 			path: "/heroes/:heroName",
-			data: {
+			handlers: {
 				/* ... */
-			},
+			} as unknown as Handler[],
 		},
 		{
 			method: "POST",
 			path: "/heroes",
-			data: {
+			handlers: {
 				/* ... */
-			},
+			} as unknown as Handler[],
 		},
 		{
 			method: "GET",
 			path: "/search",
-			data: {
+			handlers: {
 				/* ... */
-			},
+			} as unknown as Handler[],
 		},
 		{
 			method: "GET",
 			path: "/assets/*filepath",
-			data: {
+			handlers: {
 				/* ... */
-			},
+			} as unknown as Handler[],
 		},
 	];
 
@@ -43,16 +44,16 @@ describe("RouterAdapter", () => {
 		const matched = router.match("GET", "/heroes/spiderman");
 		expect(matched).not.toBeNull();
 		expect(matched?.matched).toBe(true);
-		expect(matched?.params.heroName).toBe("spiderman");
+		expect((matched?.params as any).heroName).toBe("spiderman");
 	});
 
 	it("should initialize with Sonic router and match routes correctly", () => {
 		const adapter = new RouterAdapter({ type: RouterType.SONIC });
-		adapter.addRoute({ method: "GET", path: "/test", data: "testData" });
+		adapter.addRoute({ method: "GET", path: "/test", handlers: ["testData"] as unknown as Handler[] });
 
 		const match = adapter.match("GET", "/test");
 		expect(match).not.toBeNull();
-		expect(match?.data).toBe("testData");
+		expect(match?.handlers as unknown).toEqual(["testData"]);
 	});
 
 	it("should switch to Radix router and retain routes", () => {
@@ -67,7 +68,7 @@ describe("RouterAdapter", () => {
 
 		expect(matched).not.toBeNull();
 		expect(matched?.matched).toBe(true);
-		expect(matched?.params.filepath).toBe("images/logo.png");
+		expect((matched?.params as any).filepath).toBe("images/logo.png");
 	});
 
 	it("should return null for unmatched routes", () => {

@@ -1,20 +1,32 @@
 import * as $$path from "node:path";
-import type { Context, MiddlewareHandler } from "../types";
+import type { Context, Handler, MiddlewareHandler } from "../types";
 import type { HTTPMethod, IRouter, MatchedRoute, Route } from "./base";
 import { compileSonicTrieMatcher } from "./sonic-trie-jit";
 import type { DynamicSegmentsRemoved } from "./types";
 
-export type SonicRouteNode<Data = unknown> = {
+const createNoMatch = (is405: boolean) => ({
+	matched: false,
+	method: undefined,
+	route: undefined,
+	matched_route: undefined,
+	params: {},
+	handlers: undefined,
+	store: undefined,
+	executor: undefined,
+	is405,
+});
+
+export type SonicRouteNode = {
 	method: HTTPMethod;
 	path: string;
-	data: Data;
+	handlers: import("../types").InternalHandler<Context>[];
 	paramsKeys: string[];
 	middlewares: MiddlewareHandler<Context>[];
-	staticMatchResult?: MatchedRoute<Route<unknown>[], boolean> | null;
+	staticMatchResult?: MatchedRoute<Route[], boolean> | null;
 	isStatic?: boolean;
 	isWildcard?: boolean;
 	staticPrefix?: string;
-	children?: SonicRouteNode<Data>[];
+	children?: SonicRouteNode[];
 	store?: Record<string, unknown>;
 };
 
@@ -51,6 +63,16 @@ function segmentRank(segment: string): 0 | 1 | 2 {
  * tested contract — removing it is a separate decision from the regex ->
  * trie migration and shouldn't be bundled into this change.
  */
+// fallow-ignore-next-line unused-param Node is checked for structural properties
+export function isSonicRouteNode(node: unknown): node is SonicRouteNode {
+	return (
+		typeof node === "object" &&
+		node !== null &&
+		"method" in node &&
+		"path" in node
+	);
+}
+
 export function compareRouteSpecificity(
 	a: SonicRouteNode,
 	b: SonicRouteNode,
@@ -88,10 +110,10 @@ export function compareRouteSpecificity(
  * node) — see sonic-trie-jit.ts's module docblock for the backtracking
  * correctness notes, which are the main risk area of this approach.
  */
-export class SonicRouter<Routes extends Route<unknown>[] = Route<unknown>[]>
+export class SonicRouter<Routes extends Route[] = Route[]>
 	implements IRouter<Routes>
 {
-	private _routes: Route<Routes[number]["data"]>[] = [];
+	private _routes: Route[] = [];
 
 	// routesByMethod[method] -> array of nodes, in raw registration order.
 	// Compile-time specificity sorting happens on a *copy* of this array in
@@ -116,7 +138,7 @@ export class SonicRouter<Routes extends Route<unknown>[] = Route<unknown>[]>
 		middlewares: MiddlewareHandler<Context>[];
 	}[] = [];
 
-	get routes(): Route<Routes[number]["data"]>[] {
+	get routes(): Route[] {
 		return this._routes;
 	}
 
@@ -125,15 +147,15 @@ export class SonicRouter<Routes extends Route<unknown>[] = Route<unknown>[]>
 		return this.matchFns;
 	}
 
-	addRoute(route: Route<Routes[number]["data"]>): void {
+	addRoute(route: Route): void {
 		this._routes.push(route);
-		const { method, path, data } = route;
+		const { method, path, handlers } = route;
 		const sanitizedPath = this.sanitizeRoute(path);
 
 		const node: SonicRouteNode = {
 			method,
 			path: sanitizedPath,
-			data,
+			handlers,
 			paramsKeys: [],
 			middlewares: [],
 		};
@@ -146,6 +168,15 @@ export class SonicRouter<Routes extends Route<unknown>[] = Route<unknown>[]>
 			) {
 				node.middlewares.push(...pm.middlewares);
 			}
+		}
+
+		if (Array.isArray(handlers)) {
+			node.handlers = [
+				...node.middlewares,
+				...handlers
+			];
+		} else {
+			node.handlers = handlers;
 		}
 
 		if (!this.routesByMethod[method]) this.routesByMethod[method] = [];
@@ -171,36 +202,40 @@ export class SonicRouter<Routes extends Route<unknown>[] = Route<unknown>[]>
 	 * (`(sanitized, url, method) => MatchedRoute | null`), so `match()`
 	 * below is unchanged.
 	 */
-	private compile(method: string) {
+	private compile(method: HTTPMethod) {
 		if (!this.isDirty[method]) return;
 		this.isDirty[method] = false;
 
 		const rawRoutes = this.routesByMethod[method] || [];
 		if (rawRoutes.length === 0) return;
 
-		this.staticRoutes[method] = {};
 		const dynamicRoutes: SonicRouteNode[] = [];
 
 		for (const route of rawRoutes) {
 			if (route.paramsKeys.length === 0) {
-				const matchObj = {
+				const matchObj: MatchedRoute<Routes, boolean> = {
 					matched: true,
-					method: method as HTTPMethod,
+					method: method,
 					route: route.path,
 					matched_route: route.path,
 					params: {},
-					data: route.data,
-					middlewares: route.middlewares,
+					handlers: route.handlers,
 					store: route,
 					executor: undefined,
-				} as unknown as MatchedRoute<Routes, boolean>;
+					is405: false,
+				};
 
 				const p = route.path;
+				const setStaticRoute = (pathKey: string) => {
+					if (!this.staticRoutes[pathKey]) this.staticRoutes[pathKey] = {};
+					this.staticRoutes[pathKey][method] = matchObj;
+				};
+
 				if (p === "") {
-					this.staticRoutes[method]["/"] = matchObj;
+					setStaticRoute("/");
 				} else {
-					this.staticRoutes[method][`/${p}`] = matchObj;
-					this.staticRoutes[method][`/${p}/`] = matchObj;
+					setStaticRoute(`/${p}`);
+					setStaticRoute(`/${p}/`);
 				}
 			} else {
 				dynamicRoutes.push(route);
@@ -213,7 +248,7 @@ export class SonicRouter<Routes extends Route<unknown>[] = Route<unknown>[]>
 		const sortedRoutes = dynamicRoutes.slice().sort(compareRouteSpecificity);
 
 		const { matchFn } = compileSonicTrieMatcher<SonicRouteNode>(
-			method as HTTPMethod,
+			method,
 			sortedRoutes,
 		);
 
@@ -226,13 +261,30 @@ export class SonicRouter<Routes extends Route<unknown>[] = Route<unknown>[]>
 	): MatchedRoute<Routes, boolean> | null {
 		this.compile(method);
 
-		const staticMatch = this.staticRoutes[method]?.[url as string];
-		if (staticMatch) return staticMatch;
+		const p = url as string;
+		const staticMatchMap = this.staticRoutes[p];
+		if (staticMatchMap) {
+			const staticMatch = staticMatchMap[method];
+			if (staticMatch) return staticMatch;
+			return createNoMatch(true);
+		}
 
 		const dynamicMatchFn = this.matchFns[method];
 		if (dynamicMatchFn) {
-			return dynamicMatchFn(url as string, method);
+			const m = dynamicMatchFn(p, method);
+			if (m) return m;
 		}
+
+		// 405 check for dynamic routes: check other compiled methods
+		for (const m in this.matchFns) {
+			if (m !== method) {
+				const fn = this.matchFns[m];
+				if (fn?.(p, m)) {
+					return createNoMatch(true);
+				}
+			}
+		}
+
 		return null;
 	}
 

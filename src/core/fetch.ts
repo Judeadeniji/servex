@@ -5,18 +5,93 @@ import type { RouterAdapter } from "../router/adapter";
 import type { Handler, Method, ServerRoute } from "../types";
 import { executeHandlers } from "./response";
 
+const DEFAULT_ENV = typeof process !== "undefined" ? process.env : {};
+
 // ── Trace Helper ─────────────────────────────────────────────────────────────
-async function runTracePhase<T>(
+async function executeOnRequestPhase(
+	hooks: import("../types").Hooks,
+	context: Context,
+	onReqLen: number,
+) {
+	for (let i = 0; i < onReqLen; i++) {
+		const r = hooks.onRequest[i](context);
+		const result = r instanceof Promise ? await r : r;
+		if (result instanceof Response) return result;
+	}
+}
+
+async function execute404Phase(
+	context: Context,
+	middlewares: Handler<Context>[],
+) {
+	const res = await executeHandlers(context, middlewares);
+	return res || new Response("Not Found", { status: 404 });
+}
+
+async function executeOnBeforePhase(
+	hooks: import("../types").Hooks,
+	context: Context,
+	onBeforeLen: number,
+) {
+	for (let i = 0; i < onBeforeLen; i++) {
+		const r = hooks.onBeforeHandle[i](context);
+		const result = r instanceof Promise ? await r : r;
+		if (result instanceof Response) return result;
+	}
+}
+
+async function executeHandlePhase(
+	context: Context,
+	executor: ((c: Context) => Response | Promise<Response | undefined> | undefined) | undefined,
+	handlers: Handler<Context>[],
+	aot: boolean,
+) {
+	let result: Response | undefined;
+	if (aot) {
+		result = await executor?.(context);
+	} else {
+		result = await executeHandlers(context, handlers);
+	}
+	return result || new Response("Not Found", { status: 404 });
+}
+
+async function executeOnAfterPhase(
+	hooks: import("../types").Hooks,
+	context: Context,
+	response: Response,
+	onAfterLen: number,
+) {
+	let res = response;
+	for (let i = 0; i < onAfterLen; i++) {
+		const r = hooks.onAfterHandle[i](context, res);
+		const result = r instanceof Promise ? await r : r;
+		if (result instanceof Response) res = result;
+	}
+	return res;
+}
+
+async function executeOnErrorPhase(
+	hooks: import("../types").Hooks,
+	context: Context,
+	error: Error,
+	onErrLen: number,
+) {
+	for (let i = 0; i < onErrLen; i++) {
+		const r = hooks.onError[i](error, context);
+		const result = r instanceof Promise ? await r : r;
+		if (result instanceof Response) return result;
+	}
+}
+
+async function executeTracePhaseWithArgs<T, Args extends unknown[]>(
 	listeners: import("../types").TraceListener[] | undefined,
-	phaseExecutor: () => Promise<T> | T,
+	phaseExecutor: (...args: Args) => Promise<T> | T,
+	...args: Args
 ): Promise<T> {
-	if (!listeners || listeners.length === 0) return phaseExecutor();
+	if (!listeners || listeners.length === 0) return phaseExecutor(...args);
 
 	const begin = performance.now();
-	const onStopCallbacks: ((
-		info: import("../types").TraceEventInfo,
-	) => void | Promise<void>)[] = [];
-
+	const onStopCallbacks: ((info: import("../types").TraceEventInfo) => void | Promise<void>)[] = [];
 	const event: import("../types").TraceEvent = {
 		begin,
 		onStop: (cb) => onStopCallbacks.push(cb),
@@ -27,60 +102,55 @@ async function runTracePhase<T>(
 		if (r instanceof Promise) await r;
 	}
 
-	let error: Error | null = null;
-	let result: T;
-	try {
-		result = await phaseExecutor();
-		return result;
-	} catch (err: unknown) {
-		error = err instanceof Error ? err : new Error(String(err));
-		throw err;
-	} finally {
+	const finalize = async (error: Error | null) => {
 		const end = performance.now();
 		for (let i = 0; i < onStopCallbacks.length; i++) {
 			const r = onStopCallbacks[i]({ begin, end, error });
 			if (r instanceof Promise) await r;
 		}
+	};
+
+	try {
+		const result = phaseExecutor(...args);
+		if (result instanceof Promise) {
+			const res = await result;
+			await finalize(null);
+			return res;
+		}
+		
+		await finalize(null);
+		return result;
+	} catch (err: unknown) {
+		const error = err instanceof Error ? err : new Error(String(err));
+		await finalize(error);
+		throw err;
 	}
 }
 
-// Pre-allocated methods array for 405 detection (avoids allocation per 404)
-const ALL_METHODS: Method[] = [
-	"GET",
-	"POST",
-	"PUT",
-	"DELETE",
-	"PATCH",
-	"OPTIONS",
-	"HEAD",
-];
+export interface ServeXExecutionContext {
+	waitUntil?: (promise: Promise<unknown> | unknown) => void;
+	passThroughOnException?: () => void;
+	[key: string]: unknown;
+}
 
 function sharedHandleValue(
 	r: Response | undefined,
 	context: Context,
 	hooks: import("../types").Hooks,
-	executionCtx: unknown,
+	executionCtx: ServeXExecutionContext | undefined,
 ): Response {
 	const res = r || new Response("Not Found", { status: 404 });
 	context.finalResponse = res;
 	const postProcessPromise = executePostProcess(hooks, context);
-	if (
-		executionCtx &&
-		typeof (executionCtx as Record<string, unknown>).waitUntil === "function"
-	) {
-		((executionCtx as Record<string, unknown>).waitUntil as (
-			p: Promise<unknown> | unknown,
-		) => void)(postProcessPromise);
+	if (executionCtx && typeof executionCtx.waitUntil === "function") {
+		executionCtx.waitUntil(postProcessPromise);
 	} else {
 		postProcessPromise.catch(console.error);
 	}
 	return res;
 }
 
-function sharedResolveError(
-	error: unknown,
-	debug: boolean,
-): Response {
+function sharedResolveError(error: unknown, debug: boolean): Response {
 	if (error instanceof HttpException) return error.getResponse();
 	console.error("Unhandled error:", error);
 
@@ -101,108 +171,126 @@ function sharedResolveError(
 }
 
 export function baseFetch(
+	// @ts-ignore
 	router: RouterAdapter<ServerRoute[]>,
+	// @ts-ignore
 	request: Request,
 	method: Method,
 	pathname: string,
 	middlewares: Handler<Context>[],
 	hooks: import("../types").Hooks,
-	compiledCache: Map<
-		string,
-		(context: Context) => Response | Promise<Response | undefined> | undefined
-	>,
 	envBindings?: Record<string, unknown>,
-	executionCtx?: unknown,
+	executionCtx?: ServeXExecutionContext,
 	debug: boolean = false,
 	aot: boolean = true,
 ): Response | Promise<Response> {
-	// ── Fast Path (No Hooks) ───────────────────────────────────────────────────
+	// ── Slow Path ──────────────────────────────────────────────────────────────
 	if (
-		hooks.onRequest.length === 0 &&
-		hooks.onBeforeHandle.length === 0 &&
-		hooks.onAfterHandle.length === 0 &&
-		hooks.onError.length === 0 &&
-		hooks.trace.length === 0
+		hooks.onRequest.length > 0 ||
+		hooks.onBeforeHandle.length > 0 ||
+		hooks.onAfterHandle.length > 0 ||
+		hooks.onError.length > 0 ||
+		hooks.trace.length > 0
 	) {
-		const route = router.match(method, pathname);
-		if (route?.matched) {
-			const handlers = [...middlewares, ...route.middlewares, ...route.data];
-			let executor:
-				| ((context: Context) => Response | Promise<Response | undefined> | undefined)
-				| undefined;
+		return baseFetchSlow(
+			router,
+			request,
+			method,
+			pathname,
+			middlewares,
+			hooks,
+			envBindings,
+			executionCtx,
+			debug,
+			aot
+		);
+	}
 
-			if (aot) {
-				executor = route.executor || route.store?.executor as
-					| ((context: Context) => Response | Promise<Response | undefined> | undefined)
-					| undefined;
-				if (!executor) {
-					executor = compiledCache.get(method + route.matched_route);
-					if (!executor) {
-						executor = compileHandlerChain(handlers);
-						if (route.store) route.store.executor = executor;
-						compiledCache.set(method + route.matched_route, executor);
-					}
-					route.executor = executor;
-				}
-			}
-
-			let context: Context | undefined = createContext(
+	// ── Fast Path (No Hooks) ───────────────────────────────────────────────────
+	const route = router.match(method, pathname);
+	if (!route?.matched) {
+		if (middlewares.length > 0) {
+			return baseFetchSlow(
+				router,
 				request,
-				envBindings ??
-					((typeof process !== "undefined" ? process.env : {}) as Record<
-						string,
-						unknown
-					>),
-				route.params,
+				method,
+				pathname,
+				middlewares,
+				hooks,
+				envBindings,
 				executionCtx,
 				debug,
+				aot
 			);
+		}
+		if (route?.is405) return new Response("Method Not Allowed", { status: 405 });
+		return new Response("Not Found", { status: 404 });
+	}
 
-			try {
-				let res: Response | Promise<Response | undefined> | undefined;
-				if (aot) {
-					res = executor!(context);
-				} else {
-					res = executeHandlers(context, handlers);
-				}
+	let executor:
+		| ((
+				context: Context,
+		  ) => Response | Promise<Response | undefined> | undefined)
+		| undefined;
 
-				if (res instanceof Promise) {
-					return res
-						.then((r) => {
-							const result = sharedHandleValue(r, context!, hooks, executionCtx);
-							context = undefined;
-							return result;
-						})
-						.catch((error) => {
-							const result = sharedHandleValue(sharedResolveError(error, debug), context!, hooks, executionCtx);
-							context = undefined;
-							return result;
-						});
-				}
-				const finalRes = sharedHandleValue(res, context!, hooks, executionCtx);
-				context = undefined;
-				return finalRes;
-			} catch (error) {
-				const finalRes = sharedHandleValue(sharedResolveError(error, debug), context!, hooks, executionCtx);
-				context = undefined;
-				return finalRes;
-			}
+	if (aot) {
+		executor = route.executor || (route.store?.executor as typeof executor);
+		if (!executor) {
+			const handlers = route.handlers;
+			executor = compileHandlerChain(handlers as Handler<Context>[]);
+			if (route.store) route.store.executor = executor;
+			route.executor = executor;
 		}
 	}
 
-	// ── Slow Path ──────────────────────────────────────────────────────────────
-	return baseFetchSlow(
-		router,
+	let context: Context | undefined = createContext(
 		request,
-		method,
-		pathname,
-		middlewares,
-		hooks,
-		compiledCache,
-		envBindings,
+		envBindings ?? (DEFAULT_ENV as Record<string, unknown>),
+		route.params as Record<string, string>,
 		executionCtx,
 		debug,
 	);
+
+	try {
+		let res: Response | Promise<Response | undefined> | undefined;
+		if (aot) {
+			res = executor!(context);
+		} else {
+			const handlers = route.handlers;
+			res = executeHandlers(context, handlers as Handler<Context>[]);
+		}
+
+		if (res instanceof Promise) {
+			return res
+				.then((r) => {
+					const result = sharedHandleValue(r, context!, hooks, executionCtx);
+					context = undefined;
+					return result;
+				})
+				.catch((error) => {
+					const result = sharedHandleValue(
+						sharedResolveError(error, debug),
+						context!,
+						hooks,
+						executionCtx,
+					);
+					context = undefined;
+					return result;
+				});
+		}
+		const finalRes = sharedHandleValue(res, context!, hooks, executionCtx);
+		context = undefined;
+		return finalRes;
+	} catch (error) {
+		const finalRes = sharedHandleValue(
+			sharedResolveError(error, debug),
+			context!,
+			hooks,
+			executionCtx,
+		);
+		context = undefined;
+		return finalRes;
+	}
 }
 
 async function baseFetchSlow(
@@ -212,119 +300,82 @@ async function baseFetchSlow(
 	pathname: string,
 	middlewares: Handler<Context>[],
 	hooks: import("../types").Hooks,
-	compiledCache: Map<
-		string,
-		(context: Context) => Response | Promise<Response | undefined> | undefined
-	>,
 	envBindings?: Record<string, unknown>,
-	executionCtx?: unknown,
+	executionCtx?: ServeXExecutionContext,
 	debug: boolean = false,
 	aot: boolean = true,
 ): Promise<Response> {
-	let context: Context | undefined;
 	let response: Response | undefined;
 
 	let traceApi: import("../types").TraceAPI<Context> | undefined;
 	let traceListeners:
 		| Record<string, import("../types").TraceListener[]>
 		| undefined;
+	let context: Context | undefined;
 
 	try {
+		// ── Route matching ────────────────────────────────────────────────────────
+		const route = router.match(method, pathname);
+		const is405 = !route?.matched && route?.is405;
+		if (is405) {
+			return new Response("Method Not Allowed", { status: 405 });
+		}
+
+		context = createContext(
+			request,
+			envBindings ?? (DEFAULT_ENV as Record<string, unknown>),
+			route?.matched ? (route.params as Record<string, string>) : {},
+			executionCtx,
+			debug,
+		);
+
 		// ── 1. onRequest ──────────────────────────────────────────────────────────
 		const onReqLen = hooks.onRequest.length;
 		const hasTrace = hooks.trace.length > 0;
 
-		if (onReqLen > 0 || hasTrace) {
-			context = createContext(
-				request,
-				envBindings ??
-					((typeof process !== "undefined" ? process.env : {}) as Record<
-						string,
-						unknown
-					>),
-				{},
-				executionCtx,
-				debug,
-			);
-
-			if (hasTrace) {
-				traceListeners = {
-					request: [],
-					beforeHandle: [],
-					handle: [],
-					afterHandle: [],
-					error: [],
-					response: [],
-				};
-				traceApi = {
-					context,
-					onRequest: (cb) => traceListeners?.request.push(cb),
-					onBeforeHandle: (cb) => traceListeners?.beforeHandle.push(cb),
-					onHandle: (cb) => traceListeners?.handle.push(cb),
-					onAfterHandle: (cb) => traceListeners?.afterHandle.push(cb),
-					onError: (cb) => traceListeners?.error.push(cb),
-					onResponse: (cb) => traceListeners?.response.push(cb),
-				};
-				for (let i = 0; i < hooks.trace.length; i++) {
-					const r = hooks.trace[i](traceApi);
-					if (r instanceof Promise) await r;
-				}
+		if (hasTrace) {
+			traceListeners = {
+				request: [],
+				beforeHandle: [],
+				handle: [],
+				afterHandle: [],
+				error: [],
+				response: [],
+			};
+			traceApi = {
+				context,
+				onRequest: (cb) => traceListeners?.request.push(cb),
+				onBeforeHandle: (cb) => traceListeners?.beforeHandle.push(cb),
+				onHandle: (cb) => traceListeners?.handle.push(cb),
+				onAfterHandle: (cb) => traceListeners?.afterHandle.push(cb),
+				onError: (cb) => traceListeners?.error.push(cb),
+				onResponse: (cb) => traceListeners?.response.push(cb),
+			};
+			for (let i = 0; i < hooks.trace.length; i++) {
+				const r = hooks.trace[i](traceApi);
+				if (r instanceof Promise) await r;
 			}
 		}
 
 		if (onReqLen > 0 || (traceListeners && traceListeners.request.length > 0)) {
-			const executeOnRequest = async () => {
-				for (let i = 0; i < onReqLen; i++) {
-					const r = await hooks.onRequest[i](context!);
-					if (r instanceof Response) return r; // short-circuit before routing
-				}
-			};
-			const res = await runTracePhase(
+			const res = await executeTracePhaseWithArgs(
 				traceListeners?.request,
-				executeOnRequest,
+				executeOnRequestPhase,
+				hooks,
+				context,
+				onReqLen
 			);
 			if (res instanceof Response) return res;
 		}
 
-		// ── Route matching ────────────────────────────────────────────────────────
-		const route = router.match(method, pathname);
-
 		if (!route?.matched) {
-			// 405 detection: only iterate other methods if route exists for any of them
-			let is405 = false;
-			for (let i = 0; i < ALL_METHODS.length; i++) {
-				if (ALL_METHODS[i] !== method) {
-					const r = router.match(ALL_METHODS[i], pathname);
-					if (r?.matched) {
-						is405 = true;
-						break;
-					}
-				}
-			}
-
-			if (is405) {
-				return new Response("Method Not Allowed", { status: 405 });
-			}
-
-			if (!context) {
-				context = createContext(
-					request,
-					envBindings ??
-						((typeof process !== "undefined" ? process.env : {}) as Record<
-							string,
-							unknown
-						>),
-					{},
-					executionCtx,
-					debug,
-				);
-			}
 			// 404 path: execute global middlewares
-			const execute404 = async () => {
-				const res = await executeHandlers(context!, middlewares);
-				return res || new Response("Not Found", { status: 404 });
-			};
-			response = await runTracePhase(traceListeners?.handle, execute404);
+			response = await executeTracePhaseWithArgs(
+				traceListeners?.handle,
+				execute404Phase,
+				context,
+				middlewares
+			);
 
 			// 3. onAfterHandle for 404
 			const onAfterLen = hooks.onAfterHandle.length;
@@ -332,31 +383,16 @@ async function baseFetchSlow(
 				onAfterLen > 0 ||
 				(traceListeners && traceListeners.afterHandle.length > 0)
 			) {
-				const executeOnAfter = async () => {
-					for (let i = 0; i < onAfterLen; i++) {
-						const r = await hooks.onAfterHandle[i](context!, response!);
-						if (r instanceof Response) response = r;
-					}
-				};
-				await runTracePhase(traceListeners?.afterHandle, executeOnAfter);
+				response = await executeTracePhaseWithArgs(
+					traceListeners?.afterHandle,
+					executeOnAfterPhase,
+					hooks,
+					context,
+					response,
+					onAfterLen
+				) as Response;
 			}
 			return response!;
-		}
-
-		if (!context) {
-			context = createContext(
-				request,
-				envBindings ??
-					((typeof process !== "undefined" ? process.env : {}) as Record<
-						string,
-						unknown
-					>),
-				route.params,
-				executionCtx,
-				debug,
-			);
-		} else {
-			context.setParams(route.params);
 		}
 
 		// ── 2. onBeforeHandle ─────────────────────────────────────────────────────
@@ -365,54 +401,43 @@ async function baseFetchSlow(
 			onBeforeLen > 0 ||
 			(traceListeners && traceListeners.beforeHandle.length > 0)
 		) {
-			const executeOnBefore = async () => {
-				for (let i = 0; i < onBeforeLen; i++) {
-					const r = await hooks.onBeforeHandle[i](context!);
-					if (r instanceof Response) return r;
-				}
-			};
-			const res = await runTracePhase(
+			const res = await executeTracePhaseWithArgs(
 				traceListeners?.beforeHandle,
-				executeOnBefore,
+				executeOnBeforePhase,
+				hooks,
+				context,
+				onBeforeLen
 			);
 			if (res instanceof Response) return res;
 		}
 
-		// ── Execute handler chain ─────────────────────────────────────────────────
-		const routeMids = route.middlewares;
-		const routeData = route.data;
-
-		const handlers = [...middlewares, ...routeMids, ...routeData];
-
 		// ── 3. Execute handlers ───────────────────────────────────────────────────
 		let executor:
-			| ((context: Context) => Response | Promise<Response | undefined> | undefined)
+			| ((
+					context: Context,
+			  ) => Response | Promise<Response | undefined> | undefined)
 			| undefined;
+		let finalHandlers: Handler<Context>[] = [];
 		if (aot) {
-			executor = route.executor || route.store?.executor as
-				| ((context: Context) => Response | Promise<Response | undefined> | undefined)
-				| undefined;
+			executor = route.executor || (route.store?.executor as typeof executor);
 			if (!executor) {
-				executor = compiledCache.get(method + route.matched_route);
-				if (!executor) {
-					executor = compileHandlerChain(handlers);
-					if (route.store) route.store.executor = executor;
-					compiledCache.set(method + route.matched_route, executor);
-				}
+				finalHandlers = route.handlers as Handler<Context>[];
+				executor = compileHandlerChain(finalHandlers);
+				if (route.store) route.store.executor = executor;
 				route.executor = executor;
 			}
+		} else {
+			finalHandlers = route.handlers as Handler<Context>[];
 		}
 
-		const executeHandle = async () => {
-			let result: Response | undefined;
-			if (aot) {
-				result = await executor?.(context!);
-			} else {
-				result = await executeHandlers(context!, handlers);
-			}
-			return result || new Response("Not Found", { status: 404 });
-		};
-		response = await runTracePhase(traceListeners?.handle, executeHandle);
+		response = await executeTracePhaseWithArgs(
+			traceListeners?.handle,
+			executeHandlePhase,
+			context,
+			executor,
+			finalHandlers,
+			aot
+		);
 
 		// ── 4. onAfterHandle ──────────────────────────────────────────────────────
 		const onAfterLen = hooks.onAfterHandle.length;
@@ -420,29 +445,30 @@ async function baseFetchSlow(
 			onAfterLen > 0 ||
 			(traceListeners && traceListeners.afterHandle.length > 0)
 		) {
-			const executeOnAfter = async () => {
-				for (let i = 0; i < onAfterLen; i++) {
-					const r = await hooks.onAfterHandle[i](context!, response!);
-					if (r instanceof Response) response = r;
-				}
-			};
-			await runTracePhase(traceListeners?.afterHandle, executeOnAfter);
+			response = await executeTracePhaseWithArgs(
+				traceListeners?.afterHandle,
+				executeOnAfterPhase,
+				hooks,
+				context,
+				response!,
+				onAfterLen
+			) as Response;
 		}
 	} catch (error) {
 		// ── onError hooks ─────────────────────────────────────────────────────────
-		const executeOnError = async () => {
-			const onErrLen = hooks.onError.length;
-			if (onErrLen > 0 && context) {
-				for (let i = 0; i < onErrLen; i++) {
-					const r = await hooks.onError[i](error as Error, context);
-					if (r instanceof Response) return r;
-				}
+		const onErrLen = hooks.onError.length;
+		if (context && (onErrLen > 0 || (traceListeners && traceListeners.error.length > 0))) {
+			const errRes = await executeTracePhaseWithArgs(
+				traceListeners?.error,
+				executeOnErrorPhase,
+				hooks,
+				context,
+				error as Error,
+				onErrLen
+			);
+			if (errRes instanceof Response) {
+				response = errRes;
 			}
-		};
-
-		const errRes = await runTracePhase(traceListeners?.error, executeOnError);
-		if (errRes instanceof Response) {
-			response = errRes;
 		}
 
 		if (!response) {
@@ -482,16 +508,8 @@ async function baseFetchSlow(
 				context,
 				traceListeners?.response,
 			);
-			if (
-				executionCtx &&
-				typeof (executionCtx as Record<string, unknown>).waitUntil ===
-					"function"
-			) {
-				(
-					(executionCtx as Record<string, unknown>).waitUntil as (
-						p: Promise<unknown> | unknown,
-					) => void
-				)(postProcessPromise);
+			if (executionCtx && typeof executionCtx.waitUntil === "function") {
+				executionCtx.waitUntil(postProcessPromise);
 			} else {
 				postProcessPromise.catch(console.error);
 			}
@@ -508,24 +526,40 @@ async function baseFetchSlow(
 async function executePostProcess(
 	hooks: import("../types").Hooks,
 	context: Context,
-	traceListeners?: import("../types").TraceListener[],
+	responseListeners?: import("../types").TraceListener[],
 ) {
 	context.markFinished();
 	try {
-		const onResLen = hooks.onResponse.length;
-		if (onResLen > 0 || (traceListeners && traceListeners.length > 0)) {
-			const execOnRes = async () => {
-				for (let i = 0; i < onResLen; i++) {
-					await hooks.onResponse[i](context);
-				}
-			};
-			await runTracePhase(traceListeners, execOnRes);
+		if (context.deferred) {
+			const len = context.deferred.length;
+			for (let i = 0; i < len; i++) {
+				const r = context.deferred[i]();
+				if (r instanceof Promise) await r;
+			}
+		}
+		const len = hooks.onResponse.length;
+		for (let i = 0; i < len; i++) {
+			const r = hooks.onResponse[i](context);
+			if (r instanceof Promise) await r;
 		}
 
-		const deferred = context.deferred;
-		if (deferred) {
-			for (let i = 0; i < deferred.length; i++) {
-				await deferred[i]();
+		if (responseListeners && responseListeners.length > 0) {
+			const begin = performance.now();
+			const onStopCallbacks: ((info: import("../types").TraceEventInfo) => void | Promise<void>)[] = [];
+			const event: import("../types").TraceEvent = {
+				begin,
+				onStop: (cb) => onStopCallbacks.push(cb),
+			};
+
+			for (let i = 0; i < responseListeners.length; i++) {
+				const r = responseListeners[i](event);
+				if (r instanceof Promise) await r;
+			}
+			
+			const end = performance.now();
+			for (let j = 0; j < onStopCallbacks.length; j++) {
+				const s = onStopCallbacks[j]({ begin, end, error: null });
+				if (s instanceof Promise) await s;
 			}
 		}
 	} catch (e) {

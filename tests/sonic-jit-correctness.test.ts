@@ -1,10 +1,11 @@
+import type { Handler } from "../src/types";
 import { describe, expect, it } from "bun:test";
 import { SonicRouter } from "../src/router/sonic-router";
 
 describe("SonicRouter JIT - Correctness & Param Extraction", () => {
 	it("extracts simple param correctly", () => {
 		const router = new SonicRouter();
-		router.addRoute({ method: "GET", path: "/users/:id", data: { route: 1 } });
+		router.addRoute({ method: "GET", path: "/users/:id", handlers: { route: 1 } as unknown as Handler[] });
 		const match = router.match("GET", "/users/123");
 		expect(match?.params).toEqual({ id: "123" });
 	});
@@ -14,7 +15,7 @@ describe("SonicRouter JIT - Correctness & Param Extraction", () => {
 		router.addRoute({
 			method: "GET",
 			path: "/posts/:postId/comments/:commentId",
-			data: { route: 1 },
+			handlers: { route: 1 } as unknown as Handler[],
 		});
 		const match = router.match("GET", "/posts/abc/comments/def");
 		expect(match?.params).toEqual({ postId: "abc", commentId: "def" });
@@ -25,7 +26,7 @@ describe("SonicRouter JIT - Correctness & Param Extraction", () => {
 		router.addRoute({
 			method: "GET",
 			path: "/public/*path",
-			data: { route: 1 },
+			handlers: { route: 1 } as unknown as Handler[],
 		});
 		const match = router.match("GET", "/public/assets/css/style.css");
 		expect(match?.params).toEqual({ path: "assets/css/style.css" });
@@ -38,20 +39,20 @@ describe("SonicRouter JIT - Correctness & Param Extraction", () => {
 		router.addRoute({
 			method: "GET",
 			path: "/api/v1/:resource",
-			data: { route: "v1" },
+			handlers: { route: "v1" } as unknown as Handler[],
 		});
 		router.addRoute({
 			method: "GET",
 			path: "/api/v2/:resource/:id",
-			data: { route: "v2" },
+			handlers: { route: "v2" } as unknown as Handler[],
 		});
 
 		const match1 = router.match("GET", "/api/v1/users");
-		expect(match1?.data).toEqual({ route: "v1" });
+		expect(match1?.handlers as unknown).toEqual({ route: "v1" });
 		expect(match1?.params).toEqual({ resource: "users" });
 
 		const match2 = router.match("GET", "/api/v2/posts/99");
-		expect(match2?.data).toEqual({ route: "v2" });
+		expect(match2?.handlers as unknown).toEqual({ route: "v2" });
 		expect(match2?.params).toEqual({ resource: "posts", id: "99" });
 	});
 
@@ -61,20 +62,20 @@ describe("SonicRouter JIT - Correctness & Param Extraction", () => {
 		router.addRoute({
 			method: "GET",
 			path: "/api/*all",
-			data: { route: "wild" },
+			handlers: { route: "wild" } as unknown as Handler[],
 		});
 		router.addRoute({
 			method: "GET",
 			path: "/api/users/:id",
-			data: { route: "param" },
+			handlers: { route: "param" } as unknown as Handler[],
 		});
 
 		const matchParam = router.match("GET", "/api/users/42");
-		expect(matchParam?.data).toEqual({ route: "param" });
+		expect(matchParam?.handlers as unknown).toEqual({ route: "param" });
 		expect(matchParam?.params).toEqual({ id: "42" });
 
 		const matchWild = router.match("GET", "/api/other/thing");
-		expect(matchWild?.data).toEqual({ route: "wild" });
+		expect(matchWild?.handlers as unknown).toEqual({ route: "wild" });
 		expect(matchWild?.params).toEqual({ all: "other/thing" });
 	});
 });
@@ -91,7 +92,7 @@ describe("SonicRouter - sanitizeRoute encoding semantics", () => {
 		// HTTP clients encode non-ASCII before sending. Routes should be registered
 		// in their percent-encoded form if you expect pre-encoded requests.
 		const router = new SonicRouter();
-		router.addRoute({ method: "GET", path: "/search/:query", data: 1 });
+		router.addRoute({ method: "GET", path: "/search/:query", handlers: 1 as unknown as Handler[] });
 
 		// Standard ASCII — always works
 		const m1 = router.match("GET", "/search/typescript");
@@ -109,7 +110,7 @@ describe("SonicRouter - sanitizeRoute encoding semantics", () => {
 		// This meant /caf%C3%A9 would become caf%25C3%25A9 internally and never match.
 		// The new implementation does not have this bug.
 		const router = new SonicRouter();
-		router.addRoute({ method: "GET", path: "/users/:name", data: 1 });
+		router.addRoute({ method: "GET", path: "/users/:name", handlers: 1 as unknown as Handler[] });
 
 		const match = router.match("GET", "/users/caf%C3%A9");
 		expect(match).not.toBeNull();
@@ -121,7 +122,7 @@ describe("SonicRouter - sanitizeRoute encoding semantics", () => {
 		// they match each other. sanitizeRoute is consistent: same transformation
 		// applied to both sides.
 		const router = new SonicRouter();
-		router.addRoute({ method: "GET", path: "/café", data: 1 });
+		router.addRoute({ method: "GET", path: "/café", handlers: 1 as unknown as Handler[] });
 
 		const match = router.match("GET", "/café");
 		expect(match).not.toBeNull();
@@ -131,7 +132,7 @@ describe("SonicRouter - sanitizeRoute encoding semantics", () => {
 		// sanitizeRoute strips leading/trailing slashes only; internal // are unchanged.
 		// A route with // in it would not match a URL with single /.
 		const router = new SonicRouter();
-		router.addRoute({ method: "GET", path: "/users/:id", data: 1 });
+		router.addRoute({ method: "GET", path: "/users/:id", handlers: 1 as unknown as Handler[] });
 
 		// /users//123 has an extra slash — should NOT match /users/:id
 		const match = router.match("GET", "/users//123");
@@ -140,7 +141,7 @@ describe("SonicRouter - sanitizeRoute encoding semantics", () => {
 
 	it("trailing slash and no trailing slash both match the same route", () => {
 		const router = new SonicRouter();
-		router.addRoute({ method: "GET", path: "/about", data: 1 });
+		router.addRoute({ method: "GET", path: "/about", handlers: 1 as unknown as Handler[] });
 
 		expect(router.match("GET", "/about")).not.toBeNull();
 		expect(router.match("GET", "/about/")).not.toBeNull();
@@ -156,10 +157,12 @@ describe("SonicRouter - sanitizeRoute encoding semantics", () => {
 		// all require consistent encoding between registration and request). URL normalization
 		// should happen at the reverse proxy/CDN layer before requests reach the application.
 		const router = new SonicRouter();
-		router.addRoute({ method: "GET", path: "/café", data: "raw" });
+		const rawFn = function () {} as unknown as Handler;
+		router.addRoute({ method: "GET", path: "/café", handlers: [rawFn] });
 
 		// Raw unicode request matches raw unicode route
-		expect(router.match("GET", "/café")?.data).toBe("raw");
+		// biome-ignore lint/suspicious/noNonNullAssertedOptionalChain: it's needed
+		expect((router.match("GET", "/café")?.handlers!)[0]).toBe(rawFn);
 
 		// Pre-encoded request does NOT match the raw unicode route (expected: null)
 		expect(router.match("GET", "/caf%C3%A9")).toBeNull();

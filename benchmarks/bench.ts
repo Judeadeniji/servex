@@ -7,11 +7,11 @@ import { RouterType } from "../src/router/adapter";
 import type { Handler } from "../src/types";
 
 // Helper to generate N handlers
-function generateChain(length: number): Handler<any>[] {
-	const chain: Handler<any>[] = [];
+function generateChain(length: number): Handler[] {
+	const chain: Handler[] = [];
 	for (let i = 0; i < length - 1; i++) {
 		chain.push(
-			async (ctx: Context, next: () => Promise<Response | void>) => {
+			async (ctx: Context, next) => {
 				ctx.executionCtx = ((ctx.executionCtx as number) || 0) + 1;
 				await next();
 			},
@@ -40,16 +40,16 @@ group("JIT Boot Time Cost", () => {
 });
 
 // Set up Non-JIT App (by manually filling compiledCache with executeHandlers wrapper)
-const middlewares = [
-	async (ctx: Context, next: () => Promise<Response | void>) => {
+const middlewares: import("../src/types").MiddlewareHandler<Context>[] = [
+	async (ctx, next) => {
 		ctx.executionCtx = 1;
 		await next();
 	},
-	async (ctx: Context, next: () => Promise<Response | void>) => {
+	async (ctx, next) => {
 		ctx.executionCtx = 2;
 		await next();
 	},
-	(_ctx: Context) => new Response("Hello"),
+	(_ctx) => new Response("Hello"),
 ];
 const appNonJit = createServer({
 	router: RouterType.SONIC,
@@ -64,6 +64,7 @@ for (let i = 0; i < 50; i++)
 	await appNonJit.fetch(new Request("http://localhost/api/test"));
 
 // Now overwrite the cached executor with the non-JIT loop
+//@ts-expect-error
 appNonJit.compiledCache.set("GET/api/test", (ctx: Context) =>
 	executeHandlers(ctx, middlewares),
 );

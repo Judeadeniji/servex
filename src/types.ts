@@ -1,6 +1,11 @@
+import type { StandardSchemaV1 } from "@standard-schema/spec";
 import type { Context } from "./context";
 import type { HttpException } from "./http-exception";
 import type { StatusCode } from "./http-status";
+import type {
+	ValidationTarget,
+	ValidatorMiddleware,
+} from "./middlewares/validator";
 import type { RouterType } from "./router/adapter";
 import type { AbsolutePath } from "./router/types";
 
@@ -15,22 +20,17 @@ export type Env = Partial<{
 export type ServerRoute<E extends Env = Env> = {
 	method: Method; // Added HTTP method
 	path: string;
-	data: Handler<Context<E>>[];
+	handlers: InternalHandler<Context<E>>[];
 };
 
-export type Handler<C extends Context = Context> = (
+export type Handler<C extends Context = Context, R = Response> = (
 	ctx: C,
 	next: NextFunction,
 	// biome-ignore lint/suspicious/noConfusingVoidType: handlers can return void
-) => Promise<Response | void> | Response | void;
+) => Promise<R | void> | R | void;
 
-export type RequestHandler<C extends Context = Context> = (
-	ctx: C,
-	next: NextFunction,
-	// biome-ignore lint/suspicious/noConfusingVoidType: handlers can return void
-) => Promise<Response | void> | Response | void;
-
-export type MiddlewareHandler<C extends Context> = Handler<C>;
+export type MiddlewareHandler<C extends Context = Context> = Handler<C>;
+export type InternalHandler<C extends Context = Context, R = Response> = Handler<C, R> | InlineHandler;
 
 export interface ServerOptions<B extends string = "/"> {
 	router?: RouterType;
@@ -138,7 +138,6 @@ export type Last<T extends unknown[]> = T extends readonly [
 
 export interface ServeXRouter<
 	E extends Env = Env,
-	// biome-ignore lint/complexity/noBannedTypes: schema requires empty object
 	S = {},
 	B extends string = "/",
 > {
@@ -150,6 +149,52 @@ export interface ServeXRouter<
 		...middlewares: MiddlewareHandler<Context>[]
 	): this;
 
+	get<
+		P extends string,
+		T extends ValidationTarget,
+		Schema extends StandardSchemaV1,
+		R extends InlineHandler,
+	>(
+		path: P,
+		validator: ValidatorMiddleware<T, Schema>,
+		handler: R,
+	): ServeXRouter<
+		E,
+		S & {
+			[K in AbsolutePath<B, P>]: {
+				GET: { req: { [K in T]: StandardSchemaV1.InferInput<Schema> }; res: R };
+				IS_STATIC: true;
+			};
+		},
+		B
+	>;
+	get<
+		P extends string,
+		T extends ValidationTarget,
+		Schema extends StandardSchemaV1,
+		R,
+	>(
+		path: P,
+		validator: ValidatorMiddleware<T, Schema>,
+		handler: Handler<
+			Context<
+				E,
+				P,
+				import("./router/types").ExtractUrl<P>,
+				{ [K in T]: StandardSchemaV1.InferOutput<Schema> }
+			>,
+			R
+		>,
+	): ServeXRouter<
+		E,
+		S & {
+			[K in AbsolutePath<B, P>]: {
+				GET: { req: { [K in T]: StandardSchemaV1.InferInput<Schema> }; res: R };
+			};
+		},
+		B
+	>;
+
 	get<P extends string, R extends InlineHandler>(
 		path: P,
 		handler: R,
@@ -160,12 +205,12 @@ export interface ServeXRouter<
 	>;
 	get<P extends string, R>(
 		path: P,
-		handler: (ctx: Context<E, P>, next: NextFunction) => R | Promise<R>,
+		handler: Handler<Context<E, P>, R>,
 	): ServeXRouter<E, S & { [K in AbsolutePath<B, P>]: { GET: R } }, B>;
 	get<P extends string, R>(
 		path: P,
 		m1: Handler,
-		handler: (ctx: Context<E, P>, next: NextFunction) => R | Promise<R>,
+		handler: Handler<Context<E, P>, R>,
 	): ServeXRouter<E, S & { [K in AbsolutePath<B, P>]: { GET: R } }, B>;
 	get<P extends string, R extends InlineHandler>(
 		path: P,
@@ -176,7 +221,7 @@ export interface ServeXRouter<
 		path: P,
 		m1: Handler,
 		m2: Handler,
-		handler: (ctx: Context<E, P>, next: NextFunction) => R | Promise<R>,
+		handler: Handler<Context<E, P>, R>,
 	): ServeXRouter<E, S & { [K in AbsolutePath<B, P>]: { GET: R } }, B>;
 	get<P extends string, R extends InlineHandler>(
 		path: P,
@@ -186,21 +231,77 @@ export interface ServeXRouter<
 	): ServeXRouter<E, S & { [K in AbsolutePath<B, P>]: { GET: R } }, B>;
 	get<P extends string, R>(
 		path: P,
-		...handlers: (Handler | InlineHandler)[]
+		...handlers: Handler<Context<E, P>, R>[]
 	): ServeXRouter<E, S & { [K in AbsolutePath<B, P>]: { GET: R } }, B>;
 
+	post<
+		P extends string,
+		T extends ValidationTarget,
+		Schema extends StandardSchemaV1,
+		R extends InlineHandler,
+	>(
+		path: P,
+		validator: ValidatorMiddleware<T, Schema>,
+		handler: R,
+	): ServeXRouter<
+		E,
+		S & {
+			[K in AbsolutePath<B, P>]: {
+				POST: {
+					req: { [K in T]: StandardSchemaV1.InferInput<Schema> };
+					res: R;
+				};
+				IS_STATIC: true;
+			};
+		},
+		B
+	>;
+	post<
+		P extends string,
+		T extends ValidationTarget,
+		Schema extends StandardSchemaV1,
+		R,
+	>(
+		path: P,
+		validator: ValidatorMiddleware<T, Schema>,
+		handler: Handler<
+			Context<
+				E,
+				P,
+				import("./router/types").ExtractUrl<P>,
+				{ [K in T]: StandardSchemaV1.InferOutput<Schema> }
+			>,
+			R
+		>,
+	): ServeXRouter<
+		E,
+		S & {
+			[K in AbsolutePath<B, P>]: {
+				POST: {
+					req: { [K in T]: StandardSchemaV1.InferInput<Schema> };
+					res: R;
+				};
+			};
+		},
+		B
+	>;
+
 	post<P extends string, R extends InlineHandler>(
 		path: P,
 		handler: R,
-	): ServeXRouter<E, S & { [K in AbsolutePath<B, P>]: { POST: R } }, B>;
+	): ServeXRouter<
+		E,
+		S & { [K in AbsolutePath<B, P>]: { POST: R; IS_STATIC: true } },
+		B
+	>;
 	post<P extends string, R>(
 		path: P,
-		handler: (ctx: Context<E, P>, next: NextFunction) => R | Promise<R>,
+		handler: Handler<Context<E, P>, R>,
 	): ServeXRouter<E, S & { [K in AbsolutePath<B, P>]: { POST: R } }, B>;
 	post<P extends string, R>(
 		path: P,
 		m1: Handler,
-		handler: (ctx: Context<E, P>, next: NextFunction) => R | Promise<R>,
+		handler: Handler<Context<E, P>, R>,
 	): ServeXRouter<E, S & { [K in AbsolutePath<B, P>]: { POST: R } }, B>;
 	post<P extends string, R extends InlineHandler>(
 		path: P,
@@ -211,7 +312,7 @@ export interface ServeXRouter<
 		path: P,
 		m1: Handler,
 		m2: Handler,
-		handler: (ctx: Context<E, P>, next: NextFunction) => R | Promise<R>,
+		handler: Handler<Context<E, P>, R>,
 	): ServeXRouter<E, S & { [K in AbsolutePath<B, P>]: { POST: R } }, B>;
 	post<P extends string, R extends InlineHandler>(
 		path: P,
@@ -221,21 +322,71 @@ export interface ServeXRouter<
 	): ServeXRouter<E, S & { [K in AbsolutePath<B, P>]: { POST: R } }, B>;
 	post<P extends string, R>(
 		path: P,
-		...handlers: (Handler | InlineHandler)[]
+		...handlers: Handler<Context<E, P>, R>[]
 	): ServeXRouter<E, S & { [K in AbsolutePath<B, P>]: { POST: R } }, B>;
+
+	put<
+		P extends string,
+		T extends ValidationTarget,
+		Schema extends StandardSchemaV1,
+		R extends InlineHandler,
+	>(
+		path: P,
+		validator: ValidatorMiddleware<T, Schema>,
+		handler: R,
+	): ServeXRouter<
+		E,
+		S & {
+			[K in AbsolutePath<B, P>]: {
+				PUT: { req: { [K in T]: StandardSchemaV1.InferInput<Schema> }; res: R };
+				IS_STATIC: true;
+			};
+		},
+		B
+	>;
+	put<
+		P extends string,
+		T extends ValidationTarget,
+		Schema extends StandardSchemaV1,
+		R,
+	>(
+		path: P,
+		validator: ValidatorMiddleware<T, Schema>,
+		handler: Handler<
+			Context<
+				E,
+				P,
+				import("./router/types").ExtractUrl<P>,
+				{ [K in T]: StandardSchemaV1.InferOutput<Schema> }
+			>,
+			R
+		>,
+	): ServeXRouter<
+		E,
+		S & {
+			[K in AbsolutePath<B, P>]: {
+				PUT: { req: { [K in T]: StandardSchemaV1.InferInput<Schema> }; res: R };
+			};
+		},
+		B
+	>;
 
 	put<P extends string, R extends InlineHandler>(
 		path: P,
 		handler: R,
-	): ServeXRouter<E, S & { [K in AbsolutePath<B, P>]: { PUT: R } }, B>;
+	): ServeXRouter<
+		E,
+		S & { [K in AbsolutePath<B, P>]: { PUT: R; IS_STATIC: true } },
+		B
+	>;
 	put<P extends string, R>(
 		path: P,
-		handler: (ctx: Context<E, P>, next: NextFunction) => R | Promise<R>,
+		handler: Handler<Context<E, P>, R>,
 	): ServeXRouter<E, S & { [K in AbsolutePath<B, P>]: { PUT: R } }, B>;
 	put<P extends string, R>(
 		path: P,
 		m1: Handler,
-		handler: (ctx: Context<E, P>, next: NextFunction) => R | Promise<R>,
+		handler: Handler<Context<E, P>, R>,
 	): ServeXRouter<E, S & { [K in AbsolutePath<B, P>]: { PUT: R } }, B>;
 	put<P extends string, R extends InlineHandler>(
 		path: P,
@@ -246,7 +397,7 @@ export interface ServeXRouter<
 		path: P,
 		m1: Handler,
 		m2: Handler,
-		handler: (ctx: Context<E, P>, next: NextFunction) => R | Promise<R>,
+		handler: Handler<Context<E, P>, R>,
 	): ServeXRouter<E, S & { [K in AbsolutePath<B, P>]: { PUT: R } }, B>;
 	put<P extends string, R extends InlineHandler>(
 		path: P,
@@ -256,7 +407,7 @@ export interface ServeXRouter<
 	): ServeXRouter<E, S & { [K in AbsolutePath<B, P>]: { PUT: R } }, B>;
 	put<P extends string, R>(
 		path: P,
-		...handlers: (Handler | InlineHandler)[]
+		...handlers: Handler<Context<E, P>, R>[]
 	): ServeXRouter<E, S & { [K in AbsolutePath<B, P>]: { PUT: R } }, B>;
 
 	delete<P extends string, R extends InlineHandler>(
@@ -265,12 +416,12 @@ export interface ServeXRouter<
 	): ServeXRouter<E, S & { [K in AbsolutePath<B, P>]: { DELETE: R } }, B>;
 	delete<P extends string, R>(
 		path: P,
-		handler: (ctx: Context<E, P>, next: NextFunction) => R | Promise<R>,
+		handler: Handler<Context<E, P>, R>,
 	): ServeXRouter<E, S & { [K in AbsolutePath<B, P>]: { DELETE: R } }, B>;
 	delete<P extends string, R>(
 		path: P,
 		m1: Handler,
-		handler: (ctx: Context<E, P>, next: NextFunction) => R | Promise<R>,
+		handler: Handler<Context<E, P>, R>,
 	): ServeXRouter<E, S & { [K in AbsolutePath<B, P>]: { DELETE: R } }, B>;
 	delete<P extends string, R extends InlineHandler>(
 		path: P,
@@ -281,7 +432,7 @@ export interface ServeXRouter<
 		path: P,
 		m1: Handler,
 		m2: Handler,
-		handler: (ctx: Context<E, P>, next: NextFunction) => R | Promise<R>,
+		handler: Handler<Context<E, P>, R>,
 	): ServeXRouter<E, S & { [K in AbsolutePath<B, P>]: { DELETE: R } }, B>;
 	delete<P extends string, R extends InlineHandler>(
 		path: P,
@@ -291,7 +442,7 @@ export interface ServeXRouter<
 	): ServeXRouter<E, S & { [K in AbsolutePath<B, P>]: { DELETE: R } }, B>;
 	delete<P extends string, R>(
 		path: P,
-		...handlers: (Handler | InlineHandler)[]
+		...handlers: Handler<Context<E, P>, R>[]
 	): ServeXRouter<E, S & { [K in AbsolutePath<B, P>]: { DELETE: R } }, B>;
 
 	patch<P extends string, R extends InlineHandler>(
@@ -300,12 +451,12 @@ export interface ServeXRouter<
 	): ServeXRouter<E, S & { [K in AbsolutePath<B, P>]: { PATCH: R } }, B>;
 	patch<P extends string, R>(
 		path: P,
-		handler: (ctx: Context<E, P>, next: NextFunction) => R | Promise<R>,
+		handler: Handler<Context<E, P>, R>,
 	): ServeXRouter<E, S & { [K in AbsolutePath<B, P>]: { PATCH: R } }, B>;
 	patch<P extends string, R>(
 		path: P,
 		m1: Handler,
-		handler: (ctx: Context<E, P>, next: NextFunction) => R | Promise<R>,
+		handler: Handler<Context<E, P>, R>,
 	): ServeXRouter<E, S & { [K in AbsolutePath<B, P>]: { PATCH: R } }, B>;
 	patch<P extends string, R extends InlineHandler>(
 		path: P,
@@ -316,7 +467,7 @@ export interface ServeXRouter<
 		path: P,
 		m1: Handler,
 		m2: Handler,
-		handler: (ctx: Context<E, P>, next: NextFunction) => R | Promise<R>,
+		handler: Handler<Context<E, P>, R>,
 	): ServeXRouter<E, S & { [K in AbsolutePath<B, P>]: { PATCH: R } }, B>;
 	patch<P extends string, R extends InlineHandler>(
 		path: P,
@@ -326,7 +477,7 @@ export interface ServeXRouter<
 	): ServeXRouter<E, S & { [K in AbsolutePath<B, P>]: { PATCH: R } }, B>;
 	patch<P extends string, R>(
 		path: P,
-		...handlers: (Handler | InlineHandler)[]
+		...handlers: Handler<Context<E, P>, R>[]
 	): ServeXRouter<E, S & { [K in AbsolutePath<B, P>]: { PATCH: R } }, B>;
 
 	options<P extends string, R extends InlineHandler>(
@@ -335,12 +486,12 @@ export interface ServeXRouter<
 	): ServeXRouter<E, S & { [K in AbsolutePath<B, P>]: { OPTIONS: R } }, B>;
 	options<P extends string, R>(
 		path: P,
-		handler: (ctx: Context<E, P>, next: NextFunction) => R | Promise<R>,
+		handler: Handler<Context<E, P>, R>,
 	): ServeXRouter<E, S & { [K in AbsolutePath<B, P>]: { OPTIONS: R } }, B>;
 	options<P extends string, R>(
 		path: P,
 		m1: Handler,
-		handler: (ctx: Context<E, P>, next: NextFunction) => R | Promise<R>,
+		handler: Handler<Context<E, P>, R>,
 	): ServeXRouter<E, S & { [K in AbsolutePath<B, P>]: { OPTIONS: R } }, B>;
 	options<P extends string, R extends InlineHandler>(
 		path: P,
@@ -351,7 +502,7 @@ export interface ServeXRouter<
 		path: P,
 		m1: Handler,
 		m2: Handler,
-		handler: (ctx: Context<E, P>, next: NextFunction) => R | Promise<R>,
+		handler: Handler<Context<E, P>, R>,
 	): ServeXRouter<E, S & { [K in AbsolutePath<B, P>]: { OPTIONS: R } }, B>;
 	options<P extends string, R extends InlineHandler>(
 		path: P,
@@ -361,7 +512,7 @@ export interface ServeXRouter<
 	): ServeXRouter<E, S & { [K in AbsolutePath<B, P>]: { OPTIONS: R } }, B>;
 	options<P extends string, R>(
 		path: P,
-		...handlers: (Handler | InlineHandler)[]
+		...handlers: Handler<Context<E, P>, R>[]
 	): ServeXRouter<E, S & { [K in AbsolutePath<B, P>]: { OPTIONS: R } }, B>;
 
 	head<P extends string, R extends InlineHandler>(
@@ -370,12 +521,12 @@ export interface ServeXRouter<
 	): ServeXRouter<E, S & { [K in AbsolutePath<B, P>]: { HEAD: R } }, B>;
 	head<P extends string, R>(
 		path: P,
-		handler: (ctx: Context<E, P>, next: NextFunction) => R | Promise<R>,
+		handler: Handler<Context<E, P>, R>,
 	): ServeXRouter<E, S & { [K in AbsolutePath<B, P>]: { HEAD: R } }, B>;
 	head<P extends string, R>(
 		path: P,
 		m1: Handler,
-		handler: (ctx: Context<E, P>, next: NextFunction) => R | Promise<R>,
+		handler: Handler<Context<E, P>, R>,
 	): ServeXRouter<E, S & { [K in AbsolutePath<B, P>]: { HEAD: R } }, B>;
 	head<P extends string, R extends InlineHandler>(
 		path: P,
@@ -386,7 +537,7 @@ export interface ServeXRouter<
 		path: P,
 		m1: Handler,
 		m2: Handler,
-		handler: (ctx: Context<E, P>, next: NextFunction) => R | Promise<R>,
+		handler: Handler<Context<E, P>, R>,
 	): ServeXRouter<E, S & { [K in AbsolutePath<B, P>]: { HEAD: R } }, B>;
 	head<P extends string, R extends InlineHandler>(
 		path: P,
@@ -396,7 +547,7 @@ export interface ServeXRouter<
 	): ServeXRouter<E, S & { [K in AbsolutePath<B, P>]: { HEAD: R } }, B>;
 	head<P extends string, R>(
 		path: P,
-		...handlers: (Handler | InlineHandler)[]
+		...handlers: Handler<Context<E, P>, R>[]
 	): ServeXRouter<E, S & { [K in AbsolutePath<B, P>]: { HEAD: R } }, B>;
 
 	all<P extends string, R extends InlineHandler>(
@@ -405,12 +556,12 @@ export interface ServeXRouter<
 	): ServeXRouter<E, S & { [K in AbsolutePath<B, P>]: { ALL: R } }, B>;
 	all<P extends string, R>(
 		path: P,
-		handler: (ctx: Context<E, P>, next: NextFunction) => R | Promise<R>,
+		handler: Handler<Context<E, P>, R>,
 	): ServeXRouter<E, S & { [K in AbsolutePath<B, P>]: { ALL: R } }, B>;
 	all<P extends string, R>(
 		path: P,
 		m1: Handler,
-		handler: (ctx: Context<E, P>, next: NextFunction) => R | Promise<R>,
+		handler: Handler<Context<E, P>, R>,
 	): ServeXRouter<E, S & { [K in AbsolutePath<B, P>]: { ALL: R } }, B>;
 	all<P extends string, R extends InlineHandler>(
 		path: P,
@@ -421,7 +572,7 @@ export interface ServeXRouter<
 		path: P,
 		m1: Handler,
 		m2: Handler,
-		handler: (ctx: Context<E, P>, next: NextFunction) => R | Promise<R>,
+		handler: Handler<Context<E, P>, R>,
 	): ServeXRouter<E, S & { [K in AbsolutePath<B, P>]: { ALL: R } }, B>;
 	all<P extends string, R extends InlineHandler>(
 		path: P,
@@ -431,18 +582,15 @@ export interface ServeXRouter<
 	): ServeXRouter<E, S & { [K in AbsolutePath<B, P>]: { ALL: R } }, B>;
 	all<P extends string, R>(
 		path: P,
-		...handlers: (Handler | InlineHandler)[]
+		...handlers: Handler<Context<E, P>, R>[]
 	): ServeXRouter<E, S & { [K in AbsolutePath<B, P>]: { ALL: R } }, B>;
 
-	// biome-ignore lint/complexity/noBannedTypes: schema requires empty object
 	route<P extends string, ChildSchema = {}>(
 		path: P,
 		fn: (
-			// biome-ignore lint/complexity/noBannedTypes: empty schema requires {}
 			r: ServeXRouter<E, {}, AbsolutePath<B, P>>,
 		) => ServeXRouter<E, ChildSchema, AbsolutePath<B, P>> | undefined,
 	): ServeXRouter<E, S & ChildSchema, B>;
-	// biome-ignore lint/complexity/noBannedTypes: schema requires empty object
 	route<
 		P extends string,
 		ChildSchema = {},
@@ -482,7 +630,7 @@ export interface ServeXRouter<
 			? never
 			: S[K] extends { GET: unknown; IS_STATIC: true }
 				? K
-				: never]?: S[K] extends { GET: infer R }
+				: never]: S[K] extends { GET: infer R }
 			? R extends Response
 				? R
 				: Response & TypedResponse<R, 200>

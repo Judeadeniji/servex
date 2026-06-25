@@ -15,7 +15,7 @@ import type { Env, HeaderRecord, JSONValue } from "./types";
 export interface ServeXRequest extends Request {
 	/**
 	 * Parses and returns the request body as JSON.
-	 * 
+	 *
 	 * @template T Expected return type of the parsed JSON
 	 * @returns A promise that resolves to the parsed JSON
 	 */
@@ -45,7 +45,19 @@ export interface Context<
 	E extends Env = Env,
 	P extends string = "/",
 	I extends Record<string, unknown> = ExtractUrl<P>,
+	ValidData extends Record<string, any> = {},
 > {
+	/**
+	 * Internal storage for validated data.
+	 * @internal
+	 */
+	_validData?: ValidData;
+
+	/**
+	 * Retrieve validated data from the specified target.
+	 * @param target The part of the request that was validated ("body", "query", or "params")
+	 */
+	valid<T extends keyof ValidData>(target: T): ValidData[T];
 	/**
 	 * The incoming Fetch Request object.
 	 * Extended with lightweight methods like `.json()` for parsing the body.
@@ -651,13 +663,25 @@ const contextHelpers = {
 	status(this: Context) {
 		return this._status;
 	},
+
+	valid<T extends "body" | "query" | "params">(this: Context, target: T): any {
+		if (!this._validData) {
+			throw new Error(
+				"No validation data found. Did you forget to apply the validator middleware?",
+			);
+		}
+		if (!(target in this._validData)) {
+			throw new Error(`No validation data found for target: ${target}`);
+		}
+		return this._validData[target as keyof typeof this._validData];
+	},
 };
 
 /**
  * Factory function to create a new ServeX Context.
  * Uses `__proto__` injection to attach methods without the overhead of class instantiation,
  * ensuring monomorphic inline caches for V8.
- * 
+ *
  * @internal
  * @param request The incoming Fetch Request.
  * @param env Environment variables and bindings.
@@ -679,9 +703,18 @@ export function createContext(
 		env,
 		executionCtx,
 		debug,
+		deferred: undefined,
+		finalResponse: undefined,
 		_params: params || {},
+		_query: undefined,
+		_body: undefined,
+		_response: undefined,
+		_headers: undefined,
 		_status: 200,
+		_variables: undefined,
 		_isFinished: false,
+		_routine: undefined,
+		_validData: undefined,
 	} as unknown as Context;
 	return ctx;
 }

@@ -45,7 +45,7 @@ function reqToRequest(
 			req.on("end", () => {
 				const body = noBodyMethods.includes(req.method!)
 					? null
-					: Buffer.concat(chunks as unknown as Uint8Array[]);
+					: Buffer.concat(chunks as any as Uint8Array[]);
 				const url = new URL(
 					req.url!,
 					`${req.headers[":scheme"]}://${req.headers[":authority"]}`,

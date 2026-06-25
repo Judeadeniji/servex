@@ -12,7 +12,7 @@ import type { Handler } from "../types";
  *    short-circuiting and duplicate call prevention without array allocations.
  */
 export function buildCompilerSource<C extends Context>(
-	handlers: Handler<C>[],
+	handlers: import("../types").InternalHandler<C>[],
 ): string {
 	if (handlers.length === 0) {
 		return `return () => Promise.resolve(undefined);\n`;
@@ -24,7 +24,8 @@ export function buildCompilerSource<C extends Context>(
 	code += `    switch(i) {\n`;
 
 	for (let j = 0; j < handlers.length; j++) {
-		const needsNext = handlers[j].length > 1;
+	const handler = handlers[j];
+		const needsNext = typeof handler === "function" && handler.length > 1;
 		code += `      case ${j}:\n`;
 		if (needsNext) {
 			code += `        {\n`;

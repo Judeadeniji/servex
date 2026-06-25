@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { compileSonicTrieMatcher } from "../src/router/sonic-trie-jit";
 
-type RouteLike = { path: string; paramsKeys: string[]; data: string };
+type RouteLike = { path: string; paramsKeys: string[]; handlers: string };
 
 function route(path: string): RouteLike {
 	const paramsKeys: string[] = [];
@@ -10,7 +10,7 @@ function route(path: string): RouteLike {
 		else if (seg.startsWith("*"))
 			paramsKeys.push(seg.length > 1 ? seg.slice(1) : "path");
 	}
-	return { path, paramsKeys, data: path };
+	return { path, paramsKeys, handlers: path };
 }
 
 type Case = {

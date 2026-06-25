@@ -34,45 +34,45 @@ memoirist.add("GET", "/api/legacy/*", "wild");
 
 // 2. Setup SonicRouter
 const sonic = new SonicRouter();
-sonic.addRoute({ method: "GET", path: "/", data: "ok" });
-sonic.addRoute({ method: "GET", path: "/about", data: "ok" });
-sonic.addRoute({ method: "GET", path: "/api/health", data: "ok" });
-sonic.addRoute({ method: "GET", path: "/api/config", data: "ok" });
-sonic.addRoute({ method: "GET", path: "/login", data: "ok" });
-sonic.addRoute({ method: "GET", path: "/dashboard", data: "ok" });
-sonic.addRoute({ method: "GET", path: "/pricing", data: "ok" });
-sonic.addRoute({ method: "GET", path: "/contact", data: "ok" });
-sonic.addRoute({ method: "GET", path: "/terms", data: "ok" });
-sonic.addRoute({ method: "GET", path: "/docs", data: "ok" });
-sonic.addRoute({ method: "GET", path: "/api/users/:id", data: "param" });
-sonic.addRoute({ method: "GET", path: "/api/posts/:id", data: "param" });
-sonic.addRoute({ method: "GET", path: "/api/products/:sku", data: "param" });
-sonic.addRoute({ method: "GET", path: "/u/:username", data: "param" });
-sonic.addRoute({ method: "GET", path: "/events/:eventId", data: "param" });
+sonic.addRoute({ method: "GET", path: "/", handlers: ["ok"] });
+sonic.addRoute({ method: "GET", path: "/about", handlers: ["ok"] });
+sonic.addRoute({ method: "GET", path: "/api/health", handlers: ["ok"] });
+sonic.addRoute({ method: "GET", path: "/api/config", handlers: ["ok"] });
+sonic.addRoute({ method: "GET", path: "/login", handlers: ["ok"] });
+sonic.addRoute({ method: "GET", path: "/dashboard", handlers: ["ok"] });
+sonic.addRoute({ method: "GET", path: "/pricing", handlers: ["ok"] });
+sonic.addRoute({ method: "GET", path: "/contact", handlers: ["ok"] });
+sonic.addRoute({ method: "GET", path: "/terms", handlers: ["ok"] });
+sonic.addRoute({ method: "GET", path: "/docs", handlers: ["ok"] });
+sonic.addRoute({ method: "GET", path: "/api/users/:id", handlers: ["param"] });
+sonic.addRoute({ method: "GET", path: "/api/posts/:id", handlers: ["param"] });
+sonic.addRoute({ method: "GET", path: "/api/products/:sku", handlers: ["param"] });
+sonic.addRoute({ method: "GET", path: "/u/:username", handlers: ["param"] });
+sonic.addRoute({ method: "GET", path: "/events/:eventId", handlers: ["param"] });
 sonic.addRoute({
 	method: "GET",
 	path: "/api/posts/:id/comments/:commentId",
-	data: "param-n",
+	handlers: ["param-n"],
 });
-sonic.addRoute({ method: "GET", path: "/repo/:owner/:repo", data: "param-n" });
+sonic.addRoute({ method: "GET", path: "/repo/:owner/:repo", handlers: ["param-n"] });
 sonic.addRoute({
 	method: "GET",
 	path: "/repo/:owner/:repo/issues/:issueId",
-	data: "param-n",
+	handlers: ["param-n"],
 });
 sonic.addRoute({
 	method: "GET",
 	path: "/store/:country/:state",
-	data: "param-n",
+	handlers: ["param-n"],
 });
 sonic.addRoute({
 	method: "GET",
 	path: "/flights/:origin/:dest/:date",
-	data: "param-n",
+	handlers: ["param-n"],
 });
-sonic.addRoute({ method: "GET", path: "/public/*path", data: "wild" });
-sonic.addRoute({ method: "GET", path: "/assets/*path", data: "wild" });
-sonic.addRoute({ method: "GET", path: "/api/legacy/*path", data: "wild" });
+sonic.addRoute({ method: "GET", path: "/public/*path", handlers: ["wild"] });
+sonic.addRoute({ method: "GET", path: "/assets/*path", handlers: ["wild"] });
+sonic.addRoute({ method: "GET", path: "/api/legacy/*path", handlers: ["wild"] });
 
 // The requests
 const URLS = [

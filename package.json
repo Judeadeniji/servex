@@ -1,14 +1,36 @@
 {
 	"name": "servex",
 	"version": "0.0.1-alpha",
-	"description": "ServeX (Codename: Aether) - A high-performance, extensible HTTP server framework inspired by Express, Hono, and Fastify. Delivering blazing speed, rock-solid reliability, and effortless elegance for modern web applications.",
-	"main": "dist/index.js",
-	"type": "module",
-	"scripts": {},
+	"author": "Adeniji  Oluwaferanmi (adenijiferanmi64@gmail.com)",
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/judeadeniji/servex.git"
 	},
+	"main": "dist/index.js",
+	"dependencies": {
+		"@standard-schema/spec": "^1.1.0"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "^2.5.0",
+		"@mitata/counters": "^0.0.8",
+		"@types/autocannon": "^7.12.7",
+		"@types/bun": "latest",
+		"@typescript/native-preview": "^7.0.0-dev.20260624.1",
+		"autocannon": "^8.0.0",
+		"elysia": "^1.4.29",
+		"hono": "^4.12.26",
+		"mitata": "^1.0.34",
+		"type-testing": "^0.2.0"
+	},
+	"exports": {
+		".": "./index.ts",
+		"./client": "./client.ts"
+	},
+	"bugs": {
+		"url": "https://github.com/judeadeniji/servex/issues"
+	},
+	"description": "ServeX (Codename: Aether) - A high-performance, extensible HTTP server framework inspired by Express, Hono, and Fastify. Delivering blazing speed, rock-solid reliability, and effortless elegance for modern web applications.",
+	"homepage": "https://github.com/judeadeniji/servex#readme",
 	"keywords": [
 		"http",
 		"server",
@@ -18,24 +40,9 @@
 		"bun",
 		"web"
 	],
-	"author": "Adeniji  Oluwaferanmi (adenijiferanmi64@gmail.com)",
 	"license": "MIT",
-	"bugs": {
-		"url": "https://github.com/judeadeniji/servex/issues"
+	"scripts": {
+		"tsc": "tsgo"
 	},
-	"homepage": "https://github.com/judeadeniji/servex#readme",
-	"devDependencies": {
-		"@biomejs/biome": "^2.5.0",
-		"@mitata/counters": "^0.0.8",
-		"@types/autocannon": "^7.12.7",
-		"@types/bun": "latest",
-		"autocannon": "^8.0.0",
-		"elysia": "^1.4.29",
-		"hono": "^4.12.26",
-		"mitata": "^1.0.34",
-		"type-testing": "^0.2.0"
-	},
-	"peerDependencies": {
-		"typescript": "^6.0.3"
-	}
+	"type": "module"
 }

@@ -4,112 +4,112 @@ import type { Route } from "../../src/router/base";
 import type { Context } from "../../src/context";
 
 // Create dummy routes (realistic mix)
-const routes: Route<import("../../src/types").Handler<Context>[]>[] = [
+const routes: Route[] = [
 	// 10 Static routes
-	{ method: "GET", path: "/", data: [() => new Response("Root")] },
-	{ method: "GET", path: "/about", data: [() => new Response("About")] },
-	{ method: "GET", path: "/api/health", data: [() => new Response("OK")] },
-	{ method: "GET", path: "/api/config", data: [() => new Response("Config")] },
-	{ method: "GET", path: "/login", data: [() => new Response("Login")] },
-	{ method: "GET", path: "/register", data: [() => new Response("Register")] },
+	{ method: "GET", path: "/", handlers: [() => new Response("Root")] },
+	{ method: "GET", path: "/about", handlers: [() => new Response("About")] },
+	{ method: "GET", path: "/api/health", handlers: [() => new Response("OK")] },
+	{ method: "GET", path: "/api/config", handlers: [() => new Response("Config")] },
+	{ method: "GET", path: "/login", handlers: [() => new Response("Login")] },
+	{ method: "GET", path: "/register", handlers: [() => new Response("Register")] },
 	{
 		method: "GET",
 		path: "/dashboard",
-		data: [() => new Response("Dashboard")],
+		handlers: [() => new Response("Dashboard")],
 	},
-	{ method: "GET", path: "/pricing", data: [() => new Response("Pricing")] },
-	{ method: "GET", path: "/contact", data: [() => new Response("Contact")] },
-	{ method: "GET", path: "/terms", data: [() => new Response("Terms")] },
+	{ method: "GET", path: "/pricing", handlers: [() => new Response("Pricing")] },
+	{ method: "GET", path: "/contact", handlers: [() => new Response("Contact")] },
+	{ method: "GET", path: "/terms", handlers: [() => new Response("Terms")] },
 
 	// 10 Simple Param routes
-	{ method: "GET", path: "/api/users/:id", data: [() => new Response("User")] },
+	{ method: "GET", path: "/api/users/:id", handlers: [() => new Response("User")] },
 	{
 		method: "GET",
 		path: "/api/posts/:slug",
-		data: [() => new Response("Post")],
+		handlers: [() => new Response("Post")],
 	},
 	{
 		method: "GET",
 		path: "/api/products/:sku",
-		data: [() => new Response("Product")],
+		handlers: [() => new Response("Product")],
 	},
 	{
 		method: "GET",
 		path: "/u/:username",
-		data: [() => new Response("Profile")],
+		handlers: [() => new Response("Profile")],
 	},
 	{
 		method: "GET",
 		path: "/c/:category",
-		data: [() => new Response("Category")],
+		handlers: [() => new Response("Category")],
 	},
 	{
 		method: "GET",
 		path: "/download/:fileId",
-		data: [() => new Response("Download")],
+		handlers: [() => new Response("Download")],
 	},
-	{ method: "GET", path: "/docs/:page", data: [() => new Response("Docs")] },
+	{ method: "GET", path: "/docs/:page", handlers: [() => new Response("Docs")] },
 	{
 		method: "GET",
 		path: "/events/:eventId",
-		data: [() => new Response("Event")],
+		handlers: [() => new Response("Event")],
 	},
-	{ method: "GET", path: "/orgs/:orgId", data: [() => new Response("Org")] },
+	{ method: "GET", path: "/orgs/:orgId", handlers: [() => new Response("Org")] },
 	{
 		method: "GET",
 		path: "/settings/:section",
-		data: [() => new Response("Settings")],
+		handlers: [() => new Response("Settings")],
 	},
 
 	// 5 Deep/Multi Param routes
 	{
 		method: "GET",
 		path: "/api/posts/:id/comments/:commentId",
-		data: [() => new Response("Comment")],
+		handlers: [() => new Response("Comment")],
 	},
 	{
 		method: "GET",
 		path: "/api/orgs/:orgId/teams/:teamId/members/:memberId",
-		data: [() => new Response("Member")],
+		handlers: [() => new Response("Member")],
 	},
 	{
 		method: "GET",
 		path: "/repo/:owner/:repo/issues/:issueId",
-		data: [() => new Response("Issue")],
+		handlers: [() => new Response("Issue")],
 	},
 	{
 		method: "GET",
 		path: "/store/:country/:state/:city",
-		data: [() => new Response("Store")],
+		handlers: [() => new Response("Store")],
 	},
 	{
 		method: "GET",
 		path: "/flights/:origin/:dest/:date",
-		data: [() => new Response("Flight")],
+		handlers: [() => new Response("Flight")],
 	},
 
 	// 5 Wildcard routes
 	{
 		method: "GET",
 		path: "/public/*path",
-		data: [() => new Response("Static")],
+		handlers: [() => new Response("Static")],
 	},
 	{
 		method: "GET",
 		path: "/assets/*path",
-		data: [() => new Response("Assets")],
+		handlers: [() => new Response("Assets")],
 	},
 	{
 		method: "GET",
 		path: "/images/*path",
-		data: [() => new Response("Images")],
+		handlers: [() => new Response("Images")],
 	},
 	{
 		method: "GET",
 		path: "/api/legacy/*path",
-		data: [() => new Response("Legacy")],
+		handlers: [() => new Response("Legacy")],
 	},
-	{ method: "GET", path: "/proxy/*path", data: [() => new Response("Proxy")] },
+	{ method: "GET", path: "/proxy/*path", handlers: [() => new Response("Proxy")] },
 ];
 
 const requestMix = [

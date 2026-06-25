@@ -4,7 +4,7 @@ type RouteLike = {
 	path: string;
 	paramsKeys: string[];
 	middlewares: unknown[];
-	data: unknown;
+	handlers: unknown;
 };
 
 function route(path: string): RouteLike {
@@ -14,7 +14,7 @@ function route(path: string): RouteLike {
 		else if (seg.startsWith("*"))
 			paramsKeys.push(seg.length > 1 ? seg.slice(1) : "path");
 	}
-	return { path, paramsKeys, middlewares: [], data: null };
+	return { path, paramsKeys, middlewares: [], handlers: null };
 }
 
 type Case = {

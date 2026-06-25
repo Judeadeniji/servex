@@ -94,7 +94,7 @@ export const serveStatic = (options: ServeStaticOptions = {}) => {
 				"Content-Length": data.byteLength.toString(),
 			});
 
-			return new Response(data as unknown as BodyInit, {
+			return new Response(data as BodyInit, {
 				status: 200,
 				headers: c.header(),
 			});
@@ -145,7 +145,7 @@ export const serveStatic = (options: ServeStaticOptions = {}) => {
 				"Content-Length": stat.size.toString(),
 			});
 
-			return new Response(fileBuffer as unknown as BodyInit, {
+			return new Response(fileBuffer as BodyInit, {
 				status: 200,
 				headers: c.header(),
 			});

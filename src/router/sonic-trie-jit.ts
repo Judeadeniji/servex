@@ -100,7 +100,7 @@ function buildTrie(routes: RouteLike[]): TrieNode {
  */
 export function compileSonicTrieMatcher<_T>(
 	method: HTTPMethod,
-	routes: (RouteLike & { middlewares: unknown; data: unknown; path: string })[],
+	routes: (RouteLike & { middlewares: unknown; handlers: unknown; path: string })[],
 ) {
 	const trie = buildTrie(routes);
 
@@ -108,7 +108,7 @@ export function compileSonicTrieMatcher<_T>(
 		return routes.indexOf(
 			route as RouteLike & {
 				middlewares: unknown;
-				data: unknown;
+				handlers: unknown;
 				path: string;
 			},
 		);
@@ -131,10 +131,10 @@ export function compileSonicTrieMatcher<_T>(
       route: url,
       matched_route: ${JSON.stringify(route.path)},
       params: {${paramsObj}},
-      data: deps.routes[${idx}].data,
-      middlewares: deps.routes[${idx}].middlewares,
+      handlers: deps.routes[${idx}].handlers,
       store: deps.routes[${idx}],
-      executor: undefined
+      executor: undefined,
+      is405: false
     };`;
 	}
 

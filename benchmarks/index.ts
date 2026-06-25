@@ -12,26 +12,26 @@ const sonicRouter = new RouterAdapter({ type: RouterType.SONIC });
 radixRouter.addRoute({
 	method: "GET",
 	path: "/static/path/to/resource",
-	data: [],
+	handlers: [],
 });
-radixRouter.addRoute({ method: "GET", path: "/dynamic/path/:id", data: [] });
-radixRouter.addRoute({ method: "GET", path: "/wildcard/*path", data: [] });
+radixRouter.addRoute({ method: "GET", path: "/dynamic/path/:id", handlers: [] });
+radixRouter.addRoute({ method: "GET", path: "/wildcard/*path", handlers: [] });
 
 trieRouter.addRoute({
 	method: "GET",
 	path: "/static/path/to/resource",
-	data: [],
+	handlers: [],
 });
-trieRouter.addRoute({ method: "GET", path: "/dynamic/path/:id", data: [] });
-trieRouter.addRoute({ method: "GET", path: "/wildcard/*path", data: [] });
+trieRouter.addRoute({ method: "GET", path: "/dynamic/path/:id", handlers: [] });
+trieRouter.addRoute({ method: "GET", path: "/wildcard/*path", handlers: [] });
 
 sonicRouter.addRoute({
 	method: "GET",
 	path: "/static/path/to/resource",
-	data: [],
+	handlers: [],
 });
-sonicRouter.addRoute({ method: "GET", path: "/dynamic/path/:id", data: [] });
-sonicRouter.addRoute({ method: "GET", path: "/wildcard/*path", data: [] });
+sonicRouter.addRoute({ method: "GET", path: "/dynamic/path/:id", handlers: [] });
+sonicRouter.addRoute({ method: "GET", path: "/wildcard/*path", handlers: [] });
 
 group("1. ROUTER MATCHING", () => {
 	bench("RadixRouter: Static Match", () => {

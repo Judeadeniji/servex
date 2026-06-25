@@ -37,9 +37,33 @@ export async function executeHandlers<
 			return await nextPromise;
 		};
 
-		const res = await handlers[i](context, next);
+		const handlerOrStatic = handlers[i];
 
-		if (res instanceof Response) return res;
+		if (typeof handlerOrStatic === "function") {
+			// CRITICAL FIX: Added `await` so async middleware resolves properly
+			const res = await handlerOrStatic(context, next);
+			if (res instanceof Response) return res;
+		}
+		
+		// TODO: Everything below should only exec if native static response is false
+		else if (handlerOrStatic && typeof handlerOrStatic === "object" && (handlerOrStatic as any) instanceof Response) {
+			// Fast path for static responses (clone to avoid consuming body)
+			return (handlerOrStatic as Response).clone();
+		} else if (
+			typeof handlerOrStatic === "object" &&
+			handlerOrStatic !== null
+		) {
+			// Stringify JSON objects and set the correct headers
+			return new Response(JSON.stringify(handlerOrStatic), {
+				headers: { "Content-Type": "application/json; charset=UTF-8" },
+			});
+		} else {
+			// Coerce numbers and booleans to strings
+			return new Response(String(handlerOrStatic), {
+				headers: { "Content-Type": "text/plain; charset=UTF-8" },
+			});
+		}
+
 		if (nextCalled && nextPromise) return await nextPromise;
 
 		return undefined;

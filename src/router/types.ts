@@ -7,7 +7,6 @@ export type Split<
 	D extends string,
 > = S extends `${infer T}${D}${infer U}` ? [T, ...Split<U, D>] : [S];
 
-// biome-ignore lint/complexity/noBannedTypes: We need a catch-all for functions here
 export type Coerce<T> = T extends Function
 	? T
 	: T extends object
@@ -32,7 +31,7 @@ type PathParams<Path extends string> =
 				? { [K in Param]: string } & PathParams<Rest>
 				: Path extends `${string}*${infer Param}`
 					? { [K in Param]: string }
-					: // biome-ignore lint/complexity/noBannedTypes: empty schema requires {}
+					: 
 						{};
 
 // Extract query parameters
@@ -40,9 +39,9 @@ type QueryParams<Query extends string> =
 	Query extends `${infer Param}=${string}${infer Rest}`
 		? { [K in Param]: string } & (Rest extends `&${infer Next}`
 				? QueryParams<Next>
-				: // biome-ignore lint/complexity/noBannedTypes: empty schema requires {}
+				: 
 					{})
-		: // biome-ignore lint/complexity/noBannedTypes: empty schema requires {}
+		: 
 			{};
 
 // Main type to extract both path and query parameters
@@ -51,14 +50,6 @@ export type ExtractUrl<T extends string> = Coerce<{
 	queries: QueryParams<GetQuery<T>>;
 }>;
 
-// Example usage
-type Result = ExtractUrl<"/heroes/:heroName/:action?search=query&limit=10">;
-
-// Additional test cases
-type ResultNoQuery = ExtractUrl<"/heroes/:heroName/:action">;
-type ResultEmptyQuery = ExtractUrl<"/heroes/:heroName/:action?">;
-type ResultSingleParam = ExtractUrl<"/heroes/:heroName">;
-type ResultSingleQuery = ExtractUrl<"/heroes/all?limit=10">;
 
 // Uncomment to test
 /*
@@ -95,7 +86,7 @@ type ReplaceDynamicSegments<T extends string[]> = T extends []
 	: T extends [infer F extends string, ...infer R extends string[]]
 		? F extends "" // Handle leading empty segments
 			? `/${ReplaceDynamicSegments<R>}` // Skip leading empty segments
-			: F extends `:${infer Param}` // Dynamic segment
+			: F extends `:${infer _Param}` // Dynamic segment
 				? `${string}${R extends [] ? "" : "/"}` // Replace with ${string} and handle trailing slash
 				: F extends `*` // Wildcard segment
 					? `${string}${R extends [] ? "" : "/"}` // Replace with ${string} and handle trailing slash

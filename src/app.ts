@@ -9,8 +9,9 @@ import type {
 	MiddlewareHandler,
 	ServerOptions,
 	ServerRoute,
-	ServeXRouter,
+	ServeXRouter
 } from "./types";
+import { SUPPORTED_METHODS } from "./utils";
 
 export class ServeXRequest extends Request {}
 
@@ -20,10 +21,20 @@ export class ServeXRouterImpl<
 	B extends string = "/",
 > implements ServeXRouter<E, S, B>
 {
+	public _nativeStaticResponse?: boolean;
+
+	public declare static?: ServeXRouter<E, S, B>["static"];
+
 	constructor(protected routerAdapter: RouterAdapter<ServerRoute[]>) {}
 
 	get routes(): ServerRoute[] {
 		return this.routerAdapter.routes;
+	}
+
+	onResponse(_handler: import("./types").HookHandler<Context<E>>): this {
+		throw new Error(
+			"onResponse hook can only be registered on the main ServeXApp instance, not a sub-router.",
+		);
 	}
 
 	trace(
@@ -52,20 +63,30 @@ export class ServeXRouterImpl<
 		method: Method,
 		path: string,
 		handlers: (
-			| import("./types").Handler<Context>
+			| import("./types").Handler<import("./context").Context>
 			| import("./types").InlineHandler
 		)[],
 	) {
 		const finalHandlers = [...handlers];
-		if (finalHandlers.length > 0) {
-			const last = finalHandlers[finalHandlers.length - 1];
-			if (typeof last !== "function") {
-				const inlineVal = last;
-				let routeHandler: import("./types").Handler<Context>;
+		for (let i = 0; i < handlers.length; i++) {
+			const handler = handlers[i];
+			if (
+				typeof handler !== "function" &&
+				!(
+					typeof handler === "object" &&
+					handler !== null &&
+					"__validator" in handler
+				)
+			) {
+				const inlineVal = handler;
+				let routeHandler: import("./types").Handler<
+					import("./context").Context
+				>;
+
 				if (inlineVal instanceof Response) {
 					routeHandler = () => inlineVal.clone();
 				} else if (typeof inlineVal === "object" && inlineVal !== null) {
-					routeHandler = (c) =>
+					routeHandler = (c: import("./context").Context) =>
 						c.json(inlineVal as import("./types").JSONValue);
 				} else {
 					routeHandler = (c) => c.text(String(inlineVal));
@@ -75,29 +96,31 @@ export class ServeXRouterImpl<
 				// Track native static route if supported
 				if (
 					method === "GET" &&
-					(this as unknown as { _nativeStaticResponse?: boolean })
-						._nativeStaticResponse &&
+					this._nativeStaticResponse &&
 					!path.includes(":") &&
 					!path.includes("*") &&
 					finalHandlers.length === 1
 				) {
-					if (
-						!(this as unknown as { static?: Record<string, Response> }).static
-					)
-						(this as unknown as { static?: Record<string, Response> }).static =
-							{};
+					// 1. Assert the initialization to satisfy Error 2322
+					if (!this.static) {
+						this.static = {} as ServeXRouter<E, S, B>["static"];
+					}
+
 					let res: Response;
-					if (inlineVal instanceof Response) res = inlineVal.clone();
-					else if (typeof inlineVal === "object" && inlineVal !== null)
+					if (inlineVal instanceof Response) {
+						res = inlineVal;
+					} else if (typeof inlineVal === "object" && inlineVal !== null) {
 						res = new Response(JSON.stringify(inlineVal), {
 							headers: { "Content-Type": "application/json; charset=UTF-8" },
 						});
-					else
+					} else {
 						res = new Response(String(inlineVal), {
 							headers: { "Content-Type": "text/plain; charset=UTF-8" },
 						});
-					const self = this as unknown as { static: Record<string, Response> };
-					self.static[path] = res;
+					}
+
+					// 2. Cast to a mutable Record to bypass Errors 2532 and 2862
+					(this.static as Record<string, Response>)[path] = res;
 				}
 			}
 		}
@@ -105,46 +128,72 @@ export class ServeXRouterImpl<
 		this.routerAdapter.addRoute({
 			method,
 			path,
-			data: finalHandlers as import("./types").Handler<Context>[],
+			handlers: finalHandlers as import("./types").Handler<Context>[],
 		});
 		return this;
 	}
 
 	// @ts-ignore: Implementation signature
 	get(path: string, ...handlers: import("./types").Handler<Context<E>>[]) {
-		return this.add("GET", path, handlers as Handler<Context>[]);
+		return this.add(
+			"GET",
+			path,
+			handlers as import("./types").Handler<Context>[],
+		);
 	}
 	// @ts-ignore: Implementation signature
 	post(path: string, ...handlers: import("./types").Handler<Context<E>>[]) {
-		return this.add("POST", path, handlers as Handler<Context>[]);
+		return this.add(
+			"POST",
+			path,
+			handlers as import("./types").Handler<Context>[],
+		);
 	}
 	// @ts-ignore: Implementation signature
 	put(path: string, ...handlers: import("./types").Handler<Context<E>>[]) {
-		return this.add("PUT", path, handlers as Handler<Context>[]);
+		return this.add(
+			"PUT",
+			path,
+			handlers as import("./types").Handler<Context>[],
+		);
 	}
 	// @ts-ignore: Implementation signature
 	delete(path: string, ...handlers: import("./types").Handler<Context<E>>[]) {
-		return this.add("DELETE", path, handlers as Handler<Context>[]);
+		return this.add(
+			"DELETE",
+			path,
+			handlers as import("./types").Handler<Context>[],
+		);
 	}
 	// @ts-ignore: Implementation signature
 	patch(path: string, ...handlers: import("./types").Handler<Context<E>>[]) {
-		return this.add("PATCH", path, handlers as Handler<Context>[]);
+		return this.add(
+			"PATCH",
+			path,
+			handlers as import("./types").Handler<Context>[],
+		);
 	}
 	// @ts-ignore: Implementation signature
 	options(path: string, ...handlers: import("./types").Handler<Context<E>>[]) {
-		return this.add("OPTIONS", path, handlers as Handler<Context>[]);
+		return this.add(
+			"OPTIONS",
+			path,
+			handlers as import("./types").Handler<Context>[],
+		);
 	}
 	// @ts-ignore: Implementation signature
 	head(path: string, ...handlers: import("./types").Handler<Context<E>>[]) {
-		return this.add("HEAD", path, handlers as Handler<Context>[]);
+		return this.add(
+			"HEAD",
+			path,
+			handlers as import("./types").Handler<Context>[],
+		);
 	}
 	// @ts-ignore: Implementation signature
 	all(path: string, ...handlers: import("./types").Handler<Context<E>>[]) {
-		["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"].forEach(
-			(m) => {
-				this.add(m as Method, path, handlers as Handler<Context>[]);
-			},
-		);
+		SUPPORTED_METHODS.forEach((m) => {
+			this.add(m.toUpperCase() as Method, path, handlers as Handler<Context>[]);
+		});
 		return this;
 	}
 
@@ -157,7 +206,8 @@ export class ServeXRouterImpl<
 	) {
 		if (fnOrApp instanceof ServeXRouterImpl) {
 			this.routerAdapter.addSubTrie(path, fnOrApp.routerAdapter);
-			return this as unknown as ServeXRouter<E, {}, string>;
+			//@ts-expect-error
+			return this as ServeXRouter<E, {}, string>;
 		}
 
 		const childRouter = new RouterAdapter<ServerRoute[]>({
@@ -165,20 +215,20 @@ export class ServeXRouterImpl<
 		});
 		const childServeXRouter = new ServeXRouterImpl<E, {}, string>(childRouter);
 		(fnOrApp as (r: ServeXRouter<E, {}, string>) => unknown)(
-			childServeXRouter as unknown as ServeXRouter<E, {}, string>,
+			childServeXRouter as ServeXRouter<E, {}, string>,
 		);
 		this.routerAdapter.addSubTrie(path, childRouter);
-		return this as unknown as ServeXRouter<E, {}, string>;
+		return this as ServeXRouter<E, {}, string>;
 	}
 
-	mount(
-		path: string,
+	mount<P extends string>(
+		path: P,
 		fetchFn: (
 			request: Request,
 			env?: unknown,
 			ctx?: unknown,
 		) => Response | Promise<Response>,
-	) {
+	): ServeXRouter<E, S, B> {
 		// Strip trailing slash if present to ensure the wildcard matches correctly
 		const normalizedPath =
 			path.endsWith("/") && path !== "/" ? path.slice(0, -1) : path;
@@ -205,7 +255,7 @@ export class ServeXRouterImpl<
 		// Also map the exact path without trailing slash
 		this.all(normalizedPath, handler);
 
-		return this as unknown as ServeXRouter<E, {}, string>;
+		return this as ServeXRouter<E, S, B>;
 	}
 
 	/**
@@ -247,10 +297,6 @@ export class ServeXApp<
 		onResponse: [],
 		trace: [],
 	};
-	public compiledCache = new Map<
-		string,
-		(context: Context) => Promise<Response | undefined>
-	>();
 
 	/**
 	 * The literal base path this app is scoped to.
@@ -259,17 +305,6 @@ export class ServeXApp<
 	 */
 	public readonly basePath: B;
 	public _nativeStaticResponse: boolean = false;
-	public static?: Record<string, Response> & {
-		[K in keyof S as K extends `${string}:${string}` | `${string}*${string}`
-			? never
-			: S[K] extends { GET: unknown; IS_STATIC: true }
-				? K
-				: never]?: S[K] extends { GET: infer R }
-			? R extends Response
-				? R
-				: Response & import("./types").TypedResponse<R, 200>
-			: Response;
-	};
 
 	constructor(
 		router: RouterAdapter<ServerRoute[]>,
@@ -322,12 +357,14 @@ export class ServeXApp<
 		if (typeof path === "string") {
 			if (path === "*" || path === "/*") {
 				this.middlewares.push(...middlewares);
+				this.routerAdapter.pushMiddlewares("*", middlewares);
 			} else {
 				this.routerAdapter.pushMiddlewares(path, middlewares);
 			}
 			return this;
 		}
 		this.middlewares.push(path, ...middlewares);
+		this.routerAdapter.pushMiddlewares("*", [path, ...middlewares]);
 		return this;
 	}
 
@@ -379,9 +416,8 @@ export class ServeXApp<
 			pathname,
 			this.middlewares,
 			this.hooks,
-			this.compiledCache,
 			env,
-			executionCtx,
+			executionCtx as import("./core/fetch").ServeXExecutionContext | undefined,
 			this.debug,
 			this.aot,
 		);

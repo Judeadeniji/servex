@@ -1,6 +1,6 @@
 import $$path from "node:path";
 import type { Context } from "../context";
-import type { MiddlewareHandler } from "../types";
+import type { Handler, MiddlewareHandler } from "../types";
 import {
 	type HTTPMethod,
 	type IRouter,
@@ -14,7 +14,7 @@ import type { DynamicSegmentsRemoved } from "./types";
 export class TrieRouter<Routes extends Route[]> implements IRouter<Routes> {
 	private root = new TrieSegmentNode("/");
 	private subTries: Map<string, TrieRouter<Routes>> = new Map();
-	#routes = new Set<Route<Routes[number]["data"]>>();
+	#routes = new Set<Route>();
 
 	/**
 	 * @property routes - A list of all the routes added to the trie
@@ -121,8 +121,8 @@ export class TrieRouter<Routes extends Route[]> implements IRouter<Routes> {
 		applyMiddlewareToSegment(this.root);
 	}
 
-	addRoute(route: Route<Routes[number]["data"]>) {
-		const { method, path, data } = route;
+	addRoute(route: Route) {
+		const { method, path, handlers } = route;
 		const routeKey = `${method.toUpperCase()} ${path}`;
 		if (this.#routes.has(route)) {
 			console.warn(`Route ${routeKey} already exists. Overwriting...`);
@@ -157,8 +157,16 @@ export class TrieRouter<Routes extends Route[]> implements IRouter<Routes> {
 		}
 
 		currentTrieSegment.isEndOfRoute = true;
-		// Assign data based on the HTTP method
-		currentTrieSegment.data[method.toUpperCase() as HTTPMethod] = data!;
+		if (Array.isArray(handlers)) {
+			const middlewares: MiddlewareHandler<Context>[] = [];
+			this.collectMiddlewares(currentTrieSegment, middlewares);
+			currentTrieSegment.handlers[method.toUpperCase() as HTTPMethod] = [
+				...middlewares,
+				...handlers
+			] as Handler[];
+		} else {
+			currentTrieSegment.handlers[method.toUpperCase() as HTTPMethod] = handlers as Handler[];
+		}
 		this.#routes.add(route);
 		return this;
 	}
@@ -232,7 +240,7 @@ export class TrieRouter<Routes extends Route[]> implements IRouter<Routes> {
 		if (
 			this.isDynamicSegment(seg) &&
 			childHasDynamicSegment(currentTrieSegment.children) &&
-			currentTrieSegment.data[method]
+			currentTrieSegment.handlers[method]
 		) {
 			// slice of `seg` from `route`
 			const lastRoute = route.slice(0, route.indexOf(seg));
@@ -291,10 +299,11 @@ export class TrieRouter<Routes extends Route[]> implements IRouter<Routes> {
 			route: _route,
 			matched_route: "",
 			params: {} as MatchedRoute<Routes, boolean>["params"],
-			data: null,
+			handlers: undefined,
 			middlewares: [], // Initialize middleware array
 			store: undefined,
 			executor: undefined,
+			is405: false,
 		};
 
 		return this.matchAll<RoutePath>(
@@ -329,12 +338,12 @@ export class TrieRouter<Routes extends Route[]> implements IRouter<Routes> {
 		matched_route.matched_route += `/${route.value}`;
 
 		// Collect middlewares from the current node
-		this.collectMiddlewares(route, matched_route.middlewares);
+		this.collectMiddlewares(route, matched_route.middlewares!);
 
 		if (!nextSegment && route.isEndOfRoute) {
-			if (route.data[method]) {
+			if (route.handlers[method]) {
 				matched_route.matched = true;
-				matched_route.data = route.data[method] as Routes[number]["data"];
+				matched_route.handlers = route.handlers[method] as Handler[];
 				return matched_route;
 			} else {
 				return null; // Method not allowed for this route
@@ -366,7 +375,7 @@ export class TrieRouter<Routes extends Route[]> implements IRouter<Routes> {
 			// Switch on the current trie segment type of the route child
 			switch (trieSegment.type) {
 				case "dynamic":
-					matched_route.params[seg.slice(1)] = nextSegment;
+					(matched_route.params as Record<string, string>)[seg.slice(1)] = nextSegment;
 					return this.matchAll(
 						matched_route,
 						segments,
@@ -378,26 +387,26 @@ export class TrieRouter<Routes extends Route[]> implements IRouter<Routes> {
 				case "wildcard": {
 					const isNamedWildcard = seg.startsWith("*") && seg.length > 1;
 					const routeSegArr = this.sanitizeRoute(
-						matched_route.matched_route,
+						matched_route.matched_route!,
 					).split("/");
 					// segments - routeSegArr = params
 					const params = segments.slice(routeSegArr.length);
 					// add the params to the matched_route.params
 					if (isNamedWildcard) {
-						matched_route.params[seg.slice(1)] = params.join("/");
+						(matched_route.params as Record<string, string>)[seg.slice(1)] = params.join("/");
 					} else {
 						for (let i = 0; i < params.length; i++) {
-							matched_route.params[i] = params[i];
+							(matched_route.params as Record<string, string>)[i] = params[i];
 						}
 					}
 
 					matched_route.matched_route += `/${seg}`;
-					if (trieSegment.data[method]) {
+					if (trieSegment.handlers[method]) {
 						matched_route.matched = true;
-						matched_route.data = trieSegment.data[
+						matched_route.handlers = trieSegment.handlers[
 							method
-						] as Routes[number]["data"];
-						this.collectMiddlewares(trieSegment, matched_route.middlewares);
+						] as Handler[];
+						this.collectMiddlewares(trieSegment, matched_route.middlewares!);
 						return matched_route;
 					}
 					continue;
