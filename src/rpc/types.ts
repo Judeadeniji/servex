@@ -1,6 +1,10 @@
-import type { StandardSchemaV1 } from '@standard-schema/spec';
-import type { MiddlewareHandler, Context as ServeXContext } from '../types';
-import type { RPCError, RPCTypedError } from './error';
+import type { StandardSchemaV1 } from "@standard-schema/spec";
+import type {
+	MiddlewareHandler,
+	Context as ServeXContext,
+	ServeXPlugin,
+} from "../types";
+import type { RPCError, RPCTypedError } from "./error";
 
 export type RPCContext = ServeXContext & {
 	rpc: { fn: string; input: unknown };
@@ -10,14 +14,14 @@ export type Infer<S> = S extends StandardSchemaV1
 	? StandardSchemaV1.InferOutput<S>
 	: never;
 
-export type RPCMiddleware = MiddlewareHandler<RPCContext>
+export type RPCMiddleware = MiddlewareHandler<RPCContext>;
 
 export type RPCFunctionDef<
 	TInput = unknown,
 	TOutput = unknown,
 	_TError = unknown,
 > = {
-	_tag: 'RPCFunction';
+	_tag: "RPCFunction";
 	inputSchema: StandardSchemaV1 | null;
 	outputSchema: StandardSchemaV1 | null;
 	errorSchema: StandardSchemaV1 | null;
@@ -27,8 +31,10 @@ export type RPCFunctionDef<
 
 export type RPCRegistry = Record<string, unknown>;
 
-export type RPCGroupDef<T extends Record<string, unknown> = Record<string, unknown>> = {
-	_tag: 'RPCGroup';
+export type RPCGroupDef<
+	T extends Record<string, unknown> = Record<string, unknown>,
+> = {
+	_tag: "RPCGroup";
 	middlewares: RPCMiddleware[];
 	registry: T;
 };
@@ -58,15 +64,21 @@ export interface RPCFunctionBuilder<
 		fn: (
 			input: unknown extends TInput ? NewInput : TInput,
 			ctx: RPCContext,
-		) => Promise<unknown extends TOutput ? NewOutput : TOutput> | (unknown extends TOutput ? NewOutput : TOutput),
+		) =>
+			| Promise<unknown extends TOutput ? NewOutput : TOutput>
+			| (unknown extends TOutput ? NewOutput : TOutput),
 	): RPCFunctionDef<
 		unknown extends TInput ? NewInput : TInput,
 		unknown extends TOutput ? Exclude<Awaited<NewOutput>, Error> : TOutput,
-		Extract<Awaited<NewOutput>, RPCTypedError> extends RPCTypedError<infer E> ? E : _TError
+		Extract<Awaited<NewOutput>, RPCTypedError> extends RPCTypedError<infer E>
+			? E
+			: _TError
 	>;
 }
 
-export interface RPCGroupBuilder<T extends Record<string, unknown> = Record<string, never>> {
+export interface RPCGroupBuilder<
+	T extends Record<string, unknown> = Record<string, never>,
+> {
 	middlewares(...fns: RPCMiddleware[]): RPCGroupBuilder<T>;
 	register<R extends Record<string, unknown>>(registry: R): RPCGroupDef<R>;
 }
@@ -84,17 +96,17 @@ export type RPCClientFn<TInput, TOutput, TError> = (
 ) => Promise<
 	| Awaited<TOutput>
 	| RPCError
-	| (unknown extends TError ? never : TError extends import('../types').JSONValue ? RPCTypedError<TError> : never)
+	| (unknown extends TError
+			? never
+			: TError extends import("../types").JSONValue
+				? RPCTypedError<TError>
+				: never)
 >;
 
-// Forward declaration of RPCPluginInstance from plugin.ts
-export type RPCPluginInstance<R extends Record<string, unknown>> = {
-	(ctx: ServeXContext): Promise<Response>;
+export interface RPCPluginInstance<R extends Record<string, unknown>>
+	extends ServeXPlugin<InferClientFromRegistry<R>> {
 	registry: R;
-	_isRPCPlugin: true;
-	_setPrefix: (prefix: string) => void;
-};
+}
 
-export type InferAppRPC<T> = T extends RPCPluginInstance<infer R>
-	? InferClientFromRegistry<R>
-	: never;
+export type InferAppRPC<T> =
+	T extends RPCPluginInstance<infer R> ? InferClientFromRegistry<R> : never;

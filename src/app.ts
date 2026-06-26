@@ -9,7 +9,7 @@ import type {
 	MiddlewareHandler,
 	ServerOptions,
 	ServerRoute,
-	ServeXRouter
+	ServeXRouter,
 } from "./types";
 import { SUPPORTED_METHODS } from "./utils";
 
@@ -47,15 +47,50 @@ export class ServeXRouterImpl<
 		);
 	}
 
+	// @ts-ignore: Implementation signature
 	use(
-		path: string | MiddlewareHandler<Context>,
-		...middlewares: MiddlewareHandler<Context>[]
+		pathOrPlugin:
+			| string
+			| MiddlewareHandler<Context>
+			| import("./types").ServeXPlugin,
+		...middlewaresOrPlugins: (
+			| MiddlewareHandler<Context>
+			| import("./types").ServeXPlugin
+		)[]
 	) {
-		if (typeof path === "string") {
-			this.routerAdapter.pushMiddlewares(path, middlewares);
+		if (
+			typeof pathOrPlugin === "object" &&
+			pathOrPlugin !== null &&
+			"setup" in pathOrPlugin
+		) {
+			pathOrPlugin.setup(this as any, "");
 			return this;
 		}
-		this.routerAdapter.pushMiddlewares("*", [path, ...middlewares]);
+
+		if (typeof pathOrPlugin === "string") {
+			if (
+				middlewaresOrPlugins.length === 1 &&
+				typeof middlewaresOrPlugins[0] === "object" &&
+				"setup" in middlewaresOrPlugins[0]
+			) {
+				const plugin =
+					middlewaresOrPlugins[0] as import("./types").ServeXPlugin;
+				this.route(pathOrPlugin, (childApp) =>
+					plugin.setup(childApp, pathOrPlugin),
+				);
+				return this;
+			}
+			this.routerAdapter.pushMiddlewares(
+				pathOrPlugin,
+				middlewaresOrPlugins as MiddlewareHandler<Context>[],
+			);
+			return this;
+		}
+
+		this.routerAdapter.pushMiddlewares("*", [
+			pathOrPlugin as MiddlewareHandler<Context>,
+			...(middlewaresOrPlugins as MiddlewareHandler<Context>[]),
+		]);
 		return this;
 	}
 
@@ -221,31 +256,14 @@ export class ServeXRouterImpl<
 		return this as ServeXRouter<E, {}, string>;
 	}
 
-	// @ts-ignore: Implementation signature
-	mount(
-		path: string,
-		fetchFnOrPlugin: unknown,
-	): unknown {
-		if (
-			fetchFnOrPlugin &&
-			typeof fetchFnOrPlugin === "function" &&
-			"_isRPCPlugin" in fetchFnOrPlugin
-		) {
-			const plugin = fetchFnOrPlugin as { _setPrefix?: (p: string) => void };
-			if (plugin._setPrefix) {
-				plugin._setPrefix(path);
-			}
-			return this.post(
-				`${path}/*`,
-				fetchFnOrPlugin as unknown as import("./types").MiddlewareHandler,
-			) as unknown;
-		}
-
-		const fetchFn = fetchFnOrPlugin as (
+	mount<P extends string>(
+		path: P,
+		fetchFn: (
 			request: Request,
 			env?: unknown,
 			ctx?: unknown,
-		) => Response | Promise<Response>;
+		) => Response | Promise<Response>,
+	): ServeXRouter<E, S, B> {
 		// Strip trailing slash if present to ensure the wildcard matches correctly
 		const normalizedPath =
 			path.endsWith("/") && path !== "/" ? path.slice(0, -1) : path;
@@ -272,7 +290,7 @@ export class ServeXRouterImpl<
 		// Also map the exact path without trailing slash
 		this.all(normalizedPath, handler);
 
-		return this as unknown;
+		return this as ServeXRouter<E, S, B>;
 	}
 
 	/**
@@ -367,21 +385,57 @@ export class ServeXApp<
 		return this;
 	}
 
+	// @ts-ignore: Implementation signature
 	use(
-		path: string | import("./types").MiddlewareHandler<Context>,
-		...middlewares: import("./types").MiddlewareHandler<Context>[]
+		pathOrPlugin:
+			| string
+			| import("./types").MiddlewareHandler<Context>
+			| import("./types").ServeXPlugin,
+		...middlewaresOrPlugins: (
+			| import("./types").MiddlewareHandler<Context>
+			| import("./types").ServeXPlugin
+		)[]
 	) {
-		if (typeof path === "string") {
-			if (path === "*" || path === "/*") {
-				this.middlewares.push(...middlewares);
-				this.routerAdapter.pushMiddlewares("*", middlewares);
+		if (
+			typeof pathOrPlugin === "object" &&
+			pathOrPlugin !== null &&
+			"setup" in pathOrPlugin
+		) {
+			super.use(pathOrPlugin as import("./types").ServeXPlugin);
+			return this;
+		}
+
+		if (typeof pathOrPlugin === "string") {
+			if (
+				middlewaresOrPlugins.length === 1 &&
+				typeof middlewaresOrPlugins[0] === "object" &&
+				"setup" in middlewaresOrPlugins[0]
+			) {
+				super.use(
+					pathOrPlugin,
+					middlewaresOrPlugins[0] as import("./types").ServeXPlugin,
+				);
+				return this;
+			}
+			if (pathOrPlugin === "*" || pathOrPlugin === "/*") {
+				this.middlewares.push(...(middlewaresOrPlugins as any));
+				this.routerAdapter.pushMiddlewares("*", middlewaresOrPlugins as any);
 			} else {
-				this.routerAdapter.pushMiddlewares(path, middlewares);
+				this.routerAdapter.pushMiddlewares(
+					pathOrPlugin,
+					middlewaresOrPlugins as any,
+				);
 			}
 			return this;
 		}
-		this.middlewares.push(path, ...middlewares);
-		this.routerAdapter.pushMiddlewares("*", [path, ...middlewares]);
+		this.middlewares.push(
+			pathOrPlugin as any,
+			...(middlewaresOrPlugins as any),
+		);
+		this.routerAdapter.pushMiddlewares("*", [
+			pathOrPlugin as any,
+			...(middlewaresOrPlugins as any),
+		]);
 		return this;
 	}
 

@@ -112,7 +112,7 @@ describe("RPC Module", () => {
 				hello: createRPCFunction().handler(async () => "world"),
 			});
 
-			app.mount("/rpc", plugin);
+			app.use("/rpc", plugin);
 
 			// Create a client directly against the app for testing
 			const client = createRPCClient<typeof plugin>({
@@ -144,7 +144,7 @@ describe("RPC Module", () => {
 				}),
 			});
 
-			app.mount("/api/rpc", plugin);
+			app.use("/api/rpc", plugin);
 			const client = createRPCClient<typeof plugin>({
 				baseURL: "http://localhost",
 				prefix: "/api/rpc",
@@ -162,7 +162,7 @@ describe("RPC Module", () => {
 					.handler(async () => "ok"),
 			});
 
-			app.mount("/rpc", plugin);
+			app.use("/rpc", plugin);
 
 			const client = createRPCClient<typeof plugin>({
 				baseURL: "http://localhost",
@@ -178,7 +178,9 @@ describe("RPC Module", () => {
 			expect(res).toBeInstanceOf(RPCError);
 			const err = res as RPCError;
 			expect(err.code).toBe("VALIDATION_ERROR");
-			expect(err.data).toEqual({ issues: [{ path: ["test"], message: "Invalid input format" }] });
+			expect(err.data).toEqual({
+				issues: [{ path: ["test"], message: "Invalid input format" }],
+			});
 			globalThis.fetch = originalFetch;
 		});
 
@@ -192,7 +194,7 @@ describe("RPC Module", () => {
 					}),
 			});
 
-			app.mount("/rpc", plugin);
+			app.use("/rpc", plugin);
 
 			const client = createRPCClient<typeof plugin>({
 				baseURL: "http://localhost",
@@ -218,11 +220,12 @@ describe("RPC Module", () => {
 					return new RPCTypedError({ code: "RETURNED_ERROR" });
 				}),
 			});
-			app.mount("/rpc", plugin);
+			app.use("/rpc", plugin);
 			const client = createRPCClient<typeof plugin>({
 				baseURL: "http://localhost",
 				prefix: "/rpc",
-				fetch: async (url, init) => app.fetch(new Request(url, init as RequestInit)),
+				fetch: async (url, init) =>
+					app.fetch(new Request(url, init as RequestInit)),
 			});
 
 			const res = await client.returnMe({});
@@ -259,7 +262,7 @@ describe("RPC Module", () => {
 					}),
 			});
 
-			app.mount("/rpc", plugin);
+			app.use("/rpc", plugin);
 
 			const client = createRPCClient<typeof plugin>({
 				baseURL: "http://localhost",

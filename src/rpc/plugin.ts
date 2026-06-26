@@ -1,9 +1,9 @@
-import type { JSONValue, Context as ServeXContext, } from '../types';
-import { RPCError } from './error';
-import { composeMiddlewares } from './middleware';
-import { type CompileOptions, compileRoutes } from './router';
-import type { RPCContext, RPCPluginInstance } from './types';
-import { validateInput, validateOutput } from './validation';
+import type { JSONValue, Context as ServeXContext } from "../types";
+import { RPCError } from "./error";
+import { composeMiddlewares } from "./middleware";
+import { type CompileOptions, compileRoutes } from "./router";
+import type { RPCContext, RPCPluginInstance } from "./types";
+import { validateInput, validateOutput } from "./validation";
 
 export type RPCPluginOptions = CompileOptions;
 
@@ -14,96 +14,100 @@ export function createRPCPlugin(options: RPCPluginOptions) {
 class RPCPluginBuilder {
 	constructor(private options: RPCPluginOptions) {}
 
-	register<R extends Record<string, unknown>>(registry: R): RPCPluginInstance<R> {
-		let routeMap = compileRoutes(registry, this.options);
-		
-		const handler = async (ctx: ServeXContext) => {
-			const url = new URL(ctx.req.url);
-			const pathname = url.pathname;
+	register<R extends Record<string, unknown>>(
+		registry: R,
+	): RPCPluginInstance<R> {
+		return {
+			name: "servex-rpc",
+			registry,
+			setup: (app, prefix) => {
+				this.options.prefix = prefix;
+				const routeMap = compileRoutes(registry, this.options);
 
-			// Find the matching compiled route by httpPath
-			const route = [...routeMap.values()].find(
-				(r) => r.httpPath === pathname,
-			);
+				const handler = async (ctx: ServeXContext) => {
+					const url = new URL(ctx.req.url);
+					const pathname = url.pathname;
 
-			if (!route) {
-				return ctx.json({ ok: false, error: { code: 'NOT_FOUND' } }, 404);
-			}
+					const route = [...routeMap.values()].find(
+						(r) => r.httpPath === pathname,
+					);
 
-			let body: unknown;
-			try {
-				body = await ctx.req.json();
-			} catch {
-				return ctx.json(
-					new RPCError('VALIDATION_ERROR', 'Invalid JSON body').toJSON(),
-					400,
-				);
-			}
+					if (!route) {
+						return ctx.json({ ok: false, error: { code: "NOT_FOUND" } }, 404);
+					}
 
-			// Build RPC context (extends ServeX context)
-			const rpcCtx: RPCContext = Object.assign(ctx, {
-				rpc: { fn: route.path, input: body },
-			});
+					let body: unknown;
+					try {
+						body = await ctx.req.json();
+					} catch {
+						return ctx.json(
+							new RPCError("VALIDATION_ERROR", "Invalid JSON body").toJSON(),
+							400,
+						);
+					}
 
-			try {
-				// Validate input
-				const validatedInput = await validateInput(route.fn.inputSchema, body);
+					// Build RPC context (extends ServeX context)
+					const rpcCtx: RPCContext = Object.assign(ctx, {
+						rpc: { fn: route.path, input: body },
+					});
 
-				// Run middleware chain + handler
-				let output: unknown;
-				const composed = composeMiddlewares(route.middlewareChain);
+					try {
+						// Validate input
+						const validatedInput = await validateInput(
+							route.fn.inputSchema,
+							body,
+						);
 
-				await composed(rpcCtx, async () => {
-					output = await route.fn.handler(validatedInput, rpcCtx);
-				});
+						// Run middleware chain + handler
+						let output: unknown;
+						const composed = composeMiddlewares(route.middlewareChain);
 
-				if (output instanceof Error) {
-					throw output;
-				}
+						await composed(rpcCtx, async () => {
+							output = await route.fn.handler(validatedInput, rpcCtx);
+						});
 
-				// Validate output
-				const validatedOutput = await validateOutput(
-					route.fn.outputSchema,
-					output,
-				);
+						if (output instanceof Error) {
+							throw output;
+						}
 
-				const isJSON = (val: unknown): val is JSONValue => true;
-				if (isJSON(validatedOutput)) {
-					return ctx.json({ ok: true, data: validatedOutput });
-				}
-				throw new RPCError('INTERNAL_ERROR', 'Invalid JSON output');
-			} catch (err) {
-				if (err instanceof RPCError) {
-					const status =
-						err.code === 'UNAUTHORIZED'
-							? 401
-							: err.code === 'NOT_FOUND'
-								? 404
-								: err.code === 'VALIDATION_ERROR'
-									? 400
-									: 500;
-					return ctx.json(err.toJSON(), status);
-				}
+						// Validate output
+						const validatedOutput = await validateOutput(
+							route.fn.outputSchema,
+							output,
+						);
 
-				// Unknown error — don't leak internals
-				console.error('[ServeX RPC] Unhandled error:', err);
-				return ctx.json(
-					new RPCError(
-						'INTERNAL_ERROR',
-						'An unexpected error occurred',
-					).toJSON(),
-					500,
-				);
-			}
+						const isJSON = (val: unknown): val is JSONValue => true;
+						if (isJSON(validatedOutput)) {
+							return ctx.json({ ok: true, data: validatedOutput });
+						}
+						throw new RPCError("INTERNAL_ERROR", "Invalid JSON output");
+					} catch (err) {
+						if (err instanceof RPCError) {
+							const status =
+								err.code === "UNAUTHORIZED"
+									? 401
+									: err.code === "NOT_FOUND"
+										? 404
+										: err.code === "VALIDATION_ERROR"
+											? 400
+											: 500;
+							return ctx.json(err.toJSON(), status);
+						}
+
+						// Unknown error — don't leak internals
+						console.error("[ServeX RPC] Unhandled error:", err);
+						return ctx.json(
+							new RPCError(
+								"INTERNAL_ERROR",
+								"An unexpected error occurred",
+							).toJSON(),
+							500,
+						);
+					}
+				};
+
+				app.post("/*", handler as any);
+			},
 		};
-
-		handler.registry = registry;
-		handler._isRPCPlugin = true as const;
-		handler._setPrefix = (prefix: string) => {
-			this.options.prefix = prefix;
-			routeMap = compileRoutes(registry, this.options);
-		};
-
-		return handler as unknown as RPCPluginInstance<R>;
 	}
 }

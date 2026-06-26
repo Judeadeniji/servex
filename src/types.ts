@@ -30,7 +30,9 @@ export type Handler<C extends Context = Context, R = Response> = (
 ) => Promise<R | void> | R | void;
 
 export type MiddlewareHandler<C extends Context = Context> = Handler<C>;
-export type InternalHandler<C extends Context = Context, R = Response> = Handler<C, R> | InlineHandler;
+export type InternalHandler<C extends Context = Context, R = Response> =
+	| Handler<C, R>
+	| InlineHandler;
 
 export interface ServerOptions<B extends string = "/"> {
 	router?: RouterType;
@@ -136,6 +138,14 @@ export type Last<T extends unknown[]> = T extends readonly [
 	? L
 	: never;
 
+export interface ServeXPlugin<PluginSchema = {}> {
+	name: string;
+	setup<E extends Env, S, B extends string>(
+		app: ServeXRouter<E, S, B>,
+		prefix: string,
+	): unknown;
+}
+
 export interface ServeXRouter<
 	E extends Env = Env,
 	S = {},
@@ -143,6 +153,15 @@ export interface ServeXRouter<
 > {
 	onResponse(handler: HookHandler<Context<E>>): this;
 	trace(handler: (api: TraceAPI<Context<E>>) => void | Promise<void>): this;
+
+	use<PluginSchema>(
+		plugin: ServeXPlugin<PluginSchema>,
+	): ServeXRouter<E, S & PluginSchema, B>;
+
+	use<P extends string, PluginSchema>(
+		path: P,
+		plugin: ServeXPlugin<PluginSchema>,
+	): ServeXRouter<E, S & { [K in AbsolutePath<B, P>]: PluginSchema }, B>;
 
 	use(
 		path: string | MiddlewareHandler<Context>,
@@ -600,25 +619,6 @@ export interface ServeXRouter<
 		path: P,
 		app: ServeXRouter<ChildEnv, ChildSchema, ChildBasePath>,
 	): ServeXRouter<E, S & ChildSchema, B>;
-
-	/**
-	 * Mount an RPC plugin to a specific path.
-	 * Compiles the RPC routes directly into the main ServeX router.
-	 */
-	mount<P extends string, T extends import("./rpc/types").RPCPluginInstance<{}>>(
-		path: P,
-		plugin: T,
-	): ServeXRouter<
-		E,
-		S & {
-			[K in AbsolutePath<B, P>]: T extends import("./rpc/types").RPCPluginInstance<
-				infer R extends Record<string, unknown>
-			>
-				? import("./rpc/types").InferClientFromRegistry<R>
-				: never;
-		},
-		B
-	>;
 
 	/**
 	 * Mount a WinterTC-compliant fetch function to a specific path.
