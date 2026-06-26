@@ -1,4 +1,4 @@
-import type { JSONValue, Context as ServeXContext } from "../types";
+import type { JSONValue, } from "../types";
 import { RPCError } from "./error";
 import { composeMiddlewares } from "./middleware";
 import { type CompileOptions, compileRoutes } from "./router";

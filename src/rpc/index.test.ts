@@ -1,14 +1,13 @@
-import { describe, expect, it, mock } from "bun:test";
 import type { StandardSchemaV1 } from "@standard-schema/spec";
+import { describe, expect, it, mock } from "bun:test";
 import { createServer } from "../app";
 import {
-	createRPCClient,
-	createRPCFunction,
-	createRPCGroup,
-	rpc,
-	RPCError,
-	RPCTypedError,
-	rpc,
+    createRPCClient,
+    createRPCFunction,
+    createRPCGroup,
+    rpc,
+    RPCError,
+    RPCTypedError,
 } from "./index";
 import type { RPCContext, RPCMiddleware } from "./types";
 
