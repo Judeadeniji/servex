@@ -7,8 +7,10 @@ ServeX requires strict type safety to prevent runtime errors, with careful excep
 ## Agent Directives
 
 ### Strict Typing
-
 - **Agent Action:** Every function, parameter, and return value must have explicit type annotations. Do not rely heavily on inference for public or module-level APIs.
+
+### Compilation / Type Checking
+- **Agent Action:** The project uses `tsgo` instead of `tsc` for TypeScript compilation and type checking. Do not run `tsc` or add it to any configuration or scripts. Whenever type checking is required, use `tsgo`.
 
 ### The `unknown` over `any` Rule
 

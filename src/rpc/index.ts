@@ -2,7 +2,7 @@ export { createRPCClient } from "./client";
 export { RPCError, RPCTypedError } from "./error";
 export { createRPCFunction } from "./function";
 export { createRPCGroup } from "./group";
-export { createRPCPlugin } from "./plugin";
+export { type RPCPluginOptions, serveXRPC } from "./plugin";
 export type {
 	InferAppRPC,
 	RPCContext,

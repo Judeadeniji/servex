@@ -5,9 +5,9 @@ import {
 	createRPCClient,
 	createRPCFunction,
 	createRPCGroup,
-	createRPCPlugin,
 	RPCError,
 	RPCTypedError,
+	serveXRPC,
 } from "./index";
 import type { RPCContext, RPCMiddleware } from "./types";
 
@@ -108,7 +108,7 @@ describe("RPC Module", () => {
 	describe("RPC Client & Plugin Integration", () => {
 		it("should execute a basic function and return data", async () => {
 			const app = createServer();
-			const plugin = createRPCPlugin({ prefix: "/rpc" }).register({
+			const plugin = serveXRPC({
 				hello: createRPCFunction().handler(async () => "world"),
 			});
 
@@ -136,7 +136,7 @@ describe("RPC Module", () => {
 
 		it("should execute nested functions with input", async () => {
 			const app = createServer();
-			const plugin = createRPCPlugin({ prefix: "/api/rpc" }).register({
+			const plugin = serveXRPC({
 				users: createRPCGroup().register({
 					getUser: createRPCFunction()
 						.input(createDummySchema<{ id: string }>())
@@ -156,7 +156,7 @@ describe("RPC Module", () => {
 
 		it("should fail validation and return BAD_REQUEST", async () => {
 			const app = createServer();
-			const plugin = createRPCPlugin({ prefix: "/rpc" }).register({
+			const plugin = serveXRPC({
 				test: createRPCFunction()
 					.input(createDummySchema<{ a: string }>("Invalid input format"))
 					.handler(async () => "ok"),
@@ -186,7 +186,7 @@ describe("RPC Module", () => {
 
 		it("should handle custom typed errors", async () => {
 			const app = createServer();
-			const plugin = createRPCPlugin({ prefix: "/rpc" }).register({
+			const plugin = serveXRPC({
 				throwMe: createRPCFunction()
 					.error(createDummySchema<{ code: string }>())
 					.handler(async () => {
@@ -215,7 +215,7 @@ describe("RPC Module", () => {
 
 		it("should support returning errors from handler directly", async () => {
 			const app = createServer();
-			const plugin = createRPCPlugin({ prefix: "/rpc" }).register({
+			const plugin = serveXRPC({
 				returnMe: createRPCFunction().handler(async () => {
 					return new RPCTypedError({ code: "RETURNED_ERROR" });
 				}),
@@ -249,7 +249,7 @@ describe("RPC Module", () => {
 				calls.push("m2 end");
 			};
 
-			const plugin = createRPCPlugin({ prefix: "/rpc" }).register({
+			const plugin = serveXRPC({
 				group: createRPCGroup()
 					.middlewares(m1)
 					.register({
