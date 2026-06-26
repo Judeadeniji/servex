@@ -6,7 +6,7 @@ describe("SonicRouter - Precedence & Specificity", () => {
 	function getWinner(routes: string[], url: string): string | undefined {
 		const router = new SonicRouter();
 		for (const route of routes) {
-			const fn = function () {} as unknown as Handler;
+			const fn = (() => {}) as unknown as Handler;
 			(fn as any).routeName = route;
 			router.addRoute({
 				method: "GET",

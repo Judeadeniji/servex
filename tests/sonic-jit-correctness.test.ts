@@ -157,7 +157,7 @@ describe("SonicRouter - sanitizeRoute encoding semantics", () => {
 		// all require consistent encoding between registration and request). URL normalization
 		// should happen at the reverse proxy/CDN layer before requests reach the application.
 		const router = new SonicRouter();
-		const rawFn = function () {} as unknown as Handler;
+		const rawFn = (() => {}) as unknown as Handler;
 		router.addRoute({ method: "GET", path: "/café", handlers: [rawFn] });
 
 		// Raw unicode request matches raw unicode route
