@@ -158,6 +158,7 @@ export class SonicRouter<Routes extends Route[] = Route[]>
 			handlers,
 			paramsKeys: [],
 			middlewares: [],
+			store: {},
 		};
 
 		for (const pm of this.pathMiddlewares) {

@@ -1,3 +1,4 @@
+import { compileHandlerChain } from "./compiler";
 import type { Context } from "./context";
 import { baseFetch } from "./core/fetch";
 import { RouterAdapter, RouterType } from "./router/adapter";
@@ -360,6 +361,24 @@ export class ServeXApp<
 		this.hooks.onRequest.push(handler);
 		return this;
 	}
+
+	compile(): this {
+		for (const route of this.routerAdapter.routes) {
+			const methodsToMatch =
+				route.method === "ALL" ? SUPPORTED_METHODS : [route.method];
+			for (const method of methodsToMatch) {
+				const matched = this.routerAdapter.match(method, route.path);
+				if (matched && matched.handlers && matched.store) {
+					if (!matched.store.executor) {
+						matched.store.executor = compileHandlerChain(
+							matched.handlers as import("./types").Handler<Context>[],
+						);
+					}
+				}
+			}
+		}
+		return this;
+	}
 	onBeforeHandle(handler: import("./types").HookHandler<Context>) {
 		this.hooks.onBeforeHandle.push(handler);
 		return this;
@@ -500,6 +519,31 @@ export class ServeXApp<
 	): Promise<Response> | Response => {
 		return this.fetch(new ServeXRequest(input, init));
 	};
+
+	listen(
+		portOrOptions: number | string | Partial<import("bun").ServeOptions>,
+		callback?: (server: import("bun").Server) => void,
+	): import("bun").Server {
+		this.compile();
+		
+		let options: Partial<import("bun").ServeOptions> = {};
+		if (typeof portOrOptions === "number" || typeof portOrOptions === "string") {
+			options = { port: portOrOptions };
+		} else {
+			options = portOrOptions;
+		}
+
+		const server = Bun.serve({
+			...options,
+			fetch: this.fetch as import("bun").ServeOptions["fetch"],
+		});
+
+		if (callback) {
+			callback(server);
+		}
+
+		return server;
+	}
 }
 
 export function createServer<E extends Env = Env, B extends string = "/">(
