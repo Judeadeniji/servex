@@ -1,4 +1,4 @@
-import type { RPCFunctionDef, RPCMiddleware, RPCRegistry } from './types';
+import type { RPCFunctionDef, RPCGroupDef, RPCMiddleware, RPCRegistry } from './types';
 
 export type CompiledRoute = {
 	path: string; // e.g. 'users.getUser'
@@ -20,7 +20,8 @@ export function compileRoutes(
 ): Map<string, CompiledRoute> {
 	const map = new Map<string, CompiledRoute>();
 
-	for (const [key, value] of Object.entries(registry)) {
+	for (const [key, _value] of Object.entries(registry)) {
+		const value = _value as RPCFunctionDef<unknown, unknown, unknown> | RPCGroupDef<Record<string, unknown>>;
 		const currentPath = [...parentPath, key];
 		const dotPath = currentPath.join('.');
 

@@ -5,8 +5,8 @@ import type {
 	RPCRegistry,
 } from './types';
 
-export function createRPCGroup(): RPCGroupBuilder {
-	return new RPCGroupBuilderImpl();
+export function createRPCGroup(): RPCGroupBuilder<Record<string, never>> {
+	return new RPCGroupBuilderImpl<Record<string, never>>();
 }
 
 class RPCGroupBuilderImpl<T extends RPCRegistry = Record<string, never>>
@@ -20,7 +20,7 @@ class RPCGroupBuilderImpl<T extends RPCRegistry = Record<string, never>>
 		return next;
 	}
 
-	register<R extends RPCRegistry>(registry: R): RPCGroupDef<R> {
+	register<R extends Record<string, unknown>>(registry: R): RPCGroupDef<R> {
 		return {
 			_tag: 'RPCGroup',
 			middlewares: this._middlewares,

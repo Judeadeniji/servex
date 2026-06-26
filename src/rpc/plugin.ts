@@ -1,8 +1,8 @@
-import type { Context as ServeXContext, Env, JSONValue, ServeXRouter } from '../types';
+import type { Env, JSONValue, Context as ServeXContext, ServeXRouter } from '../types';
 import { RPCError } from './error';
 import { composeMiddlewares } from './middleware';
-import { compileRoutes, type CompiledRoute, type CompileOptions } from './router';
-import type { RPCContext, RPCPluginInstance, RPCRegistry } from './types';
+import { type CompiledRoute, type CompileOptions, compileRoutes } from './router';
+import type { RPCContext, RPCPluginInstance } from './types';
 import { validateInput, validateOutput } from './validation';
 
 export type RPCPluginOptions = CompileOptions;
@@ -14,13 +14,13 @@ export function createRPCPlugin(options: RPCPluginOptions) {
 class RPCPluginBuilder {
 	constructor(private options: RPCPluginOptions) {}
 
-	register<R extends RPCRegistry>(registry: R): RPCPluginInstance<R> {
+	register<R extends Record<string, unknown>>(registry: R): RPCPluginInstance<R> {
 		const routeMap = compileRoutes(registry, this.options);
 		return new RPCPluginInstanceImpl(routeMap, registry, this.options);
 	}
 }
 
-class RPCPluginInstanceImpl<R extends RPCRegistry>
+class RPCPluginInstanceImpl<R extends Record<string, unknown>>
 	implements RPCPluginInstance<R>
 {
 	constructor(
@@ -76,6 +76,10 @@ class RPCPluginInstanceImpl<R extends RPCRegistry>
 			await composed(rpcCtx, async () => {
 				output = await route.fn.handler(validatedInput, rpcCtx);
 			});
+
+			if (output instanceof Error) {
+				throw output;
+			}
 
 			// Validate output
 			const validatedOutput = await validateOutput(
