@@ -5,6 +5,8 @@ import type {
 	ServeXPlugin,
 } from "../types";
 import type { RPCError, RPCTypedError } from "./error";
+import type { HttpException } from "../http-exception";
+import type { Result } from "./result";
 
 export type RPCContext = ServeXContext & {
 	rpc: { fn: string; input: unknown };
@@ -70,7 +72,7 @@ export interface RPCFunctionBuilder<
 	): RPCFunctionDef<
 		unknown extends TInput ? NewInput : TInput,
 		unknown extends TOutput ? Exclude<Awaited<NewOutput>, Error> : TOutput,
-		Extract<Awaited<NewOutput>, RPCTypedError> extends RPCTypedError<infer E>
+		Extract<Awaited<NewOutput>, HttpException<any>> extends HttpException<infer E>
 			? E
 			: _TError
 	>;
@@ -93,15 +95,8 @@ export type InferClientFromRegistry<T> = {
 
 export type RPCClientFn<TInput, TOutput, TError> = (
 	input: TInput,
-) => Promise<
-	| Awaited<TOutput>
-	| RPCError
-	| (unknown extends TError
-			? never
-			: TError extends import("../types").JSONValue
-				? RPCTypedError<TError>
-				: never)
->;
+	init?: RequestInit,
+) => Promise<Result<TOutput, HttpException<unknown extends TError ? unknown : TError>>>;
 
 export interface RPCPluginInstance<R extends Record<string, unknown>>
 	extends ServeXPlugin<InferClientFromRegistry<R>> {

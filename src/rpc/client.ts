@@ -1,4 +1,5 @@
-import { RPCError, RPCTypedError } from "./error";
+import { HttpException } from "../http-exception";
+import { err, ok } from "./result";
 import type { InferClientFromRegistry, RPCRegistry } from "./types";
 
 export type RPCClientOptions = {
@@ -46,18 +47,22 @@ function createProxy(options: RPCClientOptions, path: string[]): unknown {
 
 				const data = await response.json();
 
-				if (!data.ok) {
-					if (data.error.code === "TYPED_ERROR") {
-						return new RPCTypedError(data.error.data);
-					}
-					return new RPCError(
-						data.error.code,
-						data.error.message,
-						data.error.data,
+				if (!data.ok || response.status >= 400) {
+					const errCode = data.error?.code ?? data.error;
+					const errMessage = data.error?.message ?? data.message;
+					const errData = data.error?.data ?? data.data;
+
+					return err(
+						new HttpException({
+							statusCode: response.status,
+							error: errCode,
+							message: errMessage,
+							data: errData,
+						}),
 					);
 				}
 
-				return data.data;
+				return ok(data.data);
 			},
 		},
 	);

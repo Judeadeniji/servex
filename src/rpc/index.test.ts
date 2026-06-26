@@ -1,13 +1,12 @@
-import type { StandardSchemaV1 } from "@standard-schema/spec";
 import { describe, expect, it, mock } from "bun:test";
+import type { StandardSchemaV1 } from "@standard-schema/spec";
 import { createServer } from "../app";
+import { HttpException } from "../http-exception";
 import {
     createRPCClient,
     createRPCFunction,
     createRPCGroup,
     rpc,
-    RPCError,
-    RPCTypedError,
 } from "./index";
 import type { RPCContext, RPCMiddleware } from "./types";
 
@@ -24,7 +23,7 @@ function createDummySchema<T>(failWith?: string) {
 				return { value: val as T };
 			},
 		},
-	} as unknown as StandardSchemaV1<unknown, T>;
+	} as StandardSchemaV1<unknown, T>;
 }
 
 describe("RPC Module", () => {
@@ -117,21 +116,11 @@ describe("RPC Module", () => {
 			// Create a client directly against the app for testing
 			const client = createRPCClient<typeof plugin>({
 				baseURL: "http://localhost",
+				fetch: async (url, init) => app.fetch(new Request(url, init)),
 			});
 
-			// Mock the global fetch
-			const originalFetch = globalThis.fetch;
-			globalThis.fetch = async (input, init) => {
-				const req = new Request(input, init);
-				return app.fetch(req);
-			};
-
-			try {
-				const res = await client.hello({});
-				expect(res).toBe("world");
-			} finally {
-				globalThis.fetch = originalFetch;
-			}
+			const res = await client.hello({});
+			expect(res.unwrap()).toBe("world");
 		});
 
 		it("should execute nested functions with input", async () => {
@@ -151,7 +140,7 @@ describe("RPC Module", () => {
 				fetch: async (url, init) => app.fetch(new Request(url, init)),
 			});
 			const res = await client.users.getUser({ id: "123" });
-			expect(res).toEqual({ id: "123", name: "Alice" });
+			expect(res.unwrap()).toEqual({ id: "123", name: "Alice" });
 		});
 
 		it("should fail validation and return BAD_REQUEST", async () => {
@@ -166,22 +155,17 @@ describe("RPC Module", () => {
 
 			const client = createRPCClient<typeof plugin>({
 				baseURL: "http://localhost",
+				fetch: async (url, init) => app.fetch(new Request(url, init)),
 			});
-
-			const originalFetch = globalThis.fetch;
-			globalThis.fetch = async (input, init) => {
-				const req = new Request(input, init);
-				return app.fetch(req);
-			};
 
 			const res = await client.test({ a: "test" });
-			expect(res).toBeInstanceOf(RPCError);
-			const err = res as RPCError;
-			expect(err.code).toBe("VALIDATION_ERROR");
-			expect(err.data).toEqual({
-				issues: [{ path: ["test"], message: "Invalid input format" }],
-			});
-			globalThis.fetch = originalFetch;
+			expect(res.isErr).toBe(true);
+			if (res.isErr) {
+				expect(res.error.error).toBe("VALIDATION_ERROR");
+				expect(res.error.data).toEqual({
+					issues: [{ path: ["test"], message: "Invalid input format" }],
+				});
+			}
 		});
 
 		it("should handle custom typed errors", async () => {
@@ -190,7 +174,7 @@ describe("RPC Module", () => {
 				throwMe: createRPCFunction()
 					.error(createDummySchema<{ code: string }>())
 					.handler(async () => {
-						throw new RPCTypedError({ code: "MY_ERROR" });
+						throw new HttpException({ error: "TYPED_ERROR", statusCode: 500, message: "Custom typed error", data: { code: "MY_ERROR" } });
 					}),
 			});
 
@@ -198,26 +182,21 @@ describe("RPC Module", () => {
 
 			const client = createRPCClient<typeof plugin>({
 				baseURL: "http://localhost",
+				fetch: async (url, init) => app.fetch(new Request(url, init)),
 			});
 
-			const originalFetch = globalThis.fetch;
-			globalThis.fetch = async (input, init) => {
-				const req = new Request(input, init);
-				return app.fetch(req);
-			};
-
 			const res = await client.throwMe({});
-			expect(res).toBeInstanceOf(RPCTypedError);
-			const err = res as RPCTypedError<{ code: string }>;
-			expect(err.data).toEqual({ code: "MY_ERROR" });
-			globalThis.fetch = originalFetch;
+			expect(res.isErr).toBe(true);
+			if (res.isErr) {
+				expect(res.error.data).toEqual({ code: "MY_ERROR" });
+			}
 		});
 
 		it("should support returning errors from handler directly", async () => {
 			const app = createServer();
 			const plugin = rpc({
 				returnMe: createRPCFunction().handler(async () => {
-					return new RPCTypedError({ code: "RETURNED_ERROR" });
+					return new HttpException({ error: "TYPED_ERROR", statusCode: 500, message: "Returned typed error", data: { code: "RETURNED_ERROR" } });
 				}),
 			});
 			app.use("/rpc", plugin);
@@ -225,13 +204,14 @@ describe("RPC Module", () => {
 				baseURL: "http://localhost",
 				prefix: "/rpc",
 				fetch: async (url, init) =>
-					app.fetch(new Request(url, init as RequestInit)),
+					app.fetch(new Request(url, init)),
 			});
 
 			const res = await client.returnMe({});
-			expect(res).toBeInstanceOf(RPCTypedError);
-			const err = res as RPCTypedError<{ code: string }>;
-			expect(err.data).toEqual({ code: "RETURNED_ERROR" });
+			expect(res.isErr).toBe(true);
+			if (res.isErr) {
+				expect(res.error.data).toEqual({ code: "RETURNED_ERROR" });
+			}
 		});
 
 		it("should execute middlewares in correct order", async () => {
@@ -266,26 +246,17 @@ describe("RPC Module", () => {
 
 			const client = createRPCClient<typeof plugin>({
 				baseURL: "http://localhost",
+				fetch: async (url, init) => app.fetch(new Request(url, init)),
 			});
 
-			const originalFetch = globalThis.fetch;
-			globalThis.fetch = async (input, init) => {
-				const req = new Request(input, init);
-				return app.fetch(req);
-			};
-
-			try {
-				await client.group.fn({});
-				expect(calls).toEqual([
-					"m1 start",
-					"m2 start",
-					"handler",
-					"m2 end",
-					"m1 end",
-				]);
-			} finally {
-				globalThis.fetch = originalFetch;
-			}
+			await client.group.fn({});
+			expect(calls).toEqual([
+				"m1 start",
+				"m2 start",
+				"handler",
+				"m2 end",
+				"m1 end",
+			]);
 		});
 	});
 });
