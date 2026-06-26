@@ -91,6 +91,8 @@ export type RPCClientFn<TInput, TOutput, TError> = (
 export type RPCPluginInstance<R extends Record<string, unknown>> = {
 	(ctx: ServeXContext): Promise<Response>;
 	registry: R;
+	_isRPCPlugin: true;
+	_setPrefix: (prefix: string) => void;
 };
 
 export type InferAppRPC<T> = T extends RPCPluginInstance<infer R>

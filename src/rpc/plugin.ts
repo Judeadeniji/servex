@@ -1,7 +1,7 @@
-import type { Env, JSONValue, Context as ServeXContext, ServeXRouter } from '../types';
+import type { JSONValue, Context as ServeXContext, } from '../types';
 import { RPCError } from './error';
 import { composeMiddlewares } from './middleware';
-import { type CompiledRoute, type CompileOptions, compileRoutes } from './router';
+import { type CompileOptions, compileRoutes } from './router';
 import type { RPCContext, RPCPluginInstance } from './types';
 import { validateInput, validateOutput } from './validation';
 
@@ -15,9 +15,9 @@ class RPCPluginBuilder {
 	constructor(private options: RPCPluginOptions) {}
 
 	register<R extends Record<string, unknown>>(registry: R): RPCPluginInstance<R> {
-		const routeMap = compileRoutes(registry, this.options);
+		let routeMap = compileRoutes(registry, this.options);
 		
-		const handler = async (ctx: ServeXContext<any>) => {
+		const handler = async (ctx: ServeXContext) => {
 			const url = new URL(ctx.req.url);
 			const pathname = url.pathname;
 
@@ -98,6 +98,12 @@ class RPCPluginBuilder {
 		};
 
 		handler.registry = registry;
+		handler._isRPCPlugin = true as const;
+		handler._setPrefix = (prefix: string) => {
+			this.options.prefix = prefix;
+			routeMap = compileRoutes(registry, this.options);
+		};
+
 		return handler as unknown as RPCPluginInstance<R>;
 	}
 }

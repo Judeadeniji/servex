@@ -602,6 +602,25 @@ export interface ServeXRouter<
 	): ServeXRouter<E, S & ChildSchema, B>;
 
 	/**
+	 * Mount an RPC plugin to a specific path.
+	 * Compiles the RPC routes directly into the main ServeX router.
+	 */
+	mount<P extends string, T extends import("./rpc/types").RPCPluginInstance<{}>>(
+		path: P,
+		plugin: T,
+	): ServeXRouter<
+		E,
+		S & {
+			[K in AbsolutePath<B, P>]: T extends import("./rpc/types").RPCPluginInstance<
+				infer R extends Record<string, unknown>
+			>
+				? import("./rpc/types").InferClientFromRegistry<R>
+				: never;
+		},
+		B
+	>;
+
+	/**
 	 * Mount a WinterTC-compliant fetch function to a specific path.
 	 * This allows interoperability with frameworks like Hono, Remix, Itty Router, etc.
 	 *

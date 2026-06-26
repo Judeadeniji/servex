@@ -221,14 +221,31 @@ export class ServeXRouterImpl<
 		return this as ServeXRouter<E, {}, string>;
 	}
 
-	mount<P extends string>(
-		path: P,
-		fetchFn: (
+	// @ts-ignore: Implementation signature
+	mount(
+		path: string,
+		fetchFnOrPlugin: unknown,
+	): unknown {
+		if (
+			fetchFnOrPlugin &&
+			typeof fetchFnOrPlugin === "function" &&
+			"_isRPCPlugin" in fetchFnOrPlugin
+		) {
+			const plugin = fetchFnOrPlugin as { _setPrefix?: (p: string) => void };
+			if (plugin._setPrefix) {
+				plugin._setPrefix(path);
+			}
+			return this.post(
+				`${path}/*`,
+				fetchFnOrPlugin as unknown as import("./types").MiddlewareHandler,
+			) as unknown;
+		}
+
+		const fetchFn = fetchFnOrPlugin as (
 			request: Request,
 			env?: unknown,
 			ctx?: unknown,
-		) => Response | Promise<Response>,
-	): ServeXRouter<E, S, B> {
+		) => Response | Promise<Response>;
 		// Strip trailing slash if present to ensure the wildcard matches correctly
 		const normalizedPath =
 			path.endsWith("/") && path !== "/" ? path.slice(0, -1) : path;
@@ -255,7 +272,7 @@ export class ServeXRouterImpl<
 		// Also map the exact path without trailing slash
 		this.all(normalizedPath, handler);
 
-		return this as ServeXRouter<E, S, B>;
+		return this as unknown;
 	}
 
 	/**
