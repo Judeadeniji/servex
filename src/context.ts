@@ -5,6 +5,7 @@ import {
 	withCancel,
 } from "./core/signal";
 import type { StatusCode } from "./http-status";
+import { HttpException } from "./http-exception";
 import type { ExtractUrl } from "./router/types";
 import type { Env, HeaderRecord, JSONValue } from "./types";
 
@@ -316,13 +317,30 @@ export interface Context<
 	 * @param html The HTML string to send.
 	 * @param status The HTTP status code (defaults to 200).
 	 * @param _headers Additional headers to include in the response.
-	 * @returns A typed Response object.
 	 */
-	html<T extends string, U extends StatusCode = StatusCode>(
-		html: T,
-		status?: U,
-		_headers?: HeaderRecord,
-	): Response & import("./types").TypedResponse<T, U, "html">;
+	html(html: string | ReadableStream, init?: ResponseInit): Response;
+
+	/**
+	 * Creates and returns an HttpException.
+	 *
+	 * @param error An Error instance to convert or return.
+	 */
+	error(error: Error): HttpException;
+
+	/**
+	 * Creates and returns an HttpException.
+	 *
+	 * @param status The HTTP status code
+	 * @param message The error message
+	 * @param data Optional strongly typed error data
+	 * @param error Optional error code
+	 */
+	error<T = unknown>(
+		status: number,
+		message?: string,
+		data?: T,
+		error?: string,
+	): HttpException<T>;
 
 	/**
 	 * Sends a redirect response to the specified location.
@@ -658,6 +676,26 @@ const contextHelpers = {
 
 		this._response = new Response(stream, { status: this._status, headers });
 		return this._response;
+	},
+
+	error<T = unknown>(
+		this: Context,
+		statusOrError: number | Error,
+		message?: string,
+		data?: T,
+		error?: string,
+	): HttpException<T> {
+		if (statusOrError instanceof Error) {
+			if (statusOrError instanceof HttpException) {
+				return statusOrError as unknown as HttpException<T>;
+			}
+			return new HttpException<T>({
+				statusCode: 500,
+				message: statusOrError.message,
+				cause: statusOrError,
+			});
+		}
+		return new HttpException<T>({ statusCode: statusOrError, message, data, error });
 	},
 
 	status(this: Context) {

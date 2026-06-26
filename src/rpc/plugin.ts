@@ -1,5 +1,5 @@
+import { HttpException } from "../http-exception";
 import type { JSONValue, } from "../types";
-import { RPCError } from "./error";
 import { composeMiddlewares } from "./middleware";
 import { type CompileOptions, compileRoutes } from "./router";
 import type { RPCContext, RPCPluginInstance } from "./types";
@@ -21,7 +21,7 @@ export function rpc<R extends Record<string, unknown>>(
 				const url = new URL(ctx.req.url);
 				const pathname = url.pathname;
 
-				const route = [...routeMap.values()].find(
+				const route = routeMap.values().find(
 					(r) => r.httpPath === pathname,
 				);
 
@@ -33,9 +33,11 @@ export function rpc<R extends Record<string, unknown>>(
 				try {
 					body = await ctx.req.json();
 				} catch {
-					return ctx.json(
-						new RPCError("VALIDATION_ERROR", "Invalid JSON body").toJSON(),
+					return ctx.error(
 						400,
+						"Invalid JSON body",
+						null,
+						"VALIDATION_ERROR",
 					);
 				}
 
@@ -73,28 +75,19 @@ export function rpc<R extends Record<string, unknown>>(
 					if (isJSON(validatedOutput)) {
 						return ctx.json({ ok: true, data: validatedOutput });
 					}
-					throw new RPCError("INTERNAL_ERROR", "Invalid JSON output");
+					throw new HttpException({ statusCode: 500, error: "INTERNAL_ERROR", message: "Invalid JSON output" });
 				} catch (err) {
-					if (err instanceof RPCError) {
-						const status =
-							err.code === "UNAUTHORIZED"
-								? 401
-								: err.code === "NOT_FOUND"
-									? 404
-									: err.code === "VALIDATION_ERROR"
-										? 400
-										: 500;
-						return ctx.json(err.toJSON(), status);
+					if (err instanceof HttpException) {
+						return err;
 					}
 
 					// Unknown error — don't leak internals
 					console.error("[ServeX RPC] Unhandled error:", err);
-					return ctx.json(
-						new RPCError(
-							"INTERNAL_ERROR",
-							"An unexpected error occurred",
-						).toJSON(),
+					return ctx.error(
 						500,
+						"An unexpected error occurred",
+						null,
+						"INTERNAL_ERROR",
 					);
 				}
 			});

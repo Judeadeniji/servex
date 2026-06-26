@@ -17,15 +17,15 @@ export interface HttpExceptionBody {
 /**
  * Options accepted by the `HttpException` constructor.
  */
-export interface HttpExceptionOptions {
+export interface HttpExceptionOptions<T = unknown> {
 	/** The HTTP status code (e.g., 400, 404, 500). */
-	statusCode: ClientErrorStatusCode | ServerErrorStatusCode;
+	statusCode: ClientErrorStatusCode | ServerErrorStatusCode | number;
 	/** A short, machine-readable error name (e.g., "Bad Request"). */
 	error?: string;
 	/** A human-readable description of what went wrong. */
 	message?: string;
 	/** Optional arbitrary payload to include in the response body. */
-	data?: unknown;
+	data?: T;
 	/** Extra headers to attach to the generated Response. */
 	headers?: HeadersInit;
 	/** The original error that caused this exception (for logging / stack traces). */
@@ -45,17 +45,17 @@ export interface HttpExceptionOptions {
  * });
  * ```
  */
-export class HttpException extends Error {
-	public readonly statusCode: ClientErrorStatusCode | ServerErrorStatusCode;
+export class HttpException<T = unknown> extends Error {
+	public readonly statusCode: ClientErrorStatusCode | ServerErrorStatusCode | number;
 	public readonly error: string;
 	public override readonly message: string;
-	public readonly data?: unknown;
+	public readonly data?: T;
 	public readonly headers?: HeadersInit;
 
-	constructor(options: HttpExceptionOptions) {
+	constructor(options: HttpExceptionOptions<T>) {
 		const {
 			statusCode,
-			error = HTTP_ERROR_NAMES[statusCode] ?? "Error",
+			error = HTTP_ERROR_NAMES[statusCode as ClientErrorStatusCode | ServerErrorStatusCode] ?? "Error",
 			message = error ?? "An error occurred",
 			data,
 			headers,

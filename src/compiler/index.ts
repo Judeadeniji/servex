@@ -41,21 +41,21 @@ export function buildCompilerSource<C extends Context>(
 			code += `          res = deps.handlers[${j}](context, next);\n`;
 			code += `          if (res instanceof Promise) {\n`;
 			code += `            return res.then(r => {\n`;
-			code += `              if (r instanceof Response) return r;\n`;
+			code += `              if (r instanceof Response || r instanceof Error) return r;\n`;
 			code += `              if (nextCalled && nextPromise) return nextPromise;\n`;
 			code += `              return undefined;\n`;
 			code += `            });\n`;
 			code += `          }\n`;
-			code += `          if (res instanceof Response) return res;\n`;
+			code += `          if (res instanceof Response || res instanceof Error) return res;\n`;
 			code += `          if (nextCalled && nextPromise) return nextPromise;\n`;
 			code += `          return undefined;\n`;
 			code += `        }\n`;
 		} else {
 			code += `        res = deps.handlers[${j}](context);\n`;
 			code += `        if (res instanceof Promise) {\n`;
-			code += `          return res.then(r => r instanceof Response ? r : undefined);\n`;
+			code += `          return res.then(r => (r instanceof Response || r instanceof Error) ? r : undefined);\n`;
 			code += `        }\n`;
-			code += `        return res instanceof Response ? res : undefined;\n`;
+			code += `        return (res instanceof Response || res instanceof Error) ? res : undefined;\n`;
 		}
 	}
 

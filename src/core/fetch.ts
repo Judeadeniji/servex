@@ -158,20 +158,24 @@ function sharedResolveError(error: unknown, debug: boolean): Response {
 	if (error instanceof HttpException) return error.getResponse();
 	console.error("Unhandled error:", error);
 
-	const payload: Record<string, unknown> = {
+	const message = debug
+		? error instanceof Error
+			? error.message
+			: String(error)
+		: "An unexpected error occurred";
+
+	const httpException = new HttpException({
 		statusCode: 500,
 		error: "Internal Server Error",
-		message: "An unexpected error occurred",
-	};
-	if (debug) {
-		payload.message = error instanceof Error ? error.message : String(error);
-		payload.stack = error instanceof Error ? error.stack : undefined;
-	}
-
-	return new Response(JSON.stringify(payload), {
-		status: 500,
-		headers: { "Content-Type": "application/json; charset=UTF-8" },
+		message,
+		data:
+			debug && error instanceof Error
+				? { stack: error.stack }
+				: undefined,
+		cause: error,
 	});
+
+	return httpException.getResponse();
 }
 
 export function baseFetch(
@@ -250,8 +254,8 @@ export function baseFetch(
 
 	let context: Context | undefined = createContext(
 		request,
-		envBindings ?? (DEFAULT_ENV as Record<string, unknown>),
-		route.params as Record<string, string>,
+		envBindings ?? (DEFAULT_ENV),
+		route.params,
 		executionCtx,
 		debug,
 	);
@@ -268,6 +272,9 @@ export function baseFetch(
 		if (res instanceof Promise) {
 			return res
 				.then((r) => {
+					if (r instanceof Error) {
+						r = sharedResolveError(r, debug);
+					}
 					const result = sharedHandleValue(r, context!, hooks, executionCtx);
 					context = undefined;
 					return result;
@@ -282,6 +289,9 @@ export function baseFetch(
 					context = undefined;
 					return result;
 				});
+		}
+		if (res instanceof Error) {
+			res = sharedResolveError(res, debug);
 		}
 		const finalRes = sharedHandleValue(res, context!, hooks, executionCtx);
 		context = undefined;
@@ -328,8 +338,8 @@ async function baseFetchSlow(
 
 		context = createContext(
 			request,
-			envBindings ?? (DEFAULT_ENV as Record<string, unknown>),
-			route?.matched ? (route.params as Record<string, string>) : {},
+			envBindings ?? (DEFAULT_ENV ),
+			route?.matched ? (route.params ) : {},
 			executionCtx,
 			debug,
 		);
