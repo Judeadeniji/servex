@@ -1,5 +1,5 @@
-import { RPCError, RPCTypedError } from './error';
-import type { InferClientFromRegistry, RPCRegistry } from './types';
+import { RPCError, RPCTypedError } from "./error";
+import type { InferClientFromRegistry, RPCRegistry } from "./types";
 
 export type RPCClientOptions = {
 	baseURL: string;
@@ -32,22 +32,22 @@ function createProxy(options: RPCClientOptions, path: string[]): unknown {
 
 			async apply(_, __, args) {
 				// Called as a function — execute the RPC call
-				const dotPath = path.join('.');
+				const dotPath = path.join(".");
 				const httpPath = options.hash
-					? `${options.baseURL}${options.prefix ?? '/rpc'}/${options.hash(dotPath)}`
-					: `${options.baseURL}${options.prefix ?? '/rpc'}/${path.join('/')}`;
+					? `${options.baseURL}${options.prefix ?? "/rpc"}/${options.hash(dotPath)}`
+					: `${options.baseURL}${options.prefix ?? "/rpc"}/${path.join("/")}`;
 
 				const fetcher = options.fetch ?? globalThis.fetch;
 				const response = await fetcher(httpPath, {
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
 					body: JSON.stringify(args[0] ?? {}),
 				});
 
 				const data = await response.json();
 
 				if (!data.ok) {
-					if (data.error.code === 'TYPED_ERROR') {
+					if (data.error.code === "TYPED_ERROR") {
 						return new RPCTypedError(data.error.data);
 					}
 					return new RPCError(

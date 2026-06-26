@@ -110,16 +110,16 @@ export function createClient<TApp extends ServeXRouter>(
 	options?: ClientOptions,
 ): Client<TApp> {
 	const customFetch = options?.fetch ?? globalThis.fetch;
-	
-	return build<TApp>(
-		baseUrl,
-		customFetch,
-		[],
-		options
-	)
+
+	return build<TApp>(baseUrl, customFetch, [], options);
 }
 
-function build<TApp extends ServeXRouter>(baseUrl: string, customFetch: FetchLike, segments: string[], options?: ClientOptions) {
+function build<TApp extends ServeXRouter>(
+	baseUrl: string,
+	customFetch: FetchLike,
+	segments: string[],
+	options?: ClientOptions,
+) {
 	const target = { __path: segments };
 
 	return new Proxy(target, {
@@ -160,4 +160,4 @@ function build<TApp extends ServeXRouter>(baseUrl: string, customFetch: FetchLik
 			};
 		},
 	}) as unknown as Client<TApp>;
-};
+}

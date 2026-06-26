@@ -24,7 +24,7 @@ export function buildCompilerSource<C extends Context>(
 	code += `    switch(i) {\n`;
 
 	for (let j = 0; j < handlers.length; j++) {
-	const handler = handlers[j];
+		const handler = handlers[j];
 		const needsNext = typeof handler === "function" && handler.length > 1;
 		code += `      case ${j}:\n`;
 		if (needsNext) {

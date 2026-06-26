@@ -1,4 +1,10 @@
-import type { Context, Handler, InternalHandler, Method, MiddlewareHandler } from "../types";
+import type {
+	Context,
+	Handler,
+	InternalHandler,
+	Method,
+	MiddlewareHandler,
+} from "../types";
 import type { DynamicSegmentsRemoved, ExtractUrl } from "./types";
 
 export type HTTPMethod = Method;
@@ -20,11 +26,17 @@ export type MatchedRoute<
 	method: Routes[number]["method"] | undefined;
 	route: Routes[number]["path"] | undefined;
 	matched_route: string | undefined;
-	params: ExtractUrl<Routes[number]["path"]>["params"] & Record<string, string> | {};
+	params:
+		| (ExtractUrl<Routes[number]["path"]>["params"] & Record<string, string>)
+		| {};
 	handlers: InternalHandler<Context>[] | undefined;
 	middlewares?: MiddlewareHandler<Context>[];
 	store?: Record<string, unknown> | undefined;
-	executor?: ((context: Context) => Response | undefined | Promise<Response | undefined>) | undefined;
+	executor?:
+		| ((
+				context: Context,
+		  ) => Response | undefined | Promise<Response | undefined>)
+		| undefined;
 	is405?: boolean;
 };
 

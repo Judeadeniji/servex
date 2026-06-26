@@ -1,5 +1,5 @@
-import type { StandardSchemaV1 } from '@standard-schema/spec';
-import { RPCError } from './error';
+import type { StandardSchemaV1 } from "@standard-schema/spec";
+import { RPCError } from "./error";
 
 export async function validateInput(
 	schema: StandardSchemaV1 | null,
@@ -7,15 +7,16 @@ export async function validateInput(
 ): Promise<unknown> {
 	if (!schema) return data;
 
-	const result = await schema['~standard'].validate(data);
+	const result = await schema["~standard"].validate(data);
 
 	if (result.issues) {
-		throw new RPCError('VALIDATION_ERROR', 'Input validation failed', {
+		throw new RPCError("VALIDATION_ERROR", "Input validation failed", {
 			issues: result.issues.map((i) => ({
 				message: i.message,
 				path:
 					i.path?.filter(
-						(p): p is string | number => typeof p === 'string' || typeof p === 'number',
+						(p): p is string | number =>
+							typeof p === "string" || typeof p === "number",
 					) ?? null,
 			})),
 		});
@@ -30,16 +31,17 @@ export async function validateOutput(
 ): Promise<unknown> {
 	if (!schema) return data;
 
-	const result = await schema['~standard'].validate(data);
+	const result = await schema["~standard"].validate(data);
 
 	if (result.issues) {
 		// Output validation failure is a server-side bug, not a client error
-		throw new RPCError('INTERNAL_ERROR', 'Output validation failed', {
+		throw new RPCError("INTERNAL_ERROR", "Output validation failed", {
 			issues: result.issues.map((i) => ({
 				message: i.message,
 				path:
 					i.path?.filter(
-						(p): p is string | number => typeof p === 'string' || typeof p === 'number',
+						(p): p is string | number =>
+							typeof p === "string" || typeof p === "number",
 					) ?? null,
 			})),
 		});

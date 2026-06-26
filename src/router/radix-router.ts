@@ -177,10 +177,11 @@ export class RadixRouteTrie<Routes extends Route[]> implements IRouter<Routes> {
 		if (Array.isArray(handlers)) {
 			currentNode.handlers[method.toUpperCase() as HTTPMethod] = [
 				...this.collectMiddlewares(currentNode),
-				...(handlers as Handler<Context>[])
+				...(handlers as Handler<Context>[]),
 			] as Handler[];
 		} else {
-			currentNode.handlers[method.toUpperCase() as HTTPMethod] = handlers as Handler[];
+			currentNode.handlers[method.toUpperCase() as HTTPMethod] =
+				handlers as Handler[];
 		}
 		this.#routes.add(route);
 	}

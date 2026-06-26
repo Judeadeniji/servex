@@ -42,7 +42,9 @@ async function executeOnBeforePhase(
 
 async function executeHandlePhase(
 	context: Context,
-	executor: ((c: Context) => Response | Promise<Response | undefined> | undefined) | undefined,
+	executor:
+		| ((c: Context) => Response | Promise<Response | undefined> | undefined)
+		| undefined,
 	handlers: Handler<Context>[],
 	aot: boolean,
 ) {
@@ -91,7 +93,9 @@ async function executeTracePhaseWithArgs<T, Args extends unknown[]>(
 	if (!listeners || listeners.length === 0) return phaseExecutor(...args);
 
 	const begin = performance.now();
-	const onStopCallbacks: ((info: import("../types").TraceEventInfo) => void | Promise<void>)[] = [];
+	const onStopCallbacks: ((
+		info: import("../types").TraceEventInfo,
+	) => void | Promise<void>)[] = [];
 	const event: import("../types").TraceEvent = {
 		begin,
 		onStop: (cb) => onStopCallbacks.push(cb),
@@ -117,7 +121,7 @@ async function executeTracePhaseWithArgs<T, Args extends unknown[]>(
 			await finalize(null);
 			return res;
 		}
-		
+
 		await finalize(null);
 		return result;
 	} catch (err: unknown) {
@@ -202,7 +206,7 @@ export function baseFetch(
 			envBindings,
 			executionCtx,
 			debug,
-			aot
+			aot,
 		);
 	}
 
@@ -220,10 +224,11 @@ export function baseFetch(
 				envBindings,
 				executionCtx,
 				debug,
-				aot
+				aot,
 			);
 		}
-		if (route?.is405) return new Response("Method Not Allowed", { status: 405 });
+		if (route?.is405)
+			return new Response("Method Not Allowed", { status: 405 });
 		return new Response("Not Found", { status: 404 });
 	}
 
@@ -363,7 +368,7 @@ async function baseFetchSlow(
 				executeOnRequestPhase,
 				hooks,
 				context,
-				onReqLen
+				onReqLen,
 			);
 			if (res instanceof Response) return res;
 		}
@@ -374,7 +379,7 @@ async function baseFetchSlow(
 				traceListeners?.handle,
 				execute404Phase,
 				context,
-				middlewares
+				middlewares,
 			);
 
 			// 3. onAfterHandle for 404
@@ -383,14 +388,14 @@ async function baseFetchSlow(
 				onAfterLen > 0 ||
 				(traceListeners && traceListeners.afterHandle.length > 0)
 			) {
-				response = await executeTracePhaseWithArgs(
+				response = (await executeTracePhaseWithArgs(
 					traceListeners?.afterHandle,
 					executeOnAfterPhase,
 					hooks,
 					context,
 					response,
-					onAfterLen
-				) as Response;
+					onAfterLen,
+				)) as Response;
 			}
 			return response!;
 		}
@@ -406,7 +411,7 @@ async function baseFetchSlow(
 				executeOnBeforePhase,
 				hooks,
 				context,
-				onBeforeLen
+				onBeforeLen,
 			);
 			if (res instanceof Response) return res;
 		}
@@ -436,7 +441,7 @@ async function baseFetchSlow(
 			context,
 			executor,
 			finalHandlers,
-			aot
+			aot,
 		);
 
 		// ── 4. onAfterHandle ──────────────────────────────────────────────────────
@@ -445,26 +450,29 @@ async function baseFetchSlow(
 			onAfterLen > 0 ||
 			(traceListeners && traceListeners.afterHandle.length > 0)
 		) {
-			response = await executeTracePhaseWithArgs(
+			response = (await executeTracePhaseWithArgs(
 				traceListeners?.afterHandle,
 				executeOnAfterPhase,
 				hooks,
 				context,
 				response!,
-				onAfterLen
-			) as Response;
+				onAfterLen,
+			)) as Response;
 		}
 	} catch (error) {
 		// ── onError hooks ─────────────────────────────────────────────────────────
 		const onErrLen = hooks.onError.length;
-		if (context && (onErrLen > 0 || (traceListeners && traceListeners.error.length > 0))) {
+		if (
+			context &&
+			(onErrLen > 0 || (traceListeners && traceListeners.error.length > 0))
+		) {
 			const errRes = await executeTracePhaseWithArgs(
 				traceListeners?.error,
 				executeOnErrorPhase,
 				hooks,
 				context,
 				error as Error,
-				onErrLen
+				onErrLen,
 			);
 			if (errRes instanceof Response) {
 				response = errRes;
@@ -545,7 +553,9 @@ async function executePostProcess(
 
 		if (responseListeners && responseListeners.length > 0) {
 			const begin = performance.now();
-			const onStopCallbacks: ((info: import("../types").TraceEventInfo) => void | Promise<void>)[] = [];
+			const onStopCallbacks: ((
+				info: import("../types").TraceEventInfo,
+			) => void | Promise<void>)[] = [];
 			const event: import("../types").TraceEvent = {
 				begin,
 				onStop: (cb) => onStopCallbacks.push(cb),
@@ -555,7 +565,7 @@ async function executePostProcess(
 				const r = responseListeners[i](event);
 				if (r instanceof Promise) await r;
 			}
-			
+
 			const end = performance.now();
 			for (let j = 0; j < onStopCallbacks.length; j++) {
 				const s = onStopCallbacks[j]({ begin, end, error: null });

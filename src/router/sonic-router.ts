@@ -1,5 +1,5 @@
 import * as $$path from "node:path";
-import type { Context, Handler, MiddlewareHandler } from "../types";
+import type { Context, MiddlewareHandler } from "../types";
 import type { HTTPMethod, IRouter, MatchedRoute, Route } from "./base";
 import { compileSonicTrieMatcher } from "./sonic-trie-jit";
 import type { DynamicSegmentsRemoved } from "./types";
@@ -171,10 +171,7 @@ export class SonicRouter<Routes extends Route[] = Route[]>
 		}
 
 		if (Array.isArray(handlers)) {
-			node.handlers = [
-				...node.middlewares,
-				...handlers
-			];
+			node.handlers = [...node.middlewares, ...handlers];
 		} else {
 			node.handlers = handlers;
 		}

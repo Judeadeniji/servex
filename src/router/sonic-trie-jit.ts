@@ -100,7 +100,11 @@ function buildTrie(routes: RouteLike[]): TrieNode {
  */
 export function compileSonicTrieMatcher<_T>(
 	method: HTTPMethod,
-	routes: (RouteLike & { middlewares: unknown; handlers: unknown; path: string })[],
+	routes: (RouteLike & {
+		middlewares: unknown;
+		handlers: unknown;
+		path: string;
+	})[],
 ) {
 	const trie = buildTrie(routes);
 

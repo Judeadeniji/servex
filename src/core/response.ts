@@ -44,9 +44,13 @@ export async function executeHandlers<
 			const res = await handlerOrStatic(context, next);
 			if (res instanceof Response) return res;
 		}
-		
+
 		// TODO: Everything below should only exec if native static response is false
-		else if (handlerOrStatic && typeof handlerOrStatic === "object" && (handlerOrStatic as unknown) instanceof Response) {
+		else if (
+			handlerOrStatic &&
+			typeof handlerOrStatic === "object" &&
+			(handlerOrStatic as unknown) instanceof Response
+		) {
 			// Fast path for static responses (clone to avoid consuming body)
 			return (handlerOrStatic as Response).clone();
 		} else if (

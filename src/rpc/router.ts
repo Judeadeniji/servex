@@ -1,4 +1,9 @@
-import type { RPCFunctionDef, RPCGroupDef, RPCMiddleware, RPCRegistry } from './types';
+import type {
+	RPCFunctionDef,
+	RPCGroupDef,
+	RPCMiddleware,
+	RPCRegistry,
+} from "./types";
 
 export type CompiledRoute = {
 	path: string; // e.g. 'users.getUser'
@@ -21,15 +26,17 @@ export function compileRoutes(
 	const map = new Map<string, CompiledRoute>();
 
 	for (const [key, _value] of Object.entries(registry)) {
-		const value = _value as RPCFunctionDef<unknown, unknown, unknown> | RPCGroupDef<Record<string, unknown>>;
+		const value = _value as
+			| RPCFunctionDef<unknown, unknown, unknown>
+			| RPCGroupDef<Record<string, unknown>>;
 		const currentPath = [...parentPath, key];
-		const dotPath = currentPath.join('.');
+		const dotPath = currentPath.join(".");
 
-		if (value._tag === 'RPCFunction') {
+		if (value._tag === "RPCFunction") {
 			// Compose middleware chain: parent groups -> fn-level
 			const middlewareChain = [...parentMiddlewares, ...value.middlewares];
 
-			const rawHttpPath = `${options.prefix}/${currentPath.join('/')}`;
+			const rawHttpPath = `${options.prefix}/${currentPath.join("/")}`;
 			const httpPath = options.hash
 				? `${options.prefix}/${options.hash(dotPath)}`
 				: rawHttpPath;
@@ -40,7 +47,7 @@ export function compileRoutes(
 				fn: value,
 				middlewareChain,
 			});
-		} else if (value._tag === 'RPCGroup') {
+		} else if (value._tag === "RPCGroup") {
 			// Recurse into subgroup, passing down accumulated middlewares
 			const subRoutes = compileRoutes(
 				value.registry,

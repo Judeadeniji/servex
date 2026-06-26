@@ -162,10 +162,11 @@ export class TrieRouter<Routes extends Route[]> implements IRouter<Routes> {
 			this.collectMiddlewares(currentTrieSegment, middlewares);
 			currentTrieSegment.handlers[method.toUpperCase() as HTTPMethod] = [
 				...middlewares,
-				...handlers
+				...handlers,
 			] as Handler[];
 		} else {
-			currentTrieSegment.handlers[method.toUpperCase() as HTTPMethod] = handlers as Handler[];
+			currentTrieSegment.handlers[method.toUpperCase() as HTTPMethod] =
+				handlers as Handler[];
 		}
 		this.#routes.add(route);
 		return this;
@@ -375,7 +376,8 @@ export class TrieRouter<Routes extends Route[]> implements IRouter<Routes> {
 			// Switch on the current trie segment type of the route child
 			switch (trieSegment.type) {
 				case "dynamic":
-					(matched_route.params as Record<string, string>)[seg.slice(1)] = nextSegment;
+					(matched_route.params as Record<string, string>)[seg.slice(1)] =
+						nextSegment;
 					return this.matchAll(
 						matched_route,
 						segments,
@@ -393,7 +395,8 @@ export class TrieRouter<Routes extends Route[]> implements IRouter<Routes> {
 					const params = segments.slice(routeSegArr.length);
 					// add the params to the matched_route.params
 					if (isNamedWildcard) {
-						(matched_route.params as Record<string, string>)[seg.slice(1)] = params.join("/");
+						(matched_route.params as Record<string, string>)[seg.slice(1)] =
+							params.join("/");
 					} else {
 						for (let i = 0; i < params.length; i++) {
 							(matched_route.params as Record<string, string>)[i] = params[i];
@@ -403,9 +406,7 @@ export class TrieRouter<Routes extends Route[]> implements IRouter<Routes> {
 					matched_route.matched_route += `/${seg}`;
 					if (trieSegment.handlers[method]) {
 						matched_route.matched = true;
-						matched_route.handlers = trieSegment.handlers[
-							method
-						] as Handler[];
+						matched_route.handlers = trieSegment.handlers[method] as Handler[];
 						this.collectMiddlewares(trieSegment, matched_route.middlewares!);
 						return matched_route;
 					}
