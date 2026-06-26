@@ -112,7 +112,7 @@ describe("RPC Module", () => {
 				hello: createRPCFunction().handler(async () => "world"),
 			});
 
-			plugin.install(app);
+			app.post("/rpc/*", plugin);
 
 			// Create a client directly against the app for testing
 			const client = createRPCClient<typeof plugin>({
@@ -144,7 +144,7 @@ describe("RPC Module", () => {
 				}),
 			});
 
-			plugin.install(app);
+			app.post("/api/rpc/*", plugin);
 			const client = createRPCClient<typeof plugin>({
 				baseURL: "http://localhost",
 				prefix: "/api/rpc",
@@ -162,7 +162,7 @@ describe("RPC Module", () => {
 					.handler(async () => "ok"),
 			});
 
-			plugin.install(app);
+			app.post("/rpc/*", plugin);
 
 			const client = createRPCClient<typeof plugin>({
 				baseURL: "http://localhost",
@@ -192,7 +192,7 @@ describe("RPC Module", () => {
 					}),
 			});
 
-			plugin.install(app);
+			app.post("/rpc/*", plugin);
 
 			const client = createRPCClient<typeof plugin>({
 				baseURL: "http://localhost",
@@ -218,7 +218,7 @@ describe("RPC Module", () => {
 					return new RPCTypedError({ code: "RETURNED_ERROR" });
 				}),
 			});
-			plugin.install(app);
+			app.post("/rpc/*", plugin);
 			const client = createRPCClient<typeof plugin>({
 				baseURL: "http://localhost",
 				prefix: "/rpc",
@@ -259,7 +259,7 @@ describe("RPC Module", () => {
 					}),
 			});
 
-			plugin.install(app);
+			app.post("/rpc/*", plugin);
 
 			const client = createRPCClient<typeof plugin>({
 				baseURL: "http://localhost",

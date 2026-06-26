@@ -1,5 +1,5 @@
 import type { StandardSchemaV1 } from '@standard-schema/spec';
-import type { Context as ServeXContext, Env, ServeXRouter, MiddlewareHandler } from '../types';
+import type { MiddlewareHandler, Context as ServeXContext } from '../types';
 import type { RPCError, RPCTypedError } from './error';
 
 export type RPCContext = ServeXContext & {
@@ -62,7 +62,7 @@ export interface RPCFunctionBuilder<
 	): RPCFunctionDef<
 		unknown extends TInput ? NewInput : TInput,
 		unknown extends TOutput ? Exclude<Awaited<NewOutput>, Error> : TOutput,
-		Extract<Awaited<NewOutput>, RPCTypedError<any>> extends RPCTypedError<infer E> ? E : _TError
+		Extract<Awaited<NewOutput>, RPCTypedError> extends RPCTypedError<infer E> ? E : _TError
 	>;
 }
 
@@ -89,8 +89,8 @@ export type RPCClientFn<TInput, TOutput, TError> = (
 
 // Forward declaration of RPCPluginInstance from plugin.ts
 export type RPCPluginInstance<R extends Record<string, unknown>> = {
+	(ctx: ServeXContext): Promise<Response>;
 	registry: R;
-	install<E extends Env = Env>(server: ServeXRouter<E>): void;
 };
 
 export type InferAppRPC<T> = T extends RPCPluginInstance<infer R>
