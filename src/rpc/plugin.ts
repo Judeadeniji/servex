@@ -7,7 +7,7 @@ import { validateInput, validateOutput } from "./validation";
 
 export type RPCPluginOptions = CompileOptions;
 
-export function serveXRPC<R extends Record<string, unknown>>(
+export function rpc<R extends Record<string, unknown>>(
 	registry: R,
 	options: Omit<RPCPluginOptions, "prefix"> = {},
 ): RPCPluginInstance<R> {
