@@ -5,6 +5,7 @@ export type RPCClientOptions = {
 	baseURL: string;
 	prefix?: string;
 	hash?: (path: string) => string;
+	fetch?: typeof globalThis.fetch;
 };
 
 export function createRPCClient<T>(
@@ -36,7 +37,8 @@ function createProxy(options: RPCClientOptions, path: string[]): unknown {
 					? `${options.baseURL}${options.prefix ?? '/rpc'}/${options.hash(dotPath)}`
 					: `${options.baseURL}${options.prefix ?? '/rpc'}/${path.join('/')}`;
 
-				const response = await fetch(httpPath, {
+				const fetcher = options.fetch ?? globalThis.fetch;
+				const response = await fetcher(httpPath, {
 					method: 'POST',
 					headers: { 'Content-Type': 'application/json' },
 					body: JSON.stringify(args[0] ?? {}),
@@ -46,9 +48,9 @@ function createProxy(options: RPCClientOptions, path: string[]): unknown {
 
 				if (!data.ok) {
 					if (data.error.code === 'TYPED_ERROR') {
-						throw new RPCTypedError(data.error.data);
+						return new RPCTypedError(data.error.data);
 					}
-					throw new RPCError(
+					return new RPCError(
 						data.error.code,
 						data.error.message,
 						data.error.data,

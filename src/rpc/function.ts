@@ -6,6 +6,7 @@ import type {
 	RPCFunctionDef,
 	RPCMiddleware,
 } from './types';
+import type { RPCTypedError } from './error';
 
 export function createRPCFunction(): RPCFunctionBuilder {
 	return new RPCFunctionBuilderImpl();
@@ -63,16 +64,26 @@ class RPCFunctionBuilderImpl<TInput, TOutput, TError>
 		return next;
 	}
 
-	handler(
-		fn: (input: TInput, ctx: RPCContext) => Promise<TOutput>,
-	): RPCFunctionDef<TInput, TOutput, TError> {
+	handler<NewInput = unknown, NewOutput = unknown>(
+		fn: (
+			input: unknown extends TInput ? NewInput : TInput,
+			ctx: RPCContext,
+		) => Promise<unknown extends TOutput ? NewOutput : TOutput> | (unknown extends TOutput ? NewOutput : TOutput),
+	): RPCFunctionDef<
+		unknown extends TInput ? NewInput : TInput,
+		unknown extends TOutput ? Exclude<Awaited<NewOutput>, Error> : TOutput,
+		Extract<Awaited<NewOutput>, RPCTypedError<any>> extends RPCTypedError<infer E> ? E : TError
+	> {
 		return {
 			_tag: 'RPCFunction',
 			inputSchema: this._inputSchema,
 			outputSchema: this._outputSchema,
 			errorSchema: this._errorSchema,
 			middlewares: this._middlewares,
-			handler: fn,
+			handler: fn as unknown as (
+				input: unknown extends TInput ? NewInput : TInput,
+				ctx: RPCContext,
+			) => Promise<unknown extends TOutput ? Exclude<Awaited<NewOutput>, Error> : TOutput> | (unknown extends TOutput ? Exclude<Awaited<NewOutput>, Error> : TOutput),
 		};
 	}
 }
