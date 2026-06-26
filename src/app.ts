@@ -64,7 +64,7 @@ export class ServeXRouterImpl<
 			pathOrPlugin !== null &&
 			"setup" in pathOrPlugin
 		) {
-			pathOrPlugin.setup(this as any, "");
+			pathOrPlugin.setup(this, "");
 			return this;
 		}
 
@@ -364,11 +364,11 @@ export class ServeXApp<
 
 	compile(): this {
 		for (const route of this.routerAdapter.routes) {
-			const methodsToMatch =
-				route.method === "ALL" ? SUPPORTED_METHODS : [route.method];
+			const methodsToMatch =(
+				route.method === "ALL" ? SUPPORTED_METHODS : [route.method]) as Method[];
 			for (const method of methodsToMatch) {
 				const matched = this.routerAdapter.match(method, route.path);
-				if (matched && matched.handlers && matched.store) {
+				if (matched?.handlers && matched.store) {
 					if (!matched.store.executor) {
 						matched.store.executor = compileHandlerChain(
 							matched.handlers as import("./types").Handler<Context>[],
@@ -437,23 +437,17 @@ export class ServeXApp<
 				return this;
 			}
 			if (pathOrPlugin === "*" || pathOrPlugin === "/*") {
-				this.middlewares.push(...(middlewaresOrPlugins as any));
-				this.routerAdapter.pushMiddlewares("*", middlewaresOrPlugins as any);
+				this.middlewares.push(...middlewaresOrPlugins);
+				this.routerAdapter.pushMiddlewares("*", middlewaresOrPlugins);
 			} else {
-				this.routerAdapter.pushMiddlewares(
-					pathOrPlugin,
-					middlewaresOrPlugins as any,
-				);
+				this.routerAdapter.pushMiddlewares(pathOrPlugin, middlewaresOrPlugins);
 			}
 			return this;
 		}
-		this.middlewares.push(
-			pathOrPlugin as any,
-			...(middlewaresOrPlugins as any),
-		);
+		this.middlewares.push(pathOrPlugin, ...middlewaresOrPlugins);
 		this.routerAdapter.pushMiddlewares("*", [
-			pathOrPlugin as any,
-			...(middlewaresOrPlugins as any),
+			pathOrPlugin,
+			...middlewaresOrPlugins,
 		]);
 		return this;
 	}
@@ -525,9 +519,12 @@ export class ServeXApp<
 		callback?: (server: import("bun").Server) => void,
 	): import("bun").Server {
 		this.compile();
-		
+
 		let options: Partial<import("bun").ServeOptions> = {};
-		if (typeof portOrOptions === "number" || typeof portOrOptions === "string") {
+		if (
+			typeof portOrOptions === "number" ||
+			typeof portOrOptions === "string"
+		) {
 			options = { port: portOrOptions };
 		} else {
 			options = portOrOptions;
@@ -535,7 +532,7 @@ export class ServeXApp<
 
 		const server = Bun.serve({
 			...options,
-			fetch: this.fetch as import("bun").ServeOptions["fetch"],
+			fetch: this.fetch,
 		});
 
 		if (callback) {
