@@ -503,7 +503,6 @@ export class ServeXApp<
 			env,
 			executionCtx as import("./core/fetch").ServeXExecutionContext | undefined,
 			this.debug,
-			this.aot,
 		);
 	};
 
@@ -518,7 +517,9 @@ export class ServeXApp<
 		portOrOptions: number | string | Partial<import("bun").ServeOptions>,
 		callback?: (server: import("bun").Server) => void,
 	): import("bun").Server {
-		this.compile();
+		if (this.aot) {
+			this.compile();
+		}
 
 		let options: Partial<import("bun").ServeOptions> = {};
 		if (
@@ -532,7 +533,7 @@ export class ServeXApp<
 
 		const server = Bun.serve({
 			...options,
-			fetch: this.fetch,
+			fetch: this.fetch as Fetch,
 		});
 
 		if (callback) {
@@ -551,7 +552,7 @@ export function createServer<E extends Env = Env, B extends string = "/">(
 		middlewares = [],
 		basePath,
 		debug = false,
-		aot = true,
+		aot = false,
 		nativeStaticResponse = false,
 	} = options;
 	const routerAdapter = new RouterAdapter<ServerRoute[]>({
