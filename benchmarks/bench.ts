@@ -1,7 +1,6 @@
 import { bench, group, run } from "mitata";
 import { compileHandlerChain } from "../src/compiler/index";
 import type { Context } from "../src/context";
-import { executeHandlers } from "../src/core/response";
 import { createServer } from "../src/index";
 import { RouterType } from "../src/router/adapter";
 import type { Handler } from "../src/types";
@@ -39,7 +38,7 @@ group("JIT Boot Time Cost", () => {
 	});
 });
 
-// Set up Non-JIT App (by manually filling compiledCache with executeHandlers wrapper)
+// Set up Non-JIT App (using new config flag)
 const middlewares: import("../src/types").MiddlewareHandler<Context>[] = [
 	async (ctx, next) => {
 		ctx.executionCtx = 1;
@@ -53,31 +52,13 @@ const middlewares: import("../src/types").MiddlewareHandler<Context>[] = [
 ];
 const appNonJit = createServer({
 	router: RouterType.SONIC,
+	jit: false,
 	middlewares: [middlewares[0], middlewares[1]],
 });
 appNonJit.get("/api/test", middlewares[2]);
 
-// Force Non-JIT behavior by pre-filling the executor cache
-// But wait, router.match returns a route with a store.executor property too!
-// It's easier to just warm it up to let it populate the route, then overwrite it.
-for (let i = 0; i < 50; i++)
-	await appNonJit.fetch(new Request("http://localhost/api/test"));
-
-// Now overwrite the cached executor with the non-JIT loop
-//@ts-expect-error
-appNonJit.compiledCache.set("GET/api/test", (ctx: Context) =>
-	executeHandlers(ctx, middlewares),
-);
-const r = (
-	appNonJit as unknown as {
-		routerAdapter: import("../src/router/adapter").RouterAdapter<import("../src/types").ServerRoute[]>;
-	}
-).routerAdapter.match("GET", "/api/test");
-if (r?.store)
-	r.store.executor = (ctx: Context) => executeHandlers(ctx, middlewares);
-
 // Set up JIT App
-const appJit = createServer({ router: RouterType.SONIC });
+const appJit = createServer({ router: RouterType.SONIC, jit: true });
 appJit.get("/api/test", middlewares[2]);
 // biome-ignore lint/suspicious/noExplicitAny: Internal router access for benchmark warmup
 (appJit as any).middlewares.push(middlewares[0], middlewares[1]);
