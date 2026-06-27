@@ -21,25 +21,35 @@ export function createRPCClient<T>(
 		: InferClientFromRegistry<Record<string, never>>;
 }
 
-function createProxy(options: RPCClientOptions, path: string[]): unknown {
+function createProxy(options: RPCClientOptions, path: string[], precomputedPath?: string): unknown {
+	const cache = new Map<string, unknown>();
+
+	const endpointPath = precomputedPath ?? (
+		options.hash
+			? `${options.baseURL}${options.prefix ?? "/rpc"}/${options.hash(path.join("."))}`
+			: `${options.baseURL}${options.prefix ?? "/rpc"}${path.length > 0 ? "/" + path.join("/") : ""}`
+	);
+
 	return new Proxy(
 		// Target must be a function so the proxy is callable
 		() => {},
 		{
 			get(_, key: string) {
-				// Extend the path and return a new proxy
-				return createProxy(options, [...path, key]);
+				if (typeof key !== "string" || key === "then") {
+					return undefined;
+				}
+				let cached = cache.get(key);
+				if (!cached) {
+					cached = createProxy(options, [...path, key]);
+					cache.set(key, cached);
+				}
+				return cached;
 			},
 
 			async apply(_, __, args) {
 				// Called as a function — execute the RPC call
-				const dotPath = path.join(".");
-				const httpPath = options.hash
-					? `${options.baseURL}${options.prefix ?? "/rpc"}/${options.hash(dotPath)}`
-					: `${options.baseURL}${options.prefix ?? "/rpc"}/${path.join("/")}`;
-
 				const fetcher = options.fetch ?? globalThis.fetch;
-				const response = await fetcher(httpPath, {
+				const response = await fetcher(endpointPath, {
 					method: "POST",
 					headers: { "Content-Type": "application/json" },
 					body: JSON.stringify(args[0] ?? {}),
