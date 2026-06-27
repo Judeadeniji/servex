@@ -347,7 +347,8 @@ export class ServeXApp<
 		private middlewares: Handler<Context>[],
 		basePath: B = "/" as B,
 		public debug: boolean = false,
-		public aot: boolean = true,
+		public aot: boolean = false,
+		public jit: boolean = true,
 		nativeStaticResponse: boolean = false,
 	) {
 		super(router);
@@ -503,6 +504,7 @@ export class ServeXApp<
 			env,
 			executionCtx as import("./core/fetch").ServeXExecutionContext | undefined,
 			this.debug,
+			this.jit,
 		);
 	};
 
@@ -517,7 +519,7 @@ export class ServeXApp<
 		portOrOptions: number | string | Partial<import("bun").ServeOptions>,
 		callback?: (server: import("bun").Server) => void,
 	): import("bun").Server {
-		if (this.aot) {
+		if (this.aot && this.jit) {
 			this.compile();
 		}
 
@@ -553,6 +555,7 @@ export function createServer<E extends Env = Env, B extends string = "/">(
 		basePath,
 		debug = false,
 		aot = false,
+		jit = true,
 		nativeStaticResponse = false,
 	} = options;
 	const routerAdapter = new RouterAdapter<ServerRoute[]>({
@@ -565,6 +568,7 @@ export function createServer<E extends Env = Env, B extends string = "/">(
 		basePath as NormalisePath<B>,
 		debug,
 		aot,
+		jit,
 		nativeStaticResponse,
 	) as ServeXRouter<E, {}, NormalisePath<B>> &
 		ServeXApp<E, {}, NormalisePath<B>>;

@@ -46,8 +46,14 @@ async function executeHandlePhase(
 		| ((c: Context) => Response | Promise<Response | undefined> | undefined)
 		| undefined,
 	handlers: Handler<Context>[],
+	jit: boolean,
 ) {
-	const result = await executor?.(context);
+	let result: Response | undefined;
+	if (jit) {
+		result = await executor?.(context);
+	} else {
+		result = await executeHandlers(context, handlers);
+	}
 	return result || new Response("Not Found", { status: 404 });
 }
 
@@ -184,6 +190,7 @@ export function baseFetch(
 	envBindings?: Record<string, unknown>,
 	executionCtx?: ServeXExecutionContext,
 	debug: boolean = false,
+	jit: boolean = true,
 ): Response | Promise<Response> {
 	// ── Slow Path ──────────────────────────────────────────────────────────────
 	if (
@@ -203,6 +210,7 @@ export function baseFetch(
 			envBindings,
 			executionCtx,
 			debug,
+			jit,
 		);
 	}
 
@@ -220,6 +228,7 @@ export function baseFetch(
 				envBindings,
 				executionCtx,
 				debug,
+				jit,
 			);
 		}
 		if (route?.is405)
@@ -233,11 +242,13 @@ export function baseFetch(
 		  ) => Response | Promise<Response | undefined> | undefined)
 		| undefined;
 
-	if (!executor) {
-		const handlers = route.handlers;
-		executor = compileHandlerChain(handlers as Handler<Context>[]);
-		if (route.store) route.store.executor = executor;
-		route.executor = executor;
+	if (jit) {
+		if (!executor) {
+			const handlers = route.handlers;
+			executor = compileHandlerChain(handlers as Handler<Context>[]);
+			if (route.store) route.store.executor = executor;
+			route.executor = executor;
+		}
 	}
 
 	let context: Context | undefined = createContext(
@@ -249,7 +260,13 @@ export function baseFetch(
 	);
 
 	try {
-		let res: Response | Promise<Response | undefined> | undefined = executor!(context);
+		let res: Response | Promise<Response | undefined> | undefined;
+		if (jit) {
+			res = executor!(context);
+		} else {
+			const handlers = route.handlers;
+			res = executeHandlers(context, handlers as Handler<Context>[]);
+		}
 
 		if (res instanceof Promise) {
 			return res
@@ -300,6 +317,7 @@ async function baseFetchSlow(
 	envBindings?: Record<string, unknown>,
 	executionCtx?: ServeXExecutionContext,
 	debug: boolean = false,
+	jit: boolean = true,
 ): Promise<Response> {
 	let response: Response | undefined;
 
@@ -414,12 +432,16 @@ async function baseFetchSlow(
 			  ) => Response | Promise<Response | undefined> | undefined)
 			| undefined;
 		let finalHandlers: Handler<Context>[] = [];
-		executor = route.executor || (route.store?.executor as typeof executor);
-		if (!executor) {
+		if (jit) {
+			executor = route.executor || (route.store?.executor as typeof executor);
+			if (!executor) {
+				finalHandlers = route.handlers as Handler<Context>[];
+				executor = compileHandlerChain(finalHandlers);
+				if (route.store) route.store.executor = executor;
+				route.executor = executor;
+			}
+		} else {
 			finalHandlers = route.handlers as Handler<Context>[];
-			executor = compileHandlerChain(finalHandlers);
-			if (route.store) route.store.executor = executor;
-			route.executor = executor;
 		}
 
 		response = await executeTracePhaseWithArgs(
@@ -428,6 +450,7 @@ async function baseFetchSlow(
 			context,
 			executor,
 			finalHandlers,
+			jit,
 		);
 
 		// ── 4. onAfterHandle ──────────────────────────────────────────────────────

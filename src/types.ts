@@ -61,6 +61,13 @@ export interface ServerOptions<B extends string = "/"> {
 	 */
 	aot?: boolean;
 	/**
+	 * Enable Just-In-Time (JIT) compilation of handler chains.
+	 * If true, handler chains are compiled into highly optimized synchronous fast-paths using new Function().
+	 * If false, it falls back to the native recursive loop execution (useful for Cloudflare Workers where new Function() is blocked).
+	 * Default: true
+	 */
+	jit?: boolean;
+	/**
 	 * Enable debug mode. If true, full stack traces will be returned in 500 error responses,
 	 * and the `context.debug` flag will be set to true for use in middlewares.
 	 * Default: false
