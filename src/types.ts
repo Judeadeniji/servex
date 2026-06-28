@@ -102,7 +102,7 @@ export interface Hooks<E extends Env = Env> {
 export type ServerRoute<E extends Env = Env> = {
 	method: Method;
 	path: string;
-	handlers: InternalHandler<Context<E>>[];
+	handlers: InternalHandler<Context<E>>[] | InternalHandler<Context<E>>;
 };
 
 // ── Utility Types ─────────────────────────────────────────────────────────────

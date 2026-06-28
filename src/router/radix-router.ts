@@ -1,6 +1,6 @@
 import $$path from "node:path";
 import type { Context } from "../context";
-import type { Handler, MiddlewareHandler } from "../types";
+import type { Handler, InternalHandler, MiddlewareHandler } from "../types";
 import {
 	type HTTPMethod,
 	type IRouter,
@@ -172,11 +172,11 @@ export class RadixRouteTrie implements IRouter {
 		if (Array.isArray(handlers)) {
 			currentNode.handlers[method.toUpperCase() as HTTPMethod] = [
 				...this.collectMiddlewares(currentNode),
-				...(handlers as Handler<Context>[]),
-			] as Handler[];
+				...(handlers as InternalHandler<Context>[]),
+			];
 		} else {
 			currentNode.handlers[method.toUpperCase() as HTTPMethod] =
-				handlers as Handler[];
+				handlers as InternalHandler<Context>;
 		}
 		this.#routes.add(route);
 	}
@@ -253,7 +253,7 @@ export class RadixRouteTrie implements IRouter {
 							route: undefined,
 							matched_route: matchedRoute,
 							params,
-							handlers: child.handlers[method] as Handler<Context>[],
+							handlers: child.handlers[methodUpper] as InternalHandler<Context>[] | InternalHandler<Context>,
 							store: undefined,
 							executor: undefined,
 							is405: false,
@@ -275,7 +275,7 @@ export class RadixRouteTrie implements IRouter {
 				route: undefined,
 				matched_route: matchedRoute,
 				params,
-				handlers: currentNode.handlers[method] as Handler<Context>[],
+				handlers: currentNode.handlers[methodUpper] as InternalHandler<Context>[] | InternalHandler<Context>,
 				store: undefined,
 				executor: undefined,
 				is405: false,

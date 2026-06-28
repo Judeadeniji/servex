@@ -21,7 +21,7 @@ describe("SonicRouter JIT - Correctness & Param Extraction", () => {
 		router.addRoute({
 			method: "GET",
 			path: "/users/:id",
-			handlers: { route: 1 } as unknown as Handler[],
+			handlers: { route: 1 },
 		});
 		const match = router.match("GET", "/users/123");
 		expect(getParams(match)).toEqual({ id: "123" });
@@ -32,7 +32,7 @@ describe("SonicRouter JIT - Correctness & Param Extraction", () => {
 		router.addRoute({
 			method: "GET",
 			path: "/posts/:postId/comments/:commentId",
-			handlers: { route: 1 } as unknown as Handler[],
+			handlers: { route: 1 },
 		});
 		const match = router.match("GET", "/posts/abc/comments/def");
 		expect(getParams(match)).toEqual({ postId: "abc", commentId: "def" });
@@ -43,7 +43,7 @@ describe("SonicRouter JIT - Correctness & Param Extraction", () => {
 		router.addRoute({
 			method: "GET",
 			path: "/public/*path",
-			handlers: { route: 1 } as unknown as Handler[],
+			handlers: { route: 1 },
 		});
 		const match = router.match("GET", "/public/assets/css/style.css");
 		expect(getParams(match)).toEqual({ path: "assets/css/style.css" });
@@ -56,12 +56,12 @@ describe("SonicRouter JIT - Correctness & Param Extraction", () => {
 		router.addRoute({
 			method: "GET",
 			path: "/api/v1/:resource",
-			handlers: { route: "v1" } as unknown as Handler[],
+			handlers: { route: "v1" },
 		});
 		router.addRoute({
 			method: "GET",
 			path: "/api/v2/:resource/:id",
-			handlers: { route: "v2" } as unknown as Handler[],
+			handlers: { route: "v2" },
 		});
 
 		const match1 = router.match("GET", "/api/v1/users");
@@ -79,12 +79,12 @@ describe("SonicRouter JIT - Correctness & Param Extraction", () => {
 		router.addRoute({
 			method: "GET",
 			path: "/api/*all",
-			handlers: { route: "wild" } as unknown as Handler[],
+			handlers: { route: "wild" },
 		});
 		router.addRoute({
 			method: "GET",
 			path: "/api/users/:id",
-			handlers: { route: "param" } as unknown as Handler[],
+			handlers: { route: "param" },
 		});
 
 		const matchParam = router.match("GET", "/api/users/42");
@@ -112,7 +112,7 @@ describe("SonicRouter - sanitizeRoute encoding semantics", () => {
 		router.addRoute({
 			method: "GET",
 			path: "/search/:query",
-			handlers: 1 as unknown as Handler[],
+			handlers: 1,
 		});
 
 		// Standard ASCII — always works
@@ -134,7 +134,7 @@ describe("SonicRouter - sanitizeRoute encoding semantics", () => {
 		router.addRoute({
 			method: "GET",
 			path: "/users/:name",
-			handlers: 1 as unknown as Handler[],
+			handlers: 1,
 		});
 
 		const match = router.match("GET", "/users/caf%C3%A9");
@@ -150,7 +150,7 @@ describe("SonicRouter - sanitizeRoute encoding semantics", () => {
 		router.addRoute({
 			method: "GET",
 			path: "/café",
-			handlers: 1 as unknown as Handler[],
+			handlers: 1,
 		});
 
 		const match = router.match("GET", "/café");
@@ -164,7 +164,7 @@ describe("SonicRouter - sanitizeRoute encoding semantics", () => {
 		router.addRoute({
 			method: "GET",
 			path: "/users/:id",
-			handlers: 1 as unknown as Handler[],
+			handlers: 1,
 		});
 
 		// /users//123 has an extra slash — should NOT match /users/:id
@@ -177,7 +177,7 @@ describe("SonicRouter - sanitizeRoute encoding semantics", () => {
 		router.addRoute({
 			method: "GET",
 			path: "/about",
-			handlers: 1 as unknown as Handler[],
+			handlers: 1,
 		});
 
 		expect(router.match("GET", "/about")).not.toBeNull();
@@ -199,7 +199,8 @@ describe("SonicRouter - sanitizeRoute encoding semantics", () => {
 
 		// Raw unicode request matches raw unicode route
 		// biome-ignore lint/suspicious/noNonNullAssertedOptionalChain: it's needed
-		expect(router.match("GET", "/café")?.handlers![0]).toBe(rawFn);
+		const handlers = router.match("GET", "/café")?.handlers;
+		expect(Array.isArray(handlers) ? handlers[0] : handlers).toBe(rawFn);
 
 		// Pre-encoded request does NOT match the raw unicode route (expected: null)
 		expect(router.match("GET", "/caf%C3%A9")).toBeNull();

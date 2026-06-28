@@ -15,9 +15,9 @@ describe("SonicRouter - Precedence & Specificity", () => {
 			});
 		}
 		const matched = router.match("GET", url);
-		return matched?.handlers?.[0]
-			? (matched.handlers[0] as any).routeName
-			: undefined;
+		if (!matched || !matched.handlers) return undefined;
+		const handler = Array.isArray(matched.handlers) ? matched.handlers[0] : matched.handlers;
+		return handler ? (handler as any).routeName : undefined;
 	}
 
 	it("Static vs Param (Param registered first)", () => {

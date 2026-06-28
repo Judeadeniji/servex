@@ -11,7 +11,7 @@ export type HTTPMethod = Method;
 export type Route = {
 	method: HTTPMethod;
 	path: string;
-	handlers: InternalHandler[];
+	handlers: InternalHandler[] | InternalHandler;
 };
 
 export type SegmentType = "static" | "dynamic" | "wildcard";
@@ -30,7 +30,7 @@ export type MatchedRoute = {
 	 * directly when this field is present.
 	 */
 	paramValues?: string[];
-	handlers: InternalHandler<Context>[] | undefined;
+	handlers: InternalHandler<Context>[] | InternalHandler<Context> | undefined;
 	middlewares?: MiddlewareHandler<Context>[];
 	store?: Record<string, unknown> | undefined;
 	executor?:

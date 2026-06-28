@@ -1,6 +1,6 @@
 import $$path from "node:path";
 import type { Context } from "../context";
-import type { Handler, MiddlewareHandler } from "../types";
+import type { Handler, InternalHandler, MiddlewareHandler } from "../types";
 import {
 	type HTTPMethod,
 	type IRouter,
@@ -157,11 +157,11 @@ export class TrieRouter implements IRouter {
 			this.collectMiddlewares(currentTrieSegment, middlewares);
 			currentTrieSegment.handlers[method.toUpperCase() as HTTPMethod] = [
 				...middlewares,
-				...handlers,
-			] as Handler[];
+				...(handlers as InternalHandler<Context>[]),
+			];
 		} else {
 			currentTrieSegment.handlers[method.toUpperCase() as HTTPMethod] =
-				handlers as Handler[];
+				handlers as InternalHandler<Context>;
 		}
 		this.#routes.add(route);
 		return this;
@@ -339,7 +339,7 @@ export class TrieRouter implements IRouter {
 		if (!nextSegment && route.isEndOfRoute) {
 			if (route.handlers[method]) {
 				matched_route.matched = true;
-				matched_route.handlers = route.handlers[method] as Handler[];
+				matched_route.handlers = route.handlers[method] as InternalHandler<Context>[] | InternalHandler<Context>;
 				return matched_route;
 			} else {
 				return null; // Method not allowed for this route
@@ -401,7 +401,7 @@ export class TrieRouter implements IRouter {
 					matched_route.matched_route += `/${seg}`;
 					if (trieSegment.handlers[method]) {
 						matched_route.matched = true;
-						matched_route.handlers = trieSegment.handlers[method] as Handler[];
+						matched_route.handlers = trieSegment.handlers[method] as InternalHandler<Context>[] | InternalHandler<Context>;
 						this.collectMiddlewares(trieSegment, matched_route.middlewares!);
 						return matched_route;
 					}

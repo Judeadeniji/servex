@@ -19,7 +19,7 @@ const createNoMatch = (is405: boolean): MatchedRoute => ({
 export type SonicRouteNode = {
 	method: HTTPMethod;
 	path: string;
-	handlers: InternalHandler<Context>[];
+	handlers: InternalHandler<Context>[] | InternalHandler<Context>;
 	paramsKeys: string[];
 	middlewares: MiddlewareHandler<Context>[];
 	staticMatchResult?: MatchedRoute | null;

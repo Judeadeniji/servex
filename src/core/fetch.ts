@@ -278,7 +278,9 @@ export function baseFetch(
 
 	if (jit) {
 		if (!executor) {
-			const handlers = route.handlers;
+			const handlers = Array.isArray(route.handlers)
+				? route.handlers
+				: [route.handlers];
 			executor = compileHandlerChain(handlers as Handler<Context>[]);
 			if (route.store) route.store.executor = executor;
 			route.executor = executor;
@@ -298,7 +300,9 @@ export function baseFetch(
 		if (jit) {
 			res = executor!(context);
 		} else {
-			const handlers = route.handlers;
+			const handlers = Array.isArray(route.handlers)
+				? route.handlers
+				: [route.handlers];
 			res = executeHandlers(context, handlers as Handler<Context>[]);
 		}
 
@@ -469,13 +473,17 @@ async function baseFetchSlow(
 		if (jit) {
 			executor = route.executor || (route.store?.executor as typeof executor);
 			if (!executor) {
-				finalHandlers = route.handlers as Handler<Context>[];
+				finalHandlers = (
+					Array.isArray(route.handlers) ? route.handlers : [route.handlers]
+				) as Handler<Context>[];
 				executor = compileHandlerChain(finalHandlers);
 				if (route.store) route.store.executor = executor;
 				route.executor = executor;
 			}
 		} else {
-			finalHandlers = route.handlers as Handler<Context>[];
+			finalHandlers = (
+				Array.isArray(route.handlers) ? route.handlers : [route.handlers]
+			) as Handler<Context>[];
 		}
 
 		response = await executeTracePhaseWithArgs(

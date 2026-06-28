@@ -10,28 +10,28 @@ describe("RouterAdapter", () => {
 			path: "/heroes/:heroName",
 			handlers: {
 				/* ... */
-			} as unknown as Handler[],
+			},
 		},
 		{
 			method: "POST",
 			path: "/heroes",
 			handlers: {
 				/* ... */
-			} as unknown as Handler[],
+			},
 		},
 		{
 			method: "GET",
 			path: "/search",
 			handlers: {
 				/* ... */
-			} as unknown as Handler[],
+			},
 		},
 		{
 			method: "GET",
 			path: "/assets/*filepath",
 			handlers: {
 				/* ... */
-			} as unknown as Handler[],
+			},
 		},
 	];
 
@@ -52,7 +52,7 @@ describe("RouterAdapter", () => {
 		adapter.addRoute({
 			method: "GET",
 			path: "/test",
-			handlers: ["testData"] as unknown as Handler[],
+			handlers: ["testData"],
 		});
 
 		const match = adapter.match("GET", "/test");
