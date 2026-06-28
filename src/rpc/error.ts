@@ -14,8 +14,20 @@ export class RPCError extends HttpException<JSONValue> {
 		message: string,
 		public data?: JSONValue,
 	) {
-		const status = code === "UNAUTHORIZED" ? 401 : code === "NOT_FOUND" ? 404 : code === "VALIDATION_ERROR" ? 400 : 500;
-		super({ statusCode: status, error: code, message, data: data ?? undefined });
+		const status =
+			code === "UNAUTHORIZED"
+				? 401
+				: code === "NOT_FOUND"
+					? 404
+					: code === "VALIDATION_ERROR"
+						? 400
+						: 500;
+		super({
+			statusCode: status,
+			error: code,
+			message,
+			data: data ?? undefined,
+		});
 		this.name = "RPCError";
 	}
 

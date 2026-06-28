@@ -49,7 +49,11 @@ describe("RouterAdapter", () => {
 
 	it("should initialize with Sonic router and match routes correctly", () => {
 		const adapter = new RouterAdapter({ type: RouterType.SONIC });
-		adapter.addRoute({ method: "GET", path: "/test", handlers: ["testData"] as unknown as Handler[] });
+		adapter.addRoute({
+			method: "GET",
+			path: "/test",
+			handlers: ["testData"] as unknown as Handler[],
+		});
 
 		const match = adapter.match("GET", "/test");
 		expect(match).not.toBeNull();

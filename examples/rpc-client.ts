@@ -1,11 +1,10 @@
 import { createClient } from "../client";
 import { app, type App as TodoApp } from "./todo";
 
-
 async function main() {
 	// @ts-ignore: Type instantiation is excessively deep due to recursive schema mapping
 	const client = createClient<TodoApp>("http://localhost:3000", {
-		fetch: app.fetch
+		fetch: app.fetch,
 	});
 
 	console.log("Fetching all todos...");

@@ -23,7 +23,7 @@ todos.set(initialId, {
 
 // fallow-ignore-next-line unused-export Example app is imported by rpc-client.ts
 export const app = createServer()
-.use(logger())
+	.use(logger())
 	.use(cors())
 	.get("/health", (c) => c.json({ status: "ok" }))
 	.get("/todos", (c) => {
@@ -89,7 +89,7 @@ export const app = createServer()
 		todos.delete(id);
 		return new Response(null, { status: 204 });
 	});
-	
+
 export type App = typeof app;
 // Start the server using Bun.serve
 const port = 3000;

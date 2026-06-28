@@ -158,7 +158,14 @@ describe("compileSonicTrieMatcher Correctness", () => {
 			expect(gotMatch).toBe(c.expectMatch);
 
 			if (c.expectMatch !== null && c.expectParams) {
-				expect(result?.params || {}).toEqual(c.expectParams);
+				const p: Record<string, string> = {};
+				const keys = result?.route?.paramsKeys;
+				if (keys && result?.paramValues) {
+					for (let i = 0; i < keys.length; i++) {
+						p[keys[i]] = result.paramValues[i];
+					}
+				}
+				expect(result?.params || p).toEqual(c.expectParams);
 			}
 		});
 	}

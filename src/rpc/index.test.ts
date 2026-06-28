@@ -3,10 +3,10 @@ import type { StandardSchemaV1 } from "@standard-schema/spec";
 import { createServer } from "../app";
 import { HttpException } from "../http-exception";
 import {
-    createRPCClient,
-    createRPCFunction,
-    createRPCGroup,
-    rpc,
+	createRPCClient,
+	createRPCFunction,
+	createRPCGroup,
+	rpc,
 } from "./index";
 import type { RPCContext, RPCMiddleware } from "./types";
 
@@ -174,7 +174,12 @@ describe("RPC Module", () => {
 				throwMe: createRPCFunction()
 					.error(createDummySchema<{ code: string }>())
 					.handler(async () => {
-						throw new HttpException({ error: "TYPED_ERROR", statusCode: 500, message: "Custom typed error", data: { code: "MY_ERROR" } });
+						throw new HttpException({
+							error: "TYPED_ERROR",
+							statusCode: 500,
+							message: "Custom typed error",
+							data: { code: "MY_ERROR" },
+						});
 					}),
 			});
 
@@ -196,15 +201,19 @@ describe("RPC Module", () => {
 			const app = createServer();
 			const plugin = rpc({
 				returnMe: createRPCFunction().handler(async () => {
-					return new HttpException({ error: "TYPED_ERROR", statusCode: 500, message: "Returned typed error", data: { code: "RETURNED_ERROR" } });
+					return new HttpException({
+						error: "TYPED_ERROR",
+						statusCode: 500,
+						message: "Returned typed error",
+						data: { code: "RETURNED_ERROR" },
+					});
 				}),
 			});
 			app.use("/rpc", plugin);
 			const client = createRPCClient<typeof plugin>({
 				baseURL: "http://localhost",
 				prefix: "/rpc",
-				fetch: async (url, init) =>
-					app.fetch(new Request(url, init)),
+				fetch: async (url, init) => app.fetch(new Request(url, init)),
 			});
 
 			const res = await client.returnMe({});

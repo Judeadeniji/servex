@@ -15,7 +15,6 @@ describe("Helpers: Cookie", () => {
 		const req = new Request("http://localhost/", {
 			headers: { Cookie: "foo=bar; user=john%20doe" },
 		});
-		// @ts-expect-error - mock context
 		const c = createContext(req, {});
 
 		expect(getCookie(c, "foo")).toBe("bar");
@@ -25,7 +24,6 @@ describe("Helpers: Cookie", () => {
 
 	it("should set a cookie with options", () => {
 		const req = new Request("http://localhost/");
-		// @ts-expect-error - mock context
 		const c = createContext(req, {});
 
 		setCookie(c, "session", "123", {
@@ -47,7 +45,6 @@ describe("Helpers: Cookie", () => {
 
 	it("should support multiple cookies in Set-Cookie via append", () => {
 		const req = new Request("http://localhost/");
-		// @ts-expect-error - mock context
 		const c = createContext(req, {});
 
 		setCookie(c, "foo", "1");
@@ -63,7 +60,6 @@ describe("Helpers: Cookie", () => {
 
 	it("should delete a cookie by setting maxAge to 0", () => {
 		const req = new Request("http://localhost/");
-		// @ts-expect-error - mock context
 		const c = createContext(req, {});
 
 		deleteCookie(c, "foo", { path: "/" });
@@ -104,7 +100,7 @@ describe("Helpers: Cookie", () => {
 
 		it("should set and get signed cookies from Context", async () => {
 			const req1 = new Request("http://localhost/");
-			// @ts-expect-error - mock context
+
 			const c1 = createContext(req1, {});
 
 			await setSignedCookie(c1, "secure_session", "admin-data", SECRET);
@@ -117,7 +113,7 @@ describe("Helpers: Cookie", () => {
 			const req2 = new Request("http://localhost/", {
 				headers: { Cookie: `secure_session=${signedValue}` },
 			});
-			// @ts-expect-error - mock context
+
 			const c2 = createContext(req2, {});
 
 			const result = await getSignedCookie(c2, "secure_session", SECRET);

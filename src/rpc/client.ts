@@ -21,14 +21,18 @@ export function createRPCClient<T>(
 		: InferClientFromRegistry<Record<string, never>>;
 }
 
-function createProxy(options: RPCClientOptions, path: string[], precomputedPath?: string): unknown {
+function createProxy(
+	options: RPCClientOptions,
+	path: string[],
+	precomputedPath?: string,
+): unknown {
 	const cache = new Map<string, unknown>();
 
-	const endpointPath = precomputedPath ?? (
-		options.hash
+	const endpointPath =
+		precomputedPath ??
+		(options.hash
 			? `${options.baseURL}${options.prefix ?? "/rpc"}/${options.hash(path.join("."))}`
-			: `${options.baseURL}${options.prefix ?? "/rpc"}${path.length > 0 ? "/" + path.join("/") : ""}`
-	);
+			: `${options.baseURL}${options.prefix ?? "/rpc"}${path.length > 0 ? "/" + path.join("/") : ""}`);
 
 	return new Proxy(
 		// Target must be a function so the proxy is callable

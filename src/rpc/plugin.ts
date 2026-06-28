@@ -1,5 +1,5 @@
 import { HttpException } from "../http-exception";
-import type { JSONValue, } from "../types";
+import type { JSONValue } from "../types";
 import { composeMiddlewares } from "./middleware";
 import { type CompileOptions, compileRoutes } from "./router";
 import type { RPCContext, RPCPluginInstance } from "./types";
@@ -21,9 +21,7 @@ export function rpc<R extends Record<string, unknown>>(
 				const url = new URL(ctx.req.url);
 				const pathname = url.pathname;
 
-				const route = routeMap.values().find(
-					(r) => r.httpPath === pathname,
-				);
+				const route = routeMap.values().find((r) => r.httpPath === pathname);
 
 				if (!route) {
 					return ctx.json({ ok: false, error: { code: "NOT_FOUND" } }, 404);
@@ -33,12 +31,7 @@ export function rpc<R extends Record<string, unknown>>(
 				try {
 					body = await ctx.req.json();
 				} catch {
-					return ctx.error(
-						400,
-						"Invalid JSON body",
-						null,
-						"VALIDATION_ERROR",
-					);
+					return ctx.error(400, "Invalid JSON body", null, "VALIDATION_ERROR");
 				}
 
 				// Build RPC context (extends ServeX context)
@@ -75,7 +68,11 @@ export function rpc<R extends Record<string, unknown>>(
 					if (isJSON(validatedOutput)) {
 						return ctx.json({ ok: true, data: validatedOutput });
 					}
-					throw new HttpException({ statusCode: 500, error: "INTERNAL_ERROR", message: "Invalid JSON output" });
+					throw new HttpException({
+						statusCode: 500,
+						error: "INTERNAL_ERROR",
+						message: "Invalid JSON output",
+					});
 				} catch (err) {
 					if (err instanceof HttpException) {
 						return err;

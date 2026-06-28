@@ -72,7 +72,9 @@ export interface RPCFunctionBuilder<
 	): RPCFunctionDef<
 		unknown extends TInput ? NewInput : TInput,
 		unknown extends TOutput ? Exclude<Awaited<NewOutput>, Error> : TOutput,
-		Extract<Awaited<NewOutput>, HttpException<any>> extends HttpException<infer E>
+		Extract<Awaited<NewOutput>, HttpException<any>> extends HttpException<
+			infer E
+		>
 			? E
 			: _TError
 	>;
@@ -96,7 +98,9 @@ export type InferClientFromRegistry<T> = {
 export type RPCClientFn<TInput, TOutput, TError> = (
 	input: TInput,
 	init?: RequestInit,
-) => Promise<Result<TOutput, HttpException<unknown extends TError ? unknown : TError>>>;
+) => Promise<
+	Result<TOutput, HttpException<unknown extends TError ? unknown : TError>>
+>;
 
 export interface RPCPluginInstance<R extends Record<string, unknown>>
 	extends ServeXPlugin<InferClientFromRegistry<R>> {
