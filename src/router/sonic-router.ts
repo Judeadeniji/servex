@@ -22,7 +22,7 @@ export type SonicRouteNode = {
 	handlers: import("../types").InternalHandler<Context>[];
 	paramsKeys: string[];
 	middlewares: MiddlewareHandler<Context>[];
-	staticMatchResult?: MatchedRoute<Route[], boolean> | null;
+	staticMatchResult?: MatchedRoute | null;
 	isStatic?: boolean;
 	isWildcard?: boolean;
 	staticPrefix?: string;
