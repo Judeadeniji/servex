@@ -31,7 +31,7 @@ export const app = createServer()
 		return c.json({ data: allTodos });
 	})
 	.get("/todos/:id", (c) => {
-		const { id } = c.params();
+		const id = c.params("id");
 		const todo = todos.get(id);
 
 		if (!todo) {
@@ -57,7 +57,7 @@ export const app = createServer()
 		return c.json({ data: newTodo }, 201);
 	})
 	.put("/todos/:id", async (c) => {
-		const { id } = c.params();
+		const id = c.params("id");
 		const todo = todos.get(id);
 
 		if (!todo) {
@@ -80,7 +80,7 @@ export const app = createServer()
 	})
 	// fallow-ignore-next-line unused-param Fallow thinks this is unused but c.params() is called
 	.delete("/todos/:id", (c) => {
-		const { id } = c.params();
+		const id = c.params("id");
 
 		if (!todos.has(id)) {
 			throw new NotFoundError("Todo not found");
