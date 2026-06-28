@@ -1,4 +1,6 @@
-import type { ServeOptions, Server } from "bun";
+import { BunAdapter } from "./adapter/bun";
+import type { ListenCallback, Serve, Server } from "./adapter/server";
+import type { ServeXAdapter } from "./adapter/types";
 import { compileHandlerChain } from "./compiler";
 import type { Context } from "./context";
 import type { ServeXExecutionContext } from "./core/fetch";
@@ -13,7 +15,6 @@ import type {
     HookHandler,
     Hooks,
     InlineHandler,
-    JSONValue,
     Method,
     MiddlewareHandler,
     ServerOptions,
@@ -22,7 +23,7 @@ import type {
     ServeXRouter,
     TraceAPI,
 } from "./types";
-import { SUPPORTED_METHODS } from "./utils";
+import { isHTMLBundle, SUPPORTED_METHODS } from "./utils";
 
 export class ServeXRequest extends Request {}
 
@@ -36,7 +37,10 @@ export class ServeXRouterImpl<
 
 	public declare static?: ServeXRouter<E, S, B>["static"];
 
-	constructor(protected routerAdapter: RouterAdapter) {}
+	constructor(
+		protected routerAdapter: RouterAdapter,
+		protected envAdapter: ServeXAdapter = BunAdapter,
+	) {}
 
 	get routes(): ServerRoute[] {
 		return this.routerAdapter.routes;
@@ -131,9 +135,16 @@ export class ServeXRouterImpl<
 
 				if (inlineVal instanceof Response) {
 					routeHandler = () => inlineVal.clone();
+				} else if (isHTMLBundle(inlineVal)) {
+					routeHandler = () =>
+						this.envAdapter.staticFile
+							? this.envAdapter.staticFile((inlineVal).index)
+							: new Response("Static file serving not supported by adapter", {
+									status: 500,
+								});
 				} else if (typeof inlineVal === "object" && inlineVal !== null) {
 					routeHandler = (c: Context) =>
-						c.json(inlineVal as JSONValue);
+						c.json(inlineVal);
 				} else {
 					routeHandler = (c) => c.text(String(inlineVal));
 				}
@@ -155,6 +166,12 @@ export class ServeXRouterImpl<
 					let res: Response;
 					if (inlineVal instanceof Response) {
 						res = inlineVal;
+					} else if (isHTMLBundle(inlineVal)) {
+						res = this.envAdapter.staticFile
+							? this.envAdapter.staticFile((inlineVal).index)
+							: new Response("Static file serving not supported by adapter", {
+									status: 500,
+								});
 					} else if (typeof inlineVal === "object" && inlineVal !== null) {
 						res = new Response(JSON.stringify(inlineVal), {
 							headers: { "Content-Type": "application/json; charset=UTF-8" },
@@ -259,7 +276,10 @@ export class ServeXRouterImpl<
 		const childRouter = new RouterAdapter({
 			type: this.routerAdapter.type,
 		});
-		const childServeXRouter = new ServeXRouterImpl<E, {}, string>(childRouter);
+		const childServeXRouter = new ServeXRouterImpl<E, {}, string>(
+			childRouter,
+			this.envAdapter,
+		);
 		(fnOrApp as (r: ServeXRouter<E, {}, string>) => unknown)(
 			childServeXRouter as unknown as ServeXRouter<E, {}, string>,
 		);
@@ -360,8 +380,9 @@ export class ServeXApp<
 		public aot: boolean = false,
 		public jit: boolean = true,
 		nativeStaticResponse: boolean = false,
+		envAdapter: ServeXAdapter = BunAdapter,
 	) {
-		super(router);
+		super(router, envAdapter);
 		this._nativeStaticResponse = nativeStaticResponse;
 		// normalisePath at runtime; cast to B since the normalised form is the
 		// contract the user agreed to when writing the literal.
@@ -477,9 +498,11 @@ export class ServeXApp<
 		if (pathIdx === -1) {
 			pathname = "/";
 		} else {
-			pathname = url.substring(
-				pathIdx,
-				queryIndex === -1 ? url.length : queryIndex,
+			pathname = decodeURI(
+				url.substring(
+					pathIdx,
+					queryIndex === -1 ? url.length : queryIndex,
+				),
 			);
 		}
 
@@ -527,34 +550,14 @@ export class ServeXApp<
 	};
 
 	listen(
-		portOrOptions: number | string | Partial<ServeOptions>,
-		callback?: (server: Server) => void,
+		options: string | number | Partial<Serve>,
+		callback?: ListenCallback,
 	): Server {
 		if (this.aot && this.jit) {
 			this.compile();
 		}
 
-		let options: Partial<ServeOptions> = {};
-		if (
-			typeof portOrOptions === "number" ||
-			typeof portOrOptions === "string"
-		) {
-			options = { port: portOrOptions };
-		} else {
-			options = portOrOptions;
-		}
-
-		const server = Bun.serve({
-			...options,
-			// @ts-ignore: Bun's fetch expects `this: Server` but our stored arrow function is compatible at runtime
-			fetch: this.fetch,
-		});
-
-		if (callback) {
-			callback(server);
-		}
-
-		return server;
+		return this.envAdapter.listen(this)(options, callback);
 	}
 }
 
@@ -569,6 +572,7 @@ export function createServer<E extends Env = Env, B extends string = "/">(
 		aot = false,
 		jit = true,
 		nativeStaticResponse = false,
+		adapter = BunAdapter
 	} = options;
 	const routerAdapter = new RouterAdapter({
 		type: router,
@@ -582,6 +586,7 @@ export function createServer<E extends Env = Env, B extends string = "/">(
 		aot,
 		jit,
 		nativeStaticResponse,
+		adapter,
 	) as ServeXRouter<E, {}, NormalisePath<B>> &
 		ServeXApp<E, {}, NormalisePath<B>>;
 }

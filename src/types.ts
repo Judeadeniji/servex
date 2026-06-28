@@ -31,12 +31,19 @@ export type Handler<C extends Context = Context, R = Response> = (
 /** Alias kept for clarity at middleware registration sites. */
 export type MiddlewareHandler<C extends Context = Context> = Handler<C>;
 
+export interface HTMLBundlelike {
+	index: string;
+	// biome-ignore lint/suspicious/noExplicitAny: any is allowed here
+		[key: string]: any;
+}
+
 export type InlineHandler =
 	| string
 	| number
 	| boolean
 	| Record<string, unknown>
-	| Response;
+	| Response
+	| HTMLBundlelike;
 
 export type InternalHandler<C extends Context = Context, R = Response> =
 	| Handler<C, R>
@@ -148,6 +155,7 @@ export type JSONValue =
 	| number
 	| boolean
 	| null
+	| unknown
 	| JSONValue[]
 	| { [key: string]: JSONValue };
 
@@ -223,6 +231,11 @@ export interface ServerOptions<B extends string = "/"> {
 	 * Default: false
 	 */
 	nativeStaticResponse?: boolean;
+	/**
+	 * Adapter to use for environment-specific features (e.g., listening on a port,
+	 * serving static files). Defaults to BunAdapter.
+	 */
+	adapter?: import("./adapter/types").ServeXAdapter;
 }
 
 // ── Plugin ────────────────────────────────────────────────────────────────────

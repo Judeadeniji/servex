@@ -1,3 +1,4 @@
+export * from "./adapter";
 export * from "./app";
 export type { Context } from "./context";
 export { createContext } from "./context";
