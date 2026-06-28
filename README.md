@@ -78,9 +78,11 @@ For detailed guides, API references, and advanced usage, please check the [Serve
 ServeX is designed with a relentless focus on performance. We continuously benchmark against leading frameworks like Elysia, Hono, and Fastify to ensure minimal overhead.
 
 To run the local benchmarks, clone the repository and run:
+
 ```bash
 bun run bench
 ```
+
 *(Check out the `benchmarks/` directory for more details).*
 
 ## 🤝 Contributing

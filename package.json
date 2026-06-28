@@ -20,7 +20,8 @@
 		"elysia": "^1.4.29",
 		"hono": "^4.12.26",
 		"mitata": "^1.0.34",
-		"type-testing": "^0.2.0"
+		"type-testing": "^0.2.0",
+		"zod": "^4.4.3"
 	},
 	"exports": {
 		".": "./index.ts",
