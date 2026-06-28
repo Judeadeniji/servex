@@ -1,4 +1,7 @@
 import type { StorageAdapter } from "./types";
+import type * as fsPromisesType from "node:fs/promises";
+import type * as nodePathType from "node:path";
+import type * as nodeCryptoType from "node:crypto";
 
 /**
  * A persistent file-system storage adapter for Node/Bun/Deno.
@@ -14,9 +17,9 @@ export class FileSystemStorage implements StorageAdapter {
 	private initialized = false;
 
 	// Dynamically loaded node modules
-	private fs!: typeof import("node:fs/promises");
-	private path!: typeof import("node:path");
-	private crypto!: typeof import("node:crypto");
+	private fs!: typeof fsPromisesType;
+	private path!: typeof nodePathType;
+	private crypto!: typeof nodeCryptoType;
 
 	constructor(baseDir: string) {
 		this.baseDir = baseDir; // Resolved dynamically during init

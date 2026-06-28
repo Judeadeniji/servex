@@ -3,7 +3,7 @@ import { compileHandlerChain } from "../src/compiler/index";
 import type { Context } from "../src/context";
 import { createServer } from "../src/index";
 import { RouterType } from "../src/router/adapter";
-import type { Handler } from "../src/types";
+import type { Handler, MiddlewareHandler } from "../src/types";
 
 // Helper to generate N handlers
 function generateChain(length: number): Handler[] {
@@ -37,7 +37,7 @@ group("JIT Boot Time Cost", () => {
 });
 
 // Set up Non-JIT App (using new config flag)
-const middlewares: import("../src/types").MiddlewareHandler<Context>[] = [
+const middlewares: MiddlewareHandler<Context>[] = [
 	async (ctx, next) => {
 		ctx.executionCtx = 1;
 		await next();

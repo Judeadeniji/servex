@@ -7,7 +7,7 @@ import {
 import { HttpException } from "./http-exception";
 import type { StatusCode } from "./http-status";
 import type { ExtractUrl } from "./router/types";
-import type { Env, HeaderRecord, JSONValue } from "./types";
+import type { Env, HeaderRecord, JSONValue, TypedResponse } from "./types";
 
 /**
  * An extended Fetch Request object used by ServeX.
@@ -287,7 +287,7 @@ export interface Context<
 		object: T,
 		status?: U,
 		_headers?: HeaderRecord,
-	): Response & import("./types").TypedResponse<T, U, "json">;
+	): Response & TypedResponse<T, U, "json">;
 
 	/**
 	 * Sends a plain text response.
@@ -305,7 +305,7 @@ export interface Context<
 		text: T,
 		status?: U,
 		_headers?: HeaderRecord,
-	): Response & import("./types").TypedResponse<T, U, "text">;
+	): Response & TypedResponse<T, U, "text">;
 
 	/**
 	 * Sends an HTML response.

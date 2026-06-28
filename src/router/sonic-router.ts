@@ -1,5 +1,5 @@
 import * as $$path from "node:path";
-import type { Context, MiddlewareHandler } from "../types";
+import type { Context, InternalHandler, MiddlewareHandler } from "../types";
 import type { HTTPMethod, IRouter, MatchedRoute, Route } from "./base";
 import { compileSonicTrieMatcher } from "./sonic-trie-jit";
 
@@ -19,7 +19,7 @@ const createNoMatch = (is405: boolean): MatchedRoute => ({
 export type SonicRouteNode = {
 	method: HTTPMethod;
 	path: string;
-	handlers: import("../types").InternalHandler<Context>[];
+	handlers: InternalHandler<Context>[];
 	paramsKeys: string[];
 	middlewares: MiddlewareHandler<Context>[];
 	staticMatchResult?: MatchedRoute | null;

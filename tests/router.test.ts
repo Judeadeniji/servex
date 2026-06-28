@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { createServer } from "../src/index";
+import type { JSONValue } from "../src/types";
 
 describe("Router", () => {
 	const app = createServer();
@@ -7,7 +8,7 @@ describe("Router", () => {
 	app.get("/users/:id", (c) => c.json({ id: c.params("id") }));
 	app.post("/users", async (c) => {
 		const body = await c.req.json();
-		return c.json(body as import("../src/types").JSONValue, 201);
+		return c.json(body as JSONValue, 201);
 	});
 	app.get("/search", (c) => c.text(`q=${c.query("q")}`));
 

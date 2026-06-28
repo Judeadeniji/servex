@@ -11,157 +11,158 @@
 import { bench, run } from "mitata";
 import type { Route } from "../../src/router/base";
 import { SonicRouter } from "../../src/router/sonic-router";
+import type { Handler } from "../../src/types";
 
 const routes: Route[] = [
 	{
 		method: "GET",
 		path: "/",
-		handlers: [1 as unknown as import("../../src/types").Handler],
+		handlers: [1 as unknown as Handler],
 	},
 	{
 		method: "GET",
 		path: "/about",
-		handlers: [2 as unknown as import("../../src/types").Handler],
+		handlers: [2 as unknown as Handler],
 	},
 	{
 		method: "GET",
 		path: "/api/health",
-		handlers: [3 as unknown as import("../../src/types").Handler],
+		handlers: [3 as unknown as Handler],
 	},
 	{
 		method: "GET",
 		path: "/api/config",
-		handlers: [4 as unknown as import("../../src/types").Handler],
+		handlers: [4 as unknown as Handler],
 	},
 	{
 		method: "GET",
 		path: "/login",
-		handlers: [5 as unknown as import("../../src/types").Handler],
+		handlers: [5 as unknown as Handler],
 	},
 	{
 		method: "GET",
 		path: "/register",
-		handlers: [6 as unknown as import("../../src/types").Handler],
+		handlers: [6 as unknown as Handler],
 	},
 	{
 		method: "GET",
 		path: "/dashboard",
-		handlers: [7 as unknown as import("../../src/types").Handler],
+		handlers: [7 as unknown as Handler],
 	},
 	{
 		method: "GET",
 		path: "/pricing",
-		handlers: [8 as unknown as import("../../src/types").Handler],
+		handlers: [8 as unknown as Handler],
 	},
 	{
 		method: "GET",
 		path: "/contact",
-		handlers: [9 as unknown as import("../../src/types").Handler],
+		handlers: [9 as unknown as Handler],
 	},
 	{
 		method: "GET",
 		path: "/terms",
-		handlers: [10 as unknown as import("../../src/types").Handler],
+		handlers: [10 as unknown as Handler],
 	},
 	{
 		method: "GET",
 		path: "/api/users/:id",
-		handlers: [11 as unknown as import("../../src/types").Handler],
+		handlers: [11 as unknown as Handler],
 	},
 	{
 		method: "GET",
 		path: "/api/posts/:slug",
-		handlers: [12 as unknown as import("../../src/types").Handler],
+		handlers: [12 as unknown as Handler],
 	},
 	{
 		method: "GET",
 		path: "/api/products/:sku",
-		handlers: [13 as unknown as import("../../src/types").Handler],
+		handlers: [13 as unknown as Handler],
 	},
 	{
 		method: "GET",
 		path: "/u/:username",
-		handlers: [14 as unknown as import("../../src/types").Handler],
+		handlers: [14 as unknown as Handler],
 	},
 	{
 		method: "GET",
 		path: "/c/:category",
-		handlers: [15 as unknown as import("../../src/types").Handler],
+		handlers: [15 as unknown as Handler],
 	},
 	{
 		method: "GET",
 		path: "/download/:fileId",
-		handlers: [16 as unknown as import("../../src/types").Handler],
+		handlers: [16 as unknown as Handler],
 	},
 	{
 		method: "GET",
 		path: "/docs/:page",
-		handlers: [17 as unknown as import("../../src/types").Handler],
+		handlers: [17 as unknown as Handler],
 	},
 	{
 		method: "GET",
 		path: "/events/:eventId",
-		handlers: [18 as unknown as import("../../src/types").Handler],
+		handlers: [18 as unknown as Handler],
 	},
 	{
 		method: "GET",
 		path: "/orgs/:orgId",
-		handlers: [19 as unknown as import("../../src/types").Handler],
+		handlers: [19 as unknown as Handler],
 	},
 	{
 		method: "GET",
 		path: "/settings/:section",
-		handlers: [20 as unknown as import("../../src/types").Handler],
+		handlers: [20 as unknown as Handler],
 	},
 	{
 		method: "GET",
 		path: "/api/posts/:id/comments/:commentId",
-		handlers: [21 as unknown as import("../../src/types").Handler],
+		handlers: [21 as unknown as Handler],
 	},
 	{
 		method: "GET",
 		path: "/api/orgs/:orgId/teams/:teamId/members/:memberId",
-		handlers: [22 as unknown as import("../../src/types").Handler],
+		handlers: [22 as unknown as Handler],
 	},
 	{
 		method: "GET",
 		path: "/repo/:owner/:repo/issues/:issueId",
-		handlers: [23 as unknown as import("../../src/types").Handler],
+		handlers: [23 as unknown as Handler],
 	},
 	{
 		method: "GET",
 		path: "/store/:country/:state/:city",
-		handlers: [24 as unknown as import("../../src/types").Handler],
+		handlers: [24 as unknown as Handler],
 	},
 	{
 		method: "GET",
 		path: "/flights/:origin/:dest/:date",
-		handlers: [25 as unknown as import("../../src/types").Handler],
+		handlers: [25 as unknown as Handler],
 	},
 	{
 		method: "GET",
 		path: "/public/*path",
-		handlers: [26 as unknown as import("../../src/types").Handler],
+		handlers: [26 as unknown as Handler],
 	},
 	{
 		method: "GET",
 		path: "/assets/*path",
-		handlers: [27 as unknown as import("../../src/types").Handler],
+		handlers: [27 as unknown as Handler],
 	},
 	{
 		method: "GET",
 		path: "/images/*path",
-		handlers: [28 as unknown as import("../../src/types").Handler],
+		handlers: [28 as unknown as Handler],
 	},
 	{
 		method: "GET",
 		path: "/api/legacy/*path",
-		handlers: [29 as unknown as import("../../src/types").Handler],
+		handlers: [29 as unknown as Handler],
 	},
 	{
 		method: "GET",
 		path: "/proxy/*path",
-		handlers: [30 as unknown as import("../../src/types").Handler],
+		handlers: [30 as unknown as Handler],
 	},
 ];
 

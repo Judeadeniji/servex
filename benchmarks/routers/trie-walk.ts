@@ -1,8 +1,9 @@
 import { bench, run } from "mitata";
 import {
-	compareRouteSpecificity,
-	type SonicRouteNode,
+    compareRouteSpecificity,
+    type SonicRouteNode,
 } from "../../src/router/sonic-router";
+import type { InternalHandler } from "../../src/types";
 
 class TrieNode {
 	staticChildren: Record<string, TrieNode> = {};
@@ -192,7 +193,7 @@ const dynamicRoutes: SonicRouteNode[] = [
 		path: "/api/users/:id",
 		handlers: [
 			"param",
-		] as unknown as import("../../src/types").InternalHandler[],
+		] as unknown as InternalHandler[],
 		paramsKeys: ["id"],
 		middlewares: [],
 	},
@@ -201,7 +202,7 @@ const dynamicRoutes: SonicRouteNode[] = [
 		path: "/api/posts/:id",
 		handlers: [
 			"param",
-		] as unknown as import("../../src/types").InternalHandler[],
+		] as unknown as InternalHandler[],
 		paramsKeys: ["id"],
 		middlewares: [],
 	},
@@ -210,7 +211,7 @@ const dynamicRoutes: SonicRouteNode[] = [
 		path: "/api/products/:sku",
 		handlers: [
 			"param",
-		] as unknown as import("../../src/types").InternalHandler[],
+		] as unknown as InternalHandler[],
 		paramsKeys: ["sku"],
 		middlewares: [],
 	},
@@ -219,7 +220,7 @@ const dynamicRoutes: SonicRouteNode[] = [
 		path: "/u/:username",
 		handlers: [
 			"param",
-		] as unknown as import("../../src/types").InternalHandler[],
+		] as unknown as InternalHandler[],
 		paramsKeys: ["username"],
 		middlewares: [],
 	},
@@ -228,7 +229,7 @@ const dynamicRoutes: SonicRouteNode[] = [
 		path: "/events/:eventId",
 		handlers: [
 			"param",
-		] as unknown as import("../../src/types").InternalHandler[],
+		] as unknown as InternalHandler[],
 		paramsKeys: ["eventId"],
 		middlewares: [],
 	},
@@ -237,7 +238,7 @@ const dynamicRoutes: SonicRouteNode[] = [
 		path: "/api/posts/:id/comments/:commentId",
 		handlers: [
 			"param-n",
-		] as unknown as import("../../src/types").InternalHandler[],
+		] as unknown as InternalHandler[],
 		paramsKeys: ["id", "commentId"],
 		middlewares: [],
 	},
@@ -246,7 +247,7 @@ const dynamicRoutes: SonicRouteNode[] = [
 		path: "/repo/:owner/:repo",
 		handlers: [
 			"param-n",
-		] as unknown as import("../../src/types").InternalHandler[],
+		] as unknown as InternalHandler[],
 		paramsKeys: ["owner", "repo"],
 		middlewares: [],
 	},
@@ -255,7 +256,7 @@ const dynamicRoutes: SonicRouteNode[] = [
 		path: "/repo/:owner/:repo/issues/:issueId",
 		handlers: [
 			"param-n",
-		] as unknown as import("../../src/types").InternalHandler[],
+		] as unknown as InternalHandler[],
 		paramsKeys: ["owner", "repo", "issueId"],
 		middlewares: [],
 	},
@@ -264,7 +265,7 @@ const dynamicRoutes: SonicRouteNode[] = [
 		path: "/store/:country/:state",
 		handlers: [
 			"param-n",
-		] as unknown as import("../../src/types").InternalHandler[],
+		] as unknown as InternalHandler[],
 		paramsKeys: ["country", "state"],
 		middlewares: [],
 	},
@@ -273,7 +274,7 @@ const dynamicRoutes: SonicRouteNode[] = [
 		path: "/flights/:origin/:dest/:date",
 		handlers: [
 			"param-n",
-		] as unknown as import("../../src/types").InternalHandler[],
+		] as unknown as InternalHandler[],
 		paramsKeys: ["origin", "dest", "date"],
 		middlewares: [],
 	},
@@ -282,7 +283,7 @@ const dynamicRoutes: SonicRouteNode[] = [
 		path: "/public/*path",
 		handlers: [
 			"wild",
-		] as unknown as import("../../src/types").InternalHandler[],
+		] as unknown as InternalHandler[],
 		paramsKeys: ["path"],
 		middlewares: [],
 	},
@@ -291,7 +292,7 @@ const dynamicRoutes: SonicRouteNode[] = [
 		path: "/assets/*path",
 		handlers: [
 			"wild",
-		] as unknown as import("../../src/types").InternalHandler[],
+		] as unknown as InternalHandler[],
 		paramsKeys: ["path"],
 		middlewares: [],
 	},
@@ -300,7 +301,7 @@ const dynamicRoutes: SonicRouteNode[] = [
 		path: "/api/legacy/*path",
 		handlers: [
 			"wild",
-		] as unknown as import("../../src/types").InternalHandler[],
+		] as unknown as InternalHandler[],
 		paramsKeys: ["path"],
 		middlewares: [],
 	},

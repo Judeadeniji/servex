@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { Elysia } from "elysia";
 import { Hono } from "hono";
+import type { ExecutionContext } from "hono";
 import { createServer } from "../src/index";
 
 describe("Mounting WinterTC apps (Hono & Elysia)", () => {
@@ -25,7 +26,7 @@ describe("Mounting WinterTC apps (Hono & Elysia)", () => {
 
 		// Mount Hono
 		app.mount("/hono", (req, env, ctx) =>
-			hono.fetch(req, env, ctx as import("hono").ExecutionContext),
+			hono.fetch(req, env, ctx as ExecutionContext),
 		);
 
 		// Root request handled by ServeX

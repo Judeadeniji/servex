@@ -1,6 +1,8 @@
 import type { Context } from "../../context";
 import type { StorageAdapter } from "../../storage/types";
 import type { NextFunction } from "../../types";
+import type * as fsPromisesType from "node:fs/promises";
+import type * as nodePathType from "node:path";
 export interface ServeStaticOptions {
 	/**
 	 * Root directory to serve files from. Defaults to "./public" if no storage adapter is provided.
@@ -47,8 +49,8 @@ export const serveStatic = (options: ServeStaticOptions = {}) => {
 	const rootDir = options.root ?? "./public";
 	const indexFile = options.index ?? "index.html";
 
-	let fs: typeof import("node:fs/promises");
-	let path: typeof import("node:path");
+	let fs: typeof fsPromisesType;
+	let path: typeof nodePathType;
 	let initialized = false;
 
 	return async (c: Context, next: NextFunction) => {

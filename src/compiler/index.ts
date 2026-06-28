@@ -1,5 +1,5 @@
 import type { Context } from "../context";
-import type { Handler } from "../types";
+import type { Env, Handler, InternalHandler } from "../types";
 
 /**
  * JIT compiles an array of handlers into a single flat async function.
@@ -12,7 +12,7 @@ import type { Handler } from "../types";
  *    short-circuiting and duplicate call prevention without array allocations.
  */
 export function buildCompilerSource<C extends Context>(
-	handlers: import("../types").InternalHandler<C>[],
+	handlers: InternalHandler<C>[],
 ): string {
 	if (handlers.length === 0) {
 		return `return () => Promise.resolve(undefined);\n`;
@@ -70,7 +70,7 @@ export function buildCompilerSource<C extends Context>(
 }
 
 export function compileHandlerChain<
-	E extends import("../types").Env = import("../types").Env,
+	E extends Env = Env,
 >(
 	handlers: Handler<Context<E>>[],
 ): (

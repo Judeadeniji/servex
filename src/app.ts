@@ -1,16 +1,26 @@
+import type { ServeOptions, Server } from "bun";
 import { compileHandlerChain } from "./compiler";
 import type { Context } from "./context";
+import type { ServeXExecutionContext } from "./core/fetch";
 import { baseFetch } from "./core/fetch";
 import { RouterAdapter, RouterType } from "./router/adapter";
 import type { NormalisePath } from "./router/types";
 import type {
-	Env,
-	Handler,
-	Method,
-	MiddlewareHandler,
-	ServerOptions,
-	ServerRoute,
-	ServeXRouter,
+    AfterHandleHook,
+    Env,
+    ErrorHook,
+    Handler,
+    HookHandler,
+    Hooks,
+    InlineHandler,
+    JSONValue,
+    Method,
+    MiddlewareHandler,
+    ServerOptions,
+    ServerRoute,
+    ServeXPlugin,
+    ServeXRouter,
+    TraceAPI,
 } from "./types";
 import { SUPPORTED_METHODS } from "./utils";
 
@@ -32,7 +42,7 @@ export class ServeXRouterImpl<
 		return this.routerAdapter.routes;
 	}
 
-	onResponse(_handler: import("./types").HookHandler<Context<E>>): this {
+	onResponse(_handler: HookHandler<Context<E>>): this {
 		throw new Error(
 			"onResponse hook can only be registered on the main ServeXApp instance, not a sub-router.",
 		);
@@ -40,7 +50,7 @@ export class ServeXRouterImpl<
 
 	trace(
 		_handler: (
-			api: import("./types").TraceAPI<Context<E>>,
+			api: TraceAPI<Context<E>>,
 		) => void | Promise<void>,
 	): this {
 		throw new Error(
@@ -53,10 +63,10 @@ export class ServeXRouterImpl<
 		pathOrPlugin:
 			| string
 			| MiddlewareHandler<Context>
-			| import("./types").ServeXPlugin,
+			| ServeXPlugin,
 		...middlewaresOrPlugins: (
 			| MiddlewareHandler<Context>
-			| import("./types").ServeXPlugin
+			| ServeXPlugin
 		)[]
 	) {
 		if (
@@ -75,7 +85,7 @@ export class ServeXRouterImpl<
 				"setup" in middlewaresOrPlugins[0]
 			) {
 				const plugin =
-					middlewaresOrPlugins[0] as import("./types").ServeXPlugin;
+					middlewaresOrPlugins[0] as ServeXPlugin;
 				this.route(pathOrPlugin, (childApp) =>
 					plugin.setup(childApp, pathOrPlugin),
 				);
@@ -99,8 +109,8 @@ export class ServeXRouterImpl<
 		method: Method,
 		path: string,
 		handlers: (
-			| import("./types").Handler<import("./context").Context>
-			| import("./types").InlineHandler
+			| Handler<Context>
+			| InlineHandler
 		)[],
 	) {
 		const finalHandlers = [...handlers];
@@ -115,15 +125,15 @@ export class ServeXRouterImpl<
 				)
 			) {
 				const inlineVal = handler;
-				let routeHandler: import("./types").Handler<
-					import("./context").Context
+				let routeHandler: Handler<
+					Context
 				>;
 
 				if (inlineVal instanceof Response) {
 					routeHandler = () => inlineVal.clone();
 				} else if (typeof inlineVal === "object" && inlineVal !== null) {
-					routeHandler = (c: import("./context").Context) =>
-						c.json(inlineVal as import("./types").JSONValue);
+					routeHandler = (c: Context) =>
+						c.json(inlineVal as JSONValue);
 				} else {
 					routeHandler = (c) => c.text(String(inlineVal));
 				}
@@ -164,69 +174,69 @@ export class ServeXRouterImpl<
 		this.routerAdapter.addRoute({
 			method,
 			path,
-			handlers: finalHandlers as import("./types").Handler<Context>[],
+			handlers: finalHandlers as Handler<Context>[],
 		});
 		return this;
 	}
 
 	// @ts-ignore: Implementation signature
-	get(path: string, ...handlers: import("./types").Handler<Context<E>>[]) {
+	get(path: string, ...handlers: Handler<Context<E>>[]) {
 		return this.add(
 			"GET",
 			path,
-			handlers as import("./types").Handler<Context>[],
+			handlers as Handler<Context>[],
 		);
 	}
 	// @ts-ignore: Implementation signature
-	post(path: string, ...handlers: import("./types").Handler<Context<E>>[]) {
+	post(path: string, ...handlers: Handler<Context<E>>[]) {
 		return this.add(
 			"POST",
 			path,
-			handlers as import("./types").Handler<Context>[],
+			handlers as Handler<Context>[],
 		);
 	}
 	// @ts-ignore: Implementation signature
-	put(path: string, ...handlers: import("./types").Handler<Context<E>>[]) {
+	put(path: string, ...handlers: Handler<Context<E>>[]) {
 		return this.add(
 			"PUT",
 			path,
-			handlers as import("./types").Handler<Context>[],
+			handlers as Handler<Context>[],
 		);
 	}
 	// @ts-ignore: Implementation signature
-	delete(path: string, ...handlers: import("./types").Handler<Context<E>>[]) {
+	delete(path: string, ...handlers: Handler<Context<E>>[]) {
 		return this.add(
 			"DELETE",
 			path,
-			handlers as import("./types").Handler<Context>[],
+			handlers as Handler<Context>[],
 		);
 	}
 	// @ts-ignore: Implementation signature
-	patch(path: string, ...handlers: import("./types").Handler<Context<E>>[]) {
+	patch(path: string, ...handlers: Handler<Context<E>>[]) {
 		return this.add(
 			"PATCH",
 			path,
-			handlers as import("./types").Handler<Context>[],
+			handlers as Handler<Context>[],
 		);
 	}
 	// @ts-ignore: Implementation signature
-	options(path: string, ...handlers: import("./types").Handler<Context<E>>[]) {
+	options(path: string, ...handlers: Handler<Context<E>>[]) {
 		return this.add(
 			"OPTIONS",
 			path,
-			handlers as import("./types").Handler<Context>[],
+			handlers as Handler<Context>[],
 		);
 	}
 	// @ts-ignore: Implementation signature
-	head(path: string, ...handlers: import("./types").Handler<Context<E>>[]) {
+	head(path: string, ...handlers: Handler<Context<E>>[]) {
 		return this.add(
 			"HEAD",
 			path,
-			handlers as import("./types").Handler<Context>[],
+			handlers as Handler<Context>[],
 		);
 	}
 	// @ts-ignore: Implementation signature
-	all(path: string, ...handlers: import("./types").Handler<Context<E>>[]) {
+	all(path: string, ...handlers: Handler<Context<E>>[]) {
 		SUPPORTED_METHODS.forEach((m) => {
 			this.add(m.toUpperCase() as Method, path, handlers as Handler<Context>[]);
 		});
@@ -269,7 +279,7 @@ export class ServeXRouterImpl<
 		const normalizedPath =
 			path.endsWith("/") && path !== "/" ? path.slice(0, -1) : path;
 
-		const handler = (c: import("./context").Context) => {
+		const handler = (c: Context) => {
 			const req = c.req;
 			const url = new URL(req.url);
 
@@ -325,7 +335,7 @@ export class ServeXApp<
 	S = {},
 	B extends string = "/",
 > extends ServeXRouterImpl<E, S, B> {
-	public hooks: import("./types").Hooks = {
+	public hooks: Hooks = {
 		onRequest: [],
 		onBeforeHandle: [],
 		onAfterHandle: [],
@@ -358,7 +368,7 @@ export class ServeXApp<
 		this.basePath = normalisePath(basePath) as B;
 	}
 
-	onRequest(handler: import("./types").HookHandler<Context>) {
+	onRequest(handler: HookHandler<Context>) {
 		this.hooks.onRequest.push(handler);
 		return this;
 	}
@@ -373,7 +383,7 @@ export class ServeXApp<
 				if (matched?.handlers && matched.store) {
 					if (!matched.store.executor) {
 						matched.store.executor = compileHandlerChain(
-							matched.handlers as import("./types").Handler<Context>[],
+							matched.handlers as Handler<Context>[],
 						);
 					}
 				}
@@ -381,25 +391,25 @@ export class ServeXApp<
 		}
 		return this;
 	}
-	onBeforeHandle(handler: import("./types").HookHandler<Context>) {
+	onBeforeHandle(handler: HookHandler<Context>) {
 		this.hooks.onBeforeHandle.push(handler);
 		return this;
 	}
-	onAfterHandle(handler: import("./types").AfterHandleHook<Context>) {
+	onAfterHandle(handler: AfterHandleHook<Context>) {
 		this.hooks.onAfterHandle.push(handler);
 		return this;
 	}
-	onError(handler: import("./types").ErrorHook<Context>) {
+	onError(handler: ErrorHook<Context>) {
 		this.hooks.onError.push(handler);
 		return this;
 	}
-	onResponse(handler: import("./types").HookHandler<Context<E>>) {
+	onResponse(handler: HookHandler<Context<E>>) {
 		this.hooks.onResponse.push(handler as never);
 		return this;
 	}
 	trace(
 		handler: (
-			api: import("./types").TraceAPI<Context<E>>,
+			api: TraceAPI<Context<E>>,
 		) => void | Promise<void>,
 	) {
 		this.hooks.trace.push(handler as never);
@@ -410,11 +420,11 @@ export class ServeXApp<
 	use(
 		pathOrPlugin:
 			| string
-			| import("./types").MiddlewareHandler<Context>
-			| import("./types").ServeXPlugin,
+			| MiddlewareHandler<Context>
+			| ServeXPlugin,
 		...middlewaresOrPlugins: (
-			| import("./types").MiddlewareHandler<Context>
-			| import("./types").ServeXPlugin
+			| MiddlewareHandler<Context>
+			| ServeXPlugin
 		)[]
 	) {
 		if (
@@ -422,7 +432,7 @@ export class ServeXApp<
 			pathOrPlugin !== null &&
 			"setup" in pathOrPlugin
 		) {
-			super.use(pathOrPlugin as import("./types").ServeXPlugin);
+			super.use(pathOrPlugin as ServeXPlugin);
 			return this;
 		}
 
@@ -434,7 +444,7 @@ export class ServeXApp<
 			) {
 				super.use(
 					pathOrPlugin,
-					middlewaresOrPlugins[0] as import("./types").ServeXPlugin,
+					middlewaresOrPlugins[0] as ServeXPlugin,
 				);
 				return this;
 			}
@@ -503,7 +513,7 @@ export class ServeXApp<
 			this.middlewares,
 			this.hooks,
 			env,
-			executionCtx as import("./core/fetch").ServeXExecutionContext | undefined,
+			executionCtx as ServeXExecutionContext | undefined,
 			this.debug,
 			this.jit,
 		);
@@ -517,14 +527,14 @@ export class ServeXApp<
 	};
 
 	listen(
-		portOrOptions: number | string | Partial<import("bun").ServeOptions>,
-		callback?: (server: import("bun").Server) => void,
-	): import("bun").Server {
+		portOrOptions: number | string | Partial<ServeOptions>,
+		callback?: (server: Server) => void,
+	): Server {
 		if (this.aot && this.jit) {
 			this.compile();
 		}
 
-		let options: Partial<import("bun").ServeOptions> = {};
+		let options: Partial<ServeOptions> = {};
 		if (
 			typeof portOrOptions === "number" ||
 			typeof portOrOptions === "string"

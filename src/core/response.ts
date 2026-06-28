@@ -1,5 +1,5 @@
 import type { Context } from "../context";
-import type { Handler } from "../types";
+import type { Env, Handler } from "../types";
 
 // Pre-resolved promise reused across all next() calls that don't resume.
 const _RESOLVED = Promise.resolve();
@@ -19,7 +19,7 @@ const _RESOLVED = Promise.resolve();
  * @throws  Re-throws any error from a handler for the caller to handle once.
  */
 export async function executeHandlers<
-	E extends import("../types").Env = import("../types").Env,
+	E extends Env = Env,
 >(
 	context: Context<E>,
 	handlers: Handler<Context<E>>[],
