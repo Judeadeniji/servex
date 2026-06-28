@@ -2,14 +2,14 @@ import * as $$path from "node:path";
 import type { Context, MiddlewareHandler } from "../types";
 import type { HTTPMethod, IRouter, MatchedRoute, Route } from "./base";
 import { compileSonicTrieMatcher } from "./sonic-trie-jit";
-import type { DynamicSegmentsRemoved } from "./types";
 
-const createNoMatch = (is405: boolean) => ({
+
+const createNoMatch = (is405: boolean): MatchedRoute => ({
 	matched: false,
 	method: undefined,
 	route: undefined,
 	matched_route: undefined,
-	params: {},
+	params: null,
 	handlers: undefined,
 	store: undefined,
 	executor: undefined,
@@ -110,9 +110,7 @@ export function compareRouteSpecificity(
  * node) — see sonic-trie-jit.ts's module docblock for the backtracking
  * correctness notes, which are the main risk area of this approach.
  */
-export class SonicRouter<Routes extends Route[] = Route[]>
-	implements IRouter<Routes>
-{
+export class SonicRouter implements IRouter {
 	private _routes: Route[] = [];
 
 	// routesByMethod[method] -> array of nodes, in raw registration order.
@@ -123,12 +121,12 @@ export class SonicRouter<Routes extends Route[] = Route[]>
 	// compiled match functions, keyed by method
 	private matchFns: Record<
 		string,
-		(url: string, method: string) => MatchedRoute<Routes, boolean> | null
+		(url: string, method: string) => MatchedRoute | null
 	> = {};
 
 	private staticRoutes: Record<
 		string,
-		Record<string, MatchedRoute<Routes, boolean>>
+		Record<string, MatchedRoute>
 	> = {};
 
 	private isDirty: Record<string, boolean> = {};
@@ -211,12 +209,12 @@ export class SonicRouter<Routes extends Route[] = Route[]>
 
 		for (const route of rawRoutes) {
 			if (route.paramsKeys.length === 0) {
-				const matchObj: MatchedRoute<Routes, boolean> = {
+				const matchObj: MatchedRoute = {
 					matched: true,
 					method: method,
-					route: route.path,
+					route: route,
 					matched_route: route.path,
-					params: {},
+					params: null,
 					handlers: route.handlers,
 					store: route,
 					executor: undefined,
@@ -253,10 +251,10 @@ export class SonicRouter<Routes extends Route[] = Route[]>
 		this.matchFns[method] = matchFn;
 	}
 
-	match<RoutePath extends DynamicSegmentsRemoved<Routes[number]["path"]>>(
+	match(
 		method: HTTPMethod,
-		url: RoutePath,
-	): MatchedRoute<Routes, boolean> | null {
+		url: string,
+	): MatchedRoute | null {
 		this.compile(method);
 
 		const p = url as string;
@@ -272,7 +270,7 @@ export class SonicRouter<Routes extends Route[] = Route[]>
 			const m = dynamicMatchFn(p, method);
 			if (m) return m;
 		}
-
+		
 		// 405 check for dynamic routes: check other compiled methods
 		for (const m in this.matchFns) {
 			if (m !== method) {
@@ -286,7 +284,7 @@ export class SonicRouter<Routes extends Route[] = Route[]>
 		return null;
 	}
 
-	addSubTrie(parent: string, trie: IRouter<Routes>): IRouter<Routes> {
+	addSubTrie(parent: string, trie: IRouter): IRouter {
 		const sanitizedPath = this.sanitizeRoute(parent);
 		const routes = trie.routes.map((route) => {
 			route.path = $$path.join(sanitizedPath, route.path);
@@ -299,9 +297,9 @@ export class SonicRouter<Routes extends Route[] = Route[]>
 		return this;
 	}
 
-	pushMiddlewares<C extends Context>(
+	pushMiddlewares(
 		path: string,
-		middlewares: MiddlewareHandler<C>[],
+		middlewares: MiddlewareHandler<Context>[],
 	): void {
 		const sanitized = this.sanitizeRoute(path);
 		this.pathMiddlewares.push({

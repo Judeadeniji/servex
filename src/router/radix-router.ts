@@ -9,14 +9,13 @@ import {
 	type Route,
 	type SegmentType,
 } from "./base";
-import type { DynamicSegmentsRemoved, ExtractUrl } from "./types";
 
 /**
  * Radix Tree implementation for route matching.
  */
-export class RadixRouteTrie<Routes extends Route[]> implements IRouter<Routes> {
+export class RadixRouteTrie implements IRouter {
 	private root = new RadixSegmentNode("/");
-	private subTries = new Map<string, RadixRouteTrie<Routes>>();
+	private subTries = new Map<string, RadixRouteTrie>();
 	#routes: Set<Route> = new Set();
 
 	/**
@@ -26,9 +25,9 @@ export class RadixRouteTrie<Routes extends Route[]> implements IRouter<Routes> {
 		return Array.from(this.#routes);
 	}
 
-	pushMiddlewares<C extends Context>(
+	pushMiddlewares(
 		path: string,
-		middlewares: MiddlewareHandler<C>[],
+		middlewares: MiddlewareHandler<Context>[],
 	): void {
 		const sanitizedPath = this.sanitizeRoute(path);
 
@@ -42,9 +41,9 @@ export class RadixRouteTrie<Routes extends Route[]> implements IRouter<Routes> {
 		}
 	}
 
-	private addMiddlewareToPath<C extends Context>(
+	private addMiddlewareToPath(
 		path: string,
-		middlewares: MiddlewareHandler<C>[],
+		middlewares: MiddlewareHandler<Context>[],
 	): void {
 		const segments = path === "/" ? [path] : path.split("/");
 		let currentRadixSegment = this.root;
@@ -67,31 +66,27 @@ export class RadixRouteTrie<Routes extends Route[]> implements IRouter<Routes> {
 			currentRadixSegment = currentRadixSegment.children.get(seg)!;
 
 			if (isLastSegment) {
-				currentRadixSegment.middlewares.push(
-					...(middlewares as MiddlewareHandler<Context>[]),
-				);
+				currentRadixSegment.middlewares.push(...middlewares);
 			}
 		}
 	}
 
-	private applyMiddlewareToAllChildren<C extends Context>(
+	private applyMiddlewareToAllChildren(
 		segment: RadixSegmentNode,
-		middlewares: MiddlewareHandler<C>[],
+		middlewares: MiddlewareHandler<Context>[],
 	): void {
-		segment.middlewares.push(...(middlewares as MiddlewareHandler<Context>[]));
+		segment.middlewares.push(...middlewares);
 
 		for (const child of segment.children.values()) {
 			this.applyMiddlewareToAllChildren(child, middlewares);
 		}
 	}
 
-	private addGlobalMiddleware<C extends Context>(
-		middlewares: MiddlewareHandler<C>[],
+	private addGlobalMiddleware(
+		middlewares: MiddlewareHandler<Context>[],
 	): void {
 		const applyMiddlewareToSegment = (segment: RadixSegmentNode) => {
-			segment.middlewares.push(
-				...(middlewares as MiddlewareHandler<Context>[]),
-			);
+			segment.middlewares.push(...middlewares);
 			for (const child of segment.children.values()) {
 				applyMiddlewareToSegment(child);
 			}
@@ -186,7 +181,7 @@ export class RadixRouteTrie<Routes extends Route[]> implements IRouter<Routes> {
 		this.#routes.add(route);
 	}
 
-	addSubTrie(parent: string, trie: RadixRouteTrie<Routes>) {
+	addSubTrie(parent: string, trie: RadixRouteTrie) {
 		const sanitizedPath = this.sanitizeRoute(parent);
 		if (this.subTries.has(sanitizedPath)) {
 			console.warn(
@@ -205,32 +200,11 @@ export class RadixRouteTrie<Routes extends Route[]> implements IRouter<Routes> {
 		return this;
 	}
 
-	private buildMatchResult(
-		node: RadixSegmentNode,
+	match(
 		method: HTTPMethod,
 		url: string,
-		matchedRoute: string,
-		params: ExtractUrl<Routes[number]["path"]>["params"] &
-			Record<string, string>,
-	): MatchedRoute<Routes, boolean> {
-		return {
-			matched: true,
-			method,
-			route: url as Routes[number]["path"],
-			matched_route: matchedRoute,
-			params: params,
-			handlers: node.handlers[method] as Handler<Context>[],
-			store: undefined,
-			executor: undefined,
-			is405: false,
-		};
-	}
-
-	match<RoutePath extends DynamicSegmentsRemoved<Routes[number]["path"]>>(
-		method: HTTPMethod,
-		url: RoutePath,
-	): MatchedRoute<Routes, boolean> | null {
-		let sanitizedPath = url as unknown as string;
+	): MatchedRoute | null {
+		let sanitizedPath = url;
 		if (sanitizedPath.charCodeAt(0) === 47)
 			sanitizedPath = sanitizedPath.slice(1);
 		if (
@@ -240,8 +214,7 @@ export class RadixRouteTrie<Routes extends Route[]> implements IRouter<Routes> {
 			sanitizedPath = sanitizedPath.slice(0, -1);
 		}
 		const segments = sanitizedPath === "" ? [""] : sanitizedPath.split("/");
-		const params = {} as ExtractUrl<Routes[number]["path"]>["params"] &
-			Record<string, string>;
+		const params: Record<string, string> = {};
 		let currentNode = this.root;
 		let matchedRoute = "";
 		const methodUpper = method.toUpperCase() as HTTPMethod;
@@ -274,13 +247,17 @@ export class RadixRouteTrie<Routes extends Route[]> implements IRouter<Routes> {
 						const paramName =
 							child.value.length > 1 ? child.value.slice(1) : String(i);
 						params[paramName] = remainingSegments;
-						return this.buildMatchResult(
-							child,
+						return {
+							matched: true,
 							method,
-							url as string,
-							matchedRoute,
+							route: undefined,
+							matched_route: matchedRoute,
 							params,
-						);
+							handlers: child.handlers[method] as Handler<Context>[],
+							store: undefined,
+							executor: undefined,
+							is405: false,
+						};
 					}
 					wildcardMatched = true;
 					currentNode = child;
@@ -292,13 +269,17 @@ export class RadixRouteTrie<Routes extends Route[]> implements IRouter<Routes> {
 		}
 
 		if (currentNode.isEndOfRoute && currentNode.handlers[methodUpper]) {
-			return this.buildMatchResult(
-				currentNode,
+			return {
+				matched: true,
 				method,
-				url as string,
-				matchedRoute,
+				route: undefined,
+				matched_route: matchedRoute,
 				params,
-			);
+				handlers: currentNode.handlers[method] as Handler<Context>[],
+				store: undefined,
+				executor: undefined,
+				is405: false,
+			};
 		}
 
 		return null;

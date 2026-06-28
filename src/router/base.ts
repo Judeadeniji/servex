@@ -1,11 +1,10 @@
 import type {
 	Context,
-	Handler,
 	InternalHandler,
 	Method,
 	MiddlewareHandler,
 } from "../types";
-import type { DynamicSegmentsRemoved, ExtractUrl } from "./types";
+
 
 export type HTTPMethod = Method;
 
@@ -18,17 +17,19 @@ export type Route = {
 export type SegmentType = "static" | "dynamic" | "wildcard";
 export type SegmentNode<T = unknown> = TrieSegmentNode<T> | RadixSegmentNode<T>;
 
-export type MatchedRoute<
-	Routes extends Route[] = Route[],
-	M extends boolean = boolean,
-> = {
-	matched: M;
-	method: Routes[number]["method"] | undefined;
-	route: Routes[number]["path"] | undefined;
+export type MatchedRoute = {
+	matched: boolean;
+	method: Method | undefined;
+	route: Route | undefined;
 	matched_route: string | undefined;
-	params:
-		| (ExtractUrl<Routes[number]["path"]>["params"] & Record<string, string>)
-		| {};
+	params: Record<string, string> | null;
+	/**
+	 * Positional array of captured parameter values emitted by the SonicRouter
+	 * JIT codegen.  Parallel to `store.paramsKeys`; consumers should build the
+	 * keyed `params` object from these two arrays rather than reading `params`
+	 * directly when this field is present.
+	 */
+	paramValues?: string[];
 	handlers: InternalHandler<Context>[] | undefined;
 	middlewares?: MiddlewareHandler<Context>[];
 	store?: Record<string, unknown> | undefined;
@@ -39,6 +40,7 @@ export type MatchedRoute<
 		| undefined;
 	is405?: boolean;
 };
+
 
 /**
  * Orders a map of trie segments by type (static, dynamic, wildcard)
@@ -145,7 +147,7 @@ export class TrieSegmentNode<T = unknown> {
 /**
  * Interface that defines the standard methods for a router.
  */
-export interface IRouter<Routes extends Route[] = Route[]> {
+export interface IRouter {
 	/**
 	 * Adds a new route to the router.
 	 * @param route - The route to add.
@@ -158,10 +160,7 @@ export interface IRouter<Routes extends Route[] = Route[]> {
 	 * @param url - The URL to match.
 	 * @returns The matched route or null if no match is found.
 	 */
-	match<RoutePath extends DynamicSegmentsRemoved<Routes[number]["path"]>>(
-		method: HTTPMethod,
-		url: RoutePath,
-	): MatchedRoute<Routes, boolean> | null;
+	match(method: HTTPMethod, url: string): MatchedRoute | null;
 
 	/**
 	 * Retrieves all registered routes.
@@ -169,10 +168,10 @@ export interface IRouter<Routes extends Route[] = Route[]> {
 	 */
 	get routes(): Route[];
 
-	addSubTrie(parent: string, trie: IRouter<Routes>): IRouter<Routes>;
+	addSubTrie(parent: string, trie: IRouter): IRouter;
 
-	pushMiddlewares<C extends Context>(
+	pushMiddlewares(
 		path: string,
-		middleware: MiddlewareHandler<C>[],
+		middleware: MiddlewareHandler<Context>[],
 	): void;
 }

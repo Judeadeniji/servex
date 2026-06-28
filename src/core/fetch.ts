@@ -2,10 +2,38 @@ import { compileHandlerChain } from "../compiler";
 import { type Context, createContext } from "../context";
 import { HttpException } from "../http-exception";
 import type { RouterAdapter } from "../router/adapter";
-import type { Handler, Method, ServerRoute } from "../types";
+import type { Handler, Method } from "../types";
 import { executeHandlers } from "./response";
 
 const DEFAULT_ENV = typeof process !== "undefined" ? process.env : {};
+
+/**
+ * Resolves the route params object from a matched route.
+ *
+ * The SonicRouter JIT codegen avoids allocating a keyed object in the hot
+ * path — it instead returns `params: null` plus a positional `paramValues`
+ * array whose indices correspond to `store.paramsKeys`.  This function
+ * reconstructs the keyed object when that optimisation is in effect, while
+ * passing through a pre-built `params` object unchanged for all other
+ * router implementations.
+ */
+function resolveRouteParams(
+	route: import("../router/base").MatchedRoute,
+): Record<string, string> | null {
+	if (route.params !== null) return route.params;
+	const values = route.paramValues;
+	if (!values || values.length === 0) return null;
+	const keys = (
+		route.store as { paramsKeys?: string[] } | undefined
+	)?.paramsKeys;
+	if (!keys || keys.length === 0) return null;
+	const params: Record<string, string> = {};
+	const len = Math.min(keys.length, values.length);
+	for (let i = 0; i < len; i++) {
+		params[keys[i]] = values[i];
+	}
+	return params;
+}
 
 // ── Trace Helper ─────────────────────────────────────────────────────────────
 async function executeOnRequestPhase(
@@ -168,10 +196,7 @@ function sharedResolveError(error: unknown, debug: boolean): Response {
 		statusCode: 500,
 		error: "Internal Server Error",
 		message,
-		data:
-			debug && error instanceof Error
-				? { stack: error.stack }
-				: undefined,
+		data: debug && error instanceof Error ? { stack: error.stack } : undefined,
 		cause: error,
 	});
 
@@ -180,7 +205,7 @@ function sharedResolveError(error: unknown, debug: boolean): Response {
 
 export function baseFetch(
 	// @ts-ignore
-	router: RouterAdapter<ServerRoute[]>,
+	router: RouterAdapter,
 	// @ts-ignore
 	request: Request,
 	method: Method,
@@ -253,8 +278,8 @@ export function baseFetch(
 
 	let context: Context | undefined = createContext(
 		request,
-		envBindings ?? (DEFAULT_ENV),
-		route.params,
+		envBindings ?? DEFAULT_ENV,
+		resolveRouteParams(route),
 		executionCtx,
 		debug,
 	);
@@ -308,7 +333,7 @@ export function baseFetch(
 }
 
 async function baseFetchSlow(
-	router: RouterAdapter<ServerRoute[]>,
+	router: RouterAdapter,
 	request: Request,
 	method: Method,
 	pathname: string,
@@ -337,8 +362,8 @@ async function baseFetchSlow(
 
 		context = createContext(
 			request,
-			envBindings ?? (DEFAULT_ENV ),
-			route?.matched ? (route.params ) : {},
+			envBindings ?? DEFAULT_ENV,
+			route ? resolveRouteParams(route) : null,
 			executionCtx,
 			debug,
 		);

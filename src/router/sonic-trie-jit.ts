@@ -122,19 +122,19 @@ export function compileSonicTrieMatcher<_T>(
 		route: RouteLike,
 		capturedVars: { start: string; end: string }[],
 	): string {
-		const paramsObj = route.paramsKeys
+		const paramValuesArr = route.paramsKeys
 			.map(
-				(k, i) =>
-					`${JSON.stringify(k)}: url.slice(${capturedVars[i].start}, ${capturedVars[i].end})`,
+				(k, i) => `url.slice(${capturedVars[i].start}, ${capturedVars[i].end})`,
 			)
 			.join(",");
 		const idx = routeIndex(route);
 		return `return {
       matched: true,
       method: method,
-      route: url,
+      route: deps.routes[${idx}],
       matched_route: ${JSON.stringify(route.path)},
-      params: {${paramsObj}},
+      params: null,
+      paramValues: [${paramValuesArr}],
       handlers: deps.routes[${idx}].handlers,
       store: deps.routes[${idx}],
       executor: undefined,
