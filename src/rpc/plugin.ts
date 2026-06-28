@@ -1,8 +1,8 @@
 import { HttpException } from "../http-exception";
-import type { JSONValue } from "../types";
+import type { Env, JSONValue, ServeXRouter } from "../types";
 import { composeMiddlewares } from "./middleware";
 import { type CompileOptions, compileRoutes } from "./router";
-import type { RPCContext, RPCPluginInstance } from "./types";
+import type { InferClientFromRegistry, RPCContext, RPCPluginInstance } from "./types";
 import { validateInput, validateOutput } from "./validation";
 
 export type RPCPluginOptions = CompileOptions;
@@ -14,7 +14,10 @@ export function rpc<R extends Record<string, unknown>>(
 	return {
 		name: "servex-rpc",
 		registry,
-		setup: (app, prefix) => {
+		setup: <E extends Env, S, B extends string>(
+			app: ServeXRouter<E, S, B>,
+			prefix: string,
+		) => {
 			const routeMap = compileRoutes(registry, { ...options, prefix });
 
 			app.post("/*", async (ctx) => {
@@ -88,6 +91,12 @@ export function rpc<R extends Record<string, unknown>>(
 					);
 				}
 			});
+
+			return app as ServeXRouter<
+				E,
+				S & InferClientFromRegistry<R>,
+				B
+			>;
 		},
 	};
 }
