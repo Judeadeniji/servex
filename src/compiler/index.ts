@@ -1,5 +1,5 @@
 import type { Context } from "../context";
-import type { Env, Handler, InternalHandler } from "../types";
+import type { InternalHandler } from "../types";
 
 /**
  * JIT compiles an array of handlers into a single flat async function.
@@ -11,8 +11,8 @@ import type { Env, Handler, InternalHandler } from "../types";
  * 3. State Opt: Uses a simple integer bitmask (or Uint8Array) to perfectly mimic `next()`
  *    short-circuiting and duplicate call prevention without array allocations.
  */
-export function buildCompilerSource<C extends Context>(
-	handlers: InternalHandler<C>[],
+export function buildCompilerSource(
+	handlers: InternalHandler[],
 ): string {
 	if (handlers.length === 0) {
 		return `return () => Promise.resolve(undefined);\n`;
@@ -69,12 +69,10 @@ export function buildCompilerSource<C extends Context>(
 	return code;
 }
 
-export function compileHandlerChain<
-	E extends Env = Env,
->(
-	handlers: Handler<Context<E>>[],
+export function compileHandlerChain(
+	handlers: InternalHandler[],
 ): (
-	context: Context<E>,
+	context: Context,
 ) => Response | undefined | Promise<Response | undefined> {
 	if (handlers.length === 0) {
 		return async () => undefined;

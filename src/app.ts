@@ -174,71 +174,71 @@ export class ServeXRouterImpl<
 		this.routerAdapter.addRoute({
 			method,
 			path,
-			handlers: finalHandlers as Handler<Context>[],
+			handlers: finalHandlers,
 		});
 		return this;
 	}
 
 	// @ts-ignore: Implementation signature
-	get(path: string, ...handlers: Handler<Context<E>>[]) {
+	get(path: string, ...handlers: Handler[]) {
 		return this.add(
 			"GET",
 			path,
-			handlers as Handler<Context>[],
+			handlers,
 		);
 	}
 	// @ts-ignore: Implementation signature
-	post(path: string, ...handlers: Handler<Context<E>>[]) {
+	post(path: string, ...handlers: Handler[]) {
 		return this.add(
 			"POST",
 			path,
-			handlers as Handler<Context>[],
+			handlers,
 		);
 	}
 	// @ts-ignore: Implementation signature
-	put(path: string, ...handlers: Handler<Context<E>>[]) {
+	put(path: string, ...handlers: Handler[]) {
 		return this.add(
 			"PUT",
 			path,
-			handlers as Handler<Context>[],
+			handlers,
 		);
 	}
 	// @ts-ignore: Implementation signature
-	delete(path: string, ...handlers: Handler<Context<E>>[]) {
+	delete(path: string, ...handlers: Handler[]) {
 		return this.add(
 			"DELETE",
 			path,
-			handlers as Handler<Context>[],
+			handlers,
 		);
 	}
 	// @ts-ignore: Implementation signature
-	patch(path: string, ...handlers: Handler<Context<E>>[]) {
+	patch(path: string, ...handlers: Handler[]) {
 		return this.add(
 			"PATCH",
 			path,
-			handlers as Handler<Context>[],
+			handlers,
 		);
 	}
 	// @ts-ignore: Implementation signature
-	options(path: string, ...handlers: Handler<Context<E>>[]) {
+	options(path: string, ...handlers: Handler[]) {
 		return this.add(
 			"OPTIONS",
 			path,
-			handlers as Handler<Context>[],
+			handlers,
 		);
 	}
 	// @ts-ignore: Implementation signature
-	head(path: string, ...handlers: Handler<Context<E>>[]) {
+	head(path: string, ...handlers: Handler[]) {
 		return this.add(
 			"HEAD",
 			path,
-			handlers as Handler<Context>[],
+			handlers,
 		);
 	}
 	// @ts-ignore: Implementation signature
-	all(path: string, ...handlers: Handler<Context<E>>[]) {
+	all(path: string, ...handlers: Handler[]) {
 		SUPPORTED_METHODS.forEach((m) => {
-			this.add(m.toUpperCase() as Method, path, handlers as Handler<Context>[]);
+			this.add(m.toUpperCase() as Method, path, handlers);
 		});
 		return this;
 	}
@@ -335,7 +335,7 @@ export class ServeXApp<
 	S = {},
 	B extends string = "/",
 > extends ServeXRouterImpl<E, S, B> {
-	public hooks: Hooks = {
+	public hooks: Hooks<E> = {
 		onRequest: [],
 		onBeforeHandle: [],
 		onAfterHandle: [],
@@ -383,7 +383,7 @@ export class ServeXApp<
 				if (matched?.handlers && matched.store) {
 					if (!matched.store.executor) {
 						matched.store.executor = compileHandlerChain(
-							matched.handlers as Handler<Context>[],
+							Array.isArray(matched.handlers) ? matched.handlers : [matched.handlers]
 						);
 					}
 				}
@@ -404,7 +404,7 @@ export class ServeXApp<
 		return this;
 	}
 	onResponse(handler: HookHandler<Context<E>>) {
-		this.hooks.onResponse.push(handler as never);
+		this.hooks.onResponse.push(handler);
 		return this;
 	}
 	trace(
@@ -511,7 +511,7 @@ export class ServeXApp<
 			method,
 			pathname,
 			this.middlewares,
-			this.hooks,
+			this.hooks as Hooks,
 			env,
 			executionCtx as ServeXExecutionContext | undefined,
 			this.debug,
