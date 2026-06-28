@@ -58,7 +58,7 @@ describe("HttpException", () => {
 		const res = ex.getResponse();
 		expect(res.status).toBe(403);
 		expect(res.headers.get("content-type")).toContain("application/json");
-		const json = (await res.json()) as any;
+		const json = (await res.json());
 		expect(json.statusCode).toBe(403);
 		expect(json.message).toBe("Forbidden");
 	});
@@ -75,7 +75,7 @@ describe("HttpException", () => {
 	it("supports cause chaining", () => {
 		const cause = new Error("original");
 		const ex = new HttpException({ statusCode: 500, cause });
-		expect((ex as any).cause).toBe(cause);
+		expect((ex).cause).toBe(cause);
 	});
 
 	describe("static factories", () => {
@@ -131,11 +131,12 @@ describe("Named error classes", () => {
 	});
 
 	it("ValidationError → 422 with field data", () => {
+		const data = { fields: { email: "must be valid" } };
 		const e = new ValidationError("Validation failed", {
-			data: { fields: { email: "must be valid" } },
+			data,
 		});
 		expect(e.statusCode).toBe(422);
-		expect((e.data as any).fields.email).toBe("must be valid");
+		expect((e.data as typeof data).fields.email).toBe("must be valid");
 	});
 
 	it("TooManyRequestsError → 429 with Retry-After header", () => {
@@ -189,7 +190,7 @@ describe("HttpException integration — thrown in handlers", () => {
 		const res = await app.fetch(new Request("http://localhost/protected"));
 		expect(res.status).toBe(403);
 		expect(res.headers.get("content-type")).toContain("application/json");
-		const body = (await res.json()) as any;
+		const body = (await res.json());
 		expect(body.statusCode).toBe(403);
 		expect(body.error).toBe("Forbidden");
 		expect(body.message).toBe("Access denied");
@@ -204,7 +205,7 @@ describe("HttpException integration — thrown in handlers", () => {
 
 		const res = await app.fetch(new Request("http://localhost/notfound"));
 		expect(res.status).toBe(404);
-		const body = (await res.json()) as any;
+		const body = (await res.json());
 		expect(body.statusCode).toBe(404);
 		expect(body.message).toBe("Resource missing");
 	});
@@ -217,7 +218,7 @@ describe("HttpException integration — thrown in handlers", () => {
 
 		const res = await app.fetch(new Request("http://localhost/boom"));
 		expect(res.status).toBe(500);
-		const body = (await res.json()) as any;
+		const body = (await res.json());
 		expect(body.statusCode).toBe(500);
 		expect(body.error).toBe("Internal Server Error");
 	});
@@ -231,7 +232,7 @@ describe("HttpException integration — thrown in handlers", () => {
 
 		const res = await app.fetch(new Request("http://localhost/async-err"));
 		expect(res.status).toBe(401);
-		const body = (await res.json()) as any;
+		const body = (await res.json());
 		expect(body.error).toBe("Unauthorized");
 	});
 
@@ -247,7 +248,7 @@ describe("HttpException integration — thrown in handlers", () => {
 			new Request("http://localhost/register", { method: "POST" }),
 		);
 		expect(res.status).toBe(422);
-		const body = (await res.json()) as any;
+		const body = (await res.json());
 		expect(body.data.fields.username).toBe("required");
 	});
 });
@@ -261,7 +262,7 @@ describe("onError hook with HttpException", () => {
 			if (isHttpException(err)) {
 				return c.json(
 					{ custom: true, code: err.statusCode },
-					err.statusCode as any,
+					err.statusCode,
 				);
 			}
 		});
@@ -272,7 +273,7 @@ describe("onError hook with HttpException", () => {
 
 		const res = await app.fetch(new Request("http://localhost/fail"));
 		expect(res.status).toBe(400);
-		const body = (await res.json()) as any;
+		const body = (await res.json());
 		expect(body.custom).toBe(true);
 		expect(body.code).toBe(400);
 	});
@@ -289,7 +290,7 @@ describe("onError hook with HttpException", () => {
 
 		const res = await app.fetch(new Request("http://localhost/conflict"));
 		expect(res.status).toBe(409);
-		const body = (await res.json()) as any;
+		const body = (await res.json());
 		expect(body.error).toBe("Conflict");
 	});
 

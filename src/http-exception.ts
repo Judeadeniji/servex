@@ -48,8 +48,7 @@ export interface HttpExceptionOptions<T = unknown> {
 export class HttpException<T = unknown> extends Error {
 	public readonly statusCode:
 		| ClientErrorStatusCode
-		| ServerErrorStatusCode
-		| number;
+		| ServerErrorStatusCode;
 	public readonly error: string;
 	public override readonly message: string;
 	public readonly data?: T;
@@ -69,7 +68,7 @@ export class HttpException<T = unknown> extends Error {
 
 		super(message, { cause });
 		this.name = "HttpException";
-		this.statusCode = statusCode;
+		this.statusCode = statusCode as typeof this.statusCode;
 		this.error = error;
 		this.message = message;
 		this.data = data;
