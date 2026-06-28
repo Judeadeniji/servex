@@ -1,12 +1,13 @@
-import type { Handler } from "../src/types";
 import { describe, expect, it } from "bun:test";
+import type { MatchedRoute } from "../src/router/base";
 import { SonicRouter } from "../src/router/sonic-router";
+import type { Handler } from "../src/types";
 
-function getParams(match: any) {
+function getParams(match: MatchedRoute | null) {
 	if (!match) return undefined;
 	if (match.params) return match.params;
 	const p: Record<string, string> = {};
-	const keys = match.route?.paramsKeys;
+	const keys = match.store?.paramsKeys as string[];
 	if (keys && match.paramValues) {
 		for (let i = 0; i < keys.length; i++) {
 			p[keys[i]] = match.paramValues[i];
@@ -198,7 +199,6 @@ describe("SonicRouter - sanitizeRoute encoding semantics", () => {
 		router.addRoute({ method: "GET", path: "/café", handlers: [rawFn] });
 
 		// Raw unicode request matches raw unicode route
-		// biome-ignore lint/suspicious/noNonNullAssertedOptionalChain: it's needed
 		const handlers = router.match("GET", "/café")?.handlers;
 		expect(Array.isArray(handlers) ? handlers[0] : handlers).toBe(rawFn);
 
