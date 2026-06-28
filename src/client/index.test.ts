@@ -10,7 +10,7 @@ describe("RPC Client", () => {
 			return c.json({ echo: body });
 		})
 		.get("/users/:id", (c) => {
-			const { id } = c.params();
+			const id = c.params("id");
 			const search = c.query("search");
 			return c.json({ id, search: search || null });
 		})
