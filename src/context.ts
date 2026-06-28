@@ -4,8 +4,8 @@ import {
 	type Context as SignalContext,
 	withCancel,
 } from "./core/signal";
-import type { StatusCode } from "./http-status";
 import { HttpException } from "./http-exception";
+import type { StatusCode } from "./http-status";
 import type { ExtractUrl } from "./router/types";
 import type { Env, HeaderRecord, JSONValue } from "./types";
 
@@ -28,7 +28,7 @@ export interface ServeXRequest extends Request {
  * @internal
  */
 export type RequestContext = {
-	params: Record<string, string>;
+	params: Record<string, string> | null;
 };
 
 /**
@@ -46,7 +46,7 @@ export interface Context<
 	E extends Env = Env,
 	P extends string = "/",
 	I extends Record<string, unknown> = ExtractUrl<P>,
-	ValidData extends Record<string, any> = {},
+	ValidData extends Record<string, unknown> = {},
 > {
 	/**
 	 * Internal storage for validated data.
@@ -86,7 +86,7 @@ export interface Context<
 	finalResponse?: Response;
 
 	/** @internal */
-	_params: Record<string, string>;
+	_params: Record<string, string> | null;
 	/** @internal */
 	_query?: URLSearchParams;
 	/** @internal */
@@ -186,7 +186,7 @@ export interface Context<
 	 * Retrieves all matched route parameters as an object.
 	 * @returns A record containing all route parameters.
 	 */
-	params(): Record<string, string>;
+	params(): Record<string, string> | null;
 	/**
 	 * Retrieves a specific matched route parameter by its defined key.
 	 *
@@ -471,7 +471,11 @@ const contextHelpers = {
 	},
 
 	params(this: Context, k?: string) {
-		return typeof k === "string" ? this._params[k] : this._params;
+		return this._params
+			? typeof k === "string"
+				? this._params[k]
+				: this._params
+			: null;
 	},
 
 	setParams(this: Context, params: Record<string, string>) {
@@ -695,14 +699,19 @@ const contextHelpers = {
 				cause: statusOrError,
 			});
 		}
-		return new HttpException<T>({ statusCode: statusOrError, message, data, error });
+		return new HttpException<T>({
+			statusCode: statusOrError,
+			message,
+			data,
+			error,
+		});
 	},
 
 	status(this: Context) {
 		return this._status;
 	},
 
-	valid<T extends "body" | "query" | "params">(this: Context, target: T): any {
+	valid<T extends "body" | "query" | "params">(this: Context, target: T) {
 		if (!this._validData) {
 			throw new Error(
 				"No validation data found. Did you forget to apply the validator middleware?",
@@ -731,7 +740,7 @@ const contextHelpers = {
 export function createContext(
 	request: Request,
 	env: Record<string, unknown>,
-	params: Record<string, string>,
+	params: Record<string, string> | null = null,
 	executionCtx?: unknown,
 	debug: boolean = false,
 ) {
@@ -743,7 +752,7 @@ export function createContext(
 		debug,
 		deferred: undefined,
 		finalResponse: undefined,
-		_params: params || {},
+		_params: params,
 		_query: undefined,
 		_body: undefined,
 		_response: undefined,

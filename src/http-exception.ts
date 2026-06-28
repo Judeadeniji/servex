@@ -46,7 +46,10 @@ export interface HttpExceptionOptions<T = unknown> {
  * ```
  */
 export class HttpException<T = unknown> extends Error {
-	public readonly statusCode: ClientErrorStatusCode | ServerErrorStatusCode | number;
+	public readonly statusCode:
+		| ClientErrorStatusCode
+		| ServerErrorStatusCode
+		| number;
 	public readonly error: string;
 	public override readonly message: string;
 	public readonly data?: T;
@@ -55,7 +58,9 @@ export class HttpException<T = unknown> extends Error {
 	constructor(options: HttpExceptionOptions<T>) {
 		const {
 			statusCode,
-			error = HTTP_ERROR_NAMES[statusCode as ClientErrorStatusCode | ServerErrorStatusCode] ?? "Error",
+			error = HTTP_ERROR_NAMES[
+				statusCode as ClientErrorStatusCode | ServerErrorStatusCode
+			] ?? "Error",
 			message = error ?? "An error occurred",
 			data,
 			headers,

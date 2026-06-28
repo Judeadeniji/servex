@@ -53,12 +53,7 @@ describe("Error Handling System", () => {
 		test("creates HttpException directly and returns Response", async () => {
 			const app = createServer();
 			app.get("/", (ctx) => {
-				return ctx.error(
-					418,
-					"I'm a teapot",
-					{ tea: "green" },
-					"TEAPOT_ERROR",
-				);
+				return ctx.error(418, "I'm a teapot", { tea: "green" }, "TEAPOT_ERROR");
 			});
 
 			const res = await app.fetch(new Request("http://localhost/"));

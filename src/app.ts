@@ -26,7 +26,7 @@ export class ServeXRouterImpl<
 
 	public declare static?: ServeXRouter<E, S, B>["static"];
 
-	constructor(protected routerAdapter: RouterAdapter<ServerRoute[]>) {}
+	constructor(protected routerAdapter: RouterAdapter) {}
 
 	get routes(): ServerRoute[] {
 		return this.routerAdapter.routes;
@@ -64,7 +64,7 @@ export class ServeXRouterImpl<
 			pathOrPlugin !== null &&
 			"setup" in pathOrPlugin
 		) {
-			pathOrPlugin.setup(this, "");
+			pathOrPlugin.setup(this as unknown as ServeXRouter<E, S, B>, "");
 			return this;
 		}
 
@@ -246,15 +246,15 @@ export class ServeXRouterImpl<
 			return this as ServeXRouter<E, {}, string>;
 		}
 
-		const childRouter = new RouterAdapter<ServerRoute[]>({
+		const childRouter = new RouterAdapter({
 			type: this.routerAdapter.type,
 		});
 		const childServeXRouter = new ServeXRouterImpl<E, {}, string>(childRouter);
 		(fnOrApp as (r: ServeXRouter<E, {}, string>) => unknown)(
-			childServeXRouter as ServeXRouter<E, {}, string>,
+			childServeXRouter as unknown as ServeXRouter<E, {}, string>,
 		);
 		this.routerAdapter.addSubTrie(path, childRouter);
-		return this as ServeXRouter<E, {}, string>;
+		return this as unknown as ServeXRouter<E, {}, string>;
 	}
 
 	mount<P extends string>(
@@ -291,7 +291,7 @@ export class ServeXRouterImpl<
 		// Also map the exact path without trailing slash
 		this.all(normalizedPath, handler);
 
-		return this as ServeXRouter<E, S, B>;
+		return this as unknown as ServeXRouter<E, S, B>;
 	}
 
 	/**
@@ -343,7 +343,7 @@ export class ServeXApp<
 	public _nativeStaticResponse: boolean = false;
 
 	constructor(
-		router: RouterAdapter<ServerRoute[]>,
+		router: RouterAdapter,
 		private middlewares: Handler<Context>[],
 		basePath: B = "/" as B,
 		public debug: boolean = false,
@@ -365,8 +365,9 @@ export class ServeXApp<
 
 	compile(): this {
 		for (const route of this.routerAdapter.routes) {
-			const methodsToMatch =(
-				route.method === "ALL" ? SUPPORTED_METHODS : [route.method]) as Method[];
+			const methodsToMatch = (
+				route.method === "ALL" ? SUPPORTED_METHODS : [route.method]
+			) as Method[];
 			for (const method of methodsToMatch) {
 				const matched = this.routerAdapter.match(method, route.path);
 				if (matched?.handlers && matched.store) {
@@ -438,17 +439,17 @@ export class ServeXApp<
 				return this;
 			}
 			if (pathOrPlugin === "*" || pathOrPlugin === "/*") {
-				this.middlewares.push(...middlewaresOrPlugins);
-				this.routerAdapter.pushMiddlewares("*", middlewaresOrPlugins);
+				this.middlewares.push(...(middlewaresOrPlugins as MiddlewareHandler<Context>[]));
+				this.routerAdapter.pushMiddlewares("*", middlewaresOrPlugins as MiddlewareHandler<Context>[]);
 			} else {
-				this.routerAdapter.pushMiddlewares(pathOrPlugin, middlewaresOrPlugins);
+				this.routerAdapter.pushMiddlewares(pathOrPlugin, middlewaresOrPlugins as MiddlewareHandler<Context>[]);
 			}
 			return this;
 		}
-		this.middlewares.push(pathOrPlugin, ...middlewaresOrPlugins);
+		this.middlewares.push(pathOrPlugin as MiddlewareHandler<Context>, ...(middlewaresOrPlugins as MiddlewareHandler<Context>[]));
 		this.routerAdapter.pushMiddlewares("*", [
-			pathOrPlugin,
-			...middlewaresOrPlugins,
+			pathOrPlugin as MiddlewareHandler<Context>,
+			...(middlewaresOrPlugins as MiddlewareHandler<Context>[]),
 		]);
 		return this;
 	}
@@ -535,7 +536,8 @@ export class ServeXApp<
 
 		const server = Bun.serve({
 			...options,
-			fetch: this.fetch as Fetch,
+			// @ts-ignore: Bun's fetch expects `this: Server` but our stored arrow function is compatible at runtime
+			fetch: this.fetch,
 		});
 
 		if (callback) {
@@ -558,7 +560,7 @@ export function createServer<E extends Env = Env, B extends string = "/">(
 		jit = true,
 		nativeStaticResponse = false,
 	} = options;
-	const routerAdapter = new RouterAdapter<ServerRoute[]>({
+	const routerAdapter = new RouterAdapter({
 		type: router,
 	});
 
