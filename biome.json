@@ -18,7 +18,8 @@
 			"recommended": true,
 			"suspicious": {
 				"noTsIgnore": "off",
-				"noAssignInExpressions": "off"
+				"noAssignInExpressions": "off",
+				"noConfusingVoidType": "off"
 			},
 			"style": {
 				"noNonNullAssertion": "off"
