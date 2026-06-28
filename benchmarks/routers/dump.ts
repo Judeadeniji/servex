@@ -14,15 +14,27 @@ sonic.addRoute({ method: "GET", path: "/terms", handlers: ["ok"] });
 sonic.addRoute({ method: "GET", path: "/docs", handlers: ["ok"] });
 sonic.addRoute({ method: "GET", path: "/api/users/:id", handlers: ["param"] });
 sonic.addRoute({ method: "GET", path: "/api/posts/:id", handlers: ["param"] });
-sonic.addRoute({ method: "GET", path: "/api/products/:sku", handlers: ["param"] });
+sonic.addRoute({
+	method: "GET",
+	path: "/api/products/:sku",
+	handlers: ["param"],
+});
 sonic.addRoute({ method: "GET", path: "/u/:username", handlers: ["param"] });
-sonic.addRoute({ method: "GET", path: "/events/:eventId", handlers: ["param"] });
+sonic.addRoute({
+	method: "GET",
+	path: "/events/:eventId",
+	handlers: ["param"],
+});
 sonic.addRoute({
 	method: "GET",
 	path: "/api/posts/:id/comments/:commentId",
 	handlers: ["param-n"],
 });
-sonic.addRoute({ method: "GET", path: "/repo/:owner/:repo", handlers: ["param-n"] });
+sonic.addRoute({
+	method: "GET",
+	path: "/repo/:owner/:repo",
+	handlers: ["param-n"],
+});
 sonic.addRoute({
 	method: "GET",
 	path: "/repo/:owner/:repo/issues/:issueId",
@@ -40,7 +52,11 @@ sonic.addRoute({
 });
 sonic.addRoute({ method: "GET", path: "/public/*path", handlers: ["wild"] });
 sonic.addRoute({ method: "GET", path: "/assets/*path", handlers: ["wild"] });
-sonic.addRoute({ method: "GET", path: "/api/legacy/*path", handlers: ["wild"] });
+sonic.addRoute({
+	method: "GET",
+	path: "/api/legacy/*path",
+	handlers: ["wild"],
+});
 
 (sonic as any).compile("GET");
 

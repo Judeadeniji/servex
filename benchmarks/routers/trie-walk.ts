@@ -190,91 +190,117 @@ const dynamicRoutes: SonicRouteNode[] = [
 	{
 		method: "GET",
 		path: "/api/users/:id",
-		handlers: ["param"] as unknown as import("../../src/types").InternalHandler[],
+		handlers: [
+			"param",
+		] as unknown as import("../../src/types").InternalHandler[],
 		paramsKeys: ["id"],
 		middlewares: [],
 	},
 	{
 		method: "GET",
 		path: "/api/posts/:id",
-		handlers: ["param"] as unknown as import("../../src/types").InternalHandler[],
+		handlers: [
+			"param",
+		] as unknown as import("../../src/types").InternalHandler[],
 		paramsKeys: ["id"],
 		middlewares: [],
 	},
 	{
 		method: "GET",
 		path: "/api/products/:sku",
-		handlers: ["param"] as unknown as import("../../src/types").InternalHandler[],
+		handlers: [
+			"param",
+		] as unknown as import("../../src/types").InternalHandler[],
 		paramsKeys: ["sku"],
 		middlewares: [],
 	},
 	{
 		method: "GET",
 		path: "/u/:username",
-		handlers: ["param"] as unknown as import("../../src/types").InternalHandler[],
+		handlers: [
+			"param",
+		] as unknown as import("../../src/types").InternalHandler[],
 		paramsKeys: ["username"],
 		middlewares: [],
 	},
 	{
 		method: "GET",
 		path: "/events/:eventId",
-		handlers: ["param"] as unknown as import("../../src/types").InternalHandler[],
+		handlers: [
+			"param",
+		] as unknown as import("../../src/types").InternalHandler[],
 		paramsKeys: ["eventId"],
 		middlewares: [],
 	},
 	{
 		method: "GET",
 		path: "/api/posts/:id/comments/:commentId",
-		handlers: ["param-n"] as unknown as import("../../src/types").InternalHandler[],
+		handlers: [
+			"param-n",
+		] as unknown as import("../../src/types").InternalHandler[],
 		paramsKeys: ["id", "commentId"],
 		middlewares: [],
 	},
 	{
 		method: "GET",
 		path: "/repo/:owner/:repo",
-		handlers: ["param-n"] as unknown as import("../../src/types").InternalHandler[],
+		handlers: [
+			"param-n",
+		] as unknown as import("../../src/types").InternalHandler[],
 		paramsKeys: ["owner", "repo"],
 		middlewares: [],
 	},
 	{
 		method: "GET",
 		path: "/repo/:owner/:repo/issues/:issueId",
-		handlers: ["param-n"] as unknown as import("../../src/types").InternalHandler[],
+		handlers: [
+			"param-n",
+		] as unknown as import("../../src/types").InternalHandler[],
 		paramsKeys: ["owner", "repo", "issueId"],
 		middlewares: [],
 	},
 	{
 		method: "GET",
 		path: "/store/:country/:state",
-		handlers: ["param-n"] as unknown as import("../../src/types").InternalHandler[],
+		handlers: [
+			"param-n",
+		] as unknown as import("../../src/types").InternalHandler[],
 		paramsKeys: ["country", "state"],
 		middlewares: [],
 	},
 	{
 		method: "GET",
 		path: "/flights/:origin/:dest/:date",
-		handlers: ["param-n"] as unknown as import("../../src/types").InternalHandler[],
+		handlers: [
+			"param-n",
+		] as unknown as import("../../src/types").InternalHandler[],
 		paramsKeys: ["origin", "dest", "date"],
 		middlewares: [],
 	},
 	{
 		method: "GET",
 		path: "/public/*path",
-		handlers: ["wild"] as unknown as import("../../src/types").InternalHandler[],
+		handlers: [
+			"wild",
+		] as unknown as import("../../src/types").InternalHandler[],
 		paramsKeys: ["path"],
 		middlewares: [],
 	},
 	{
 		method: "GET",
 		path: "/assets/*path",
-		handlers: ["wild"] as unknown as import("../../src/types").InternalHandler[],
+		handlers: [
+			"wild",
+		] as unknown as import("../../src/types").InternalHandler[],
 		paramsKeys: ["path"],
 		middlewares: [],
 	},
 	{
 		method: "GET",
 		path: "/api/legacy/*path",
-		handlers: ["wild"] as unknown as import("../../src/types").InternalHandler[],
+		handlers: [
+			"wild",
+		] as unknown as import("../../src/types").InternalHandler[],
 		paramsKeys: ["path"],
 		middlewares: [],
 	},

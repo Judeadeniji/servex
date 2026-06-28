@@ -14,7 +14,11 @@ radixRouter.addRoute({
 	path: "/static/path/to/resource",
 	handlers: [],
 });
-radixRouter.addRoute({ method: "GET", path: "/dynamic/path/:id", handlers: [] });
+radixRouter.addRoute({
+	method: "GET",
+	path: "/dynamic/path/:id",
+	handlers: [],
+});
 radixRouter.addRoute({ method: "GET", path: "/wildcard/*path", handlers: [] });
 
 trieRouter.addRoute({
@@ -30,7 +34,11 @@ sonicRouter.addRoute({
 	path: "/static/path/to/resource",
 	handlers: [],
 });
-sonicRouter.addRoute({ method: "GET", path: "/dynamic/path/:id", handlers: [] });
+sonicRouter.addRoute({
+	method: "GET",
+	path: "/dynamic/path/:id",
+	handlers: [],
+});
 sonicRouter.addRoute({ method: "GET", path: "/wildcard/*path", handlers: [] });
 
 group("1. ROUTER MATCHING", () => {

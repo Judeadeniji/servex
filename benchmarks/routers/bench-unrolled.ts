@@ -63,13 +63,11 @@ function compileUnrolled(
 function generateChain(length: number): Handler<Context>[] {
 	const chain: Handler<Context>[] = [];
 	for (let i = 0; i < length - 1; i++) {
-		chain.push(
-			async (ctx: Context, next: () => Promise<Response | void>) => {
-				(ctx as unknown as { count: number }).count =
-					((ctx as unknown as { count: number }).count || 0) + 1;
-				await next();
-			},
-		);
+		chain.push(async (ctx: Context, next: () => Promise<Response | void>) => {
+			(ctx as unknown as { count: number }).count =
+				((ctx as unknown as { count: number }).count || 0) + 1;
+			await next();
+		});
 	}
 	chain.push(async () => new Response("OK"));
 	return chain;

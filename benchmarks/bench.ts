@@ -9,12 +9,10 @@ import type { Handler } from "../src/types";
 function generateChain(length: number): Handler[] {
 	const chain: Handler[] = [];
 	for (let i = 0; i < length - 1; i++) {
-		chain.push(
-			async (ctx: Context, next) => {
-				ctx.executionCtx = ((ctx.executionCtx as number) || 0) + 1;
-				await next();
-			},
-		);
+		chain.push(async (ctx: Context, next) => {
+			ctx.executionCtx = ((ctx.executionCtx as number) || 0) + 1;
+			await next();
+		});
 	}
 	chain.push((_ctx: Context) => new Response("OK"));
 	return chain;

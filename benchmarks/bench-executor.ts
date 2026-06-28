@@ -3,7 +3,7 @@ import { compileHandlerChain } from "../src/compiler/index";
 import { executeHandlers } from "../src/core/response";
 import type { Context, Handler } from "../src/types";
 
-type MockContext = { count: number } & Context
+type MockContext = { count: number } & Context;
 
 function generateChain(length: number): Handler<MockContext>[] {
 	const chain: Handler<MockContext>[] = [];
@@ -11,7 +11,7 @@ function generateChain(length: number): Handler<MockContext>[] {
 		chain.push(
 			// biome-ignore lint/suspicious/noConfusingVoidType: void is valid
 			async (ctx: MockContext, next: () => Promise<Response | void>) => {
-				(ctx).count = ((ctx).count || 0) + 1;
+				ctx.count = (ctx.count || 0) + 1;
 				await next();
 			},
 		);

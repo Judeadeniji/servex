@@ -30,11 +30,11 @@ group("RPC Client Proxy Overhead", () => {
 	bench("Client Proxy Path Building (1 segment)", async () => {
 		// Just trigger proxy resolution without fetch execution
 		// The proxy delays execution until the method (e.g. get) is called.
-		 client.api;
+		client.api;
 	});
-    
+
 	bench("Client Proxy Path Building (2 segments)", async () => {
-		 client.api.test;
+		client.api.test;
 	});
 });
 

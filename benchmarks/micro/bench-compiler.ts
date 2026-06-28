@@ -31,8 +31,6 @@ const longChain = [
 const compiledShort = compileHandlerChain(shortChain);
 const compiledLong = compileHandlerChain(longChain);
 
-
-
 // Ensure both give the same result
 async function verify() {
 	const res1 = await executeHandlers(ctx, shortChain);

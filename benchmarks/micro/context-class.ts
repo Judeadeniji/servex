@@ -1,8 +1,26 @@
 import { run, bench, group } from "mitata";
 
 const contextHelpers = {
-	a() {}, b() {}, c() {}, d() {}, e() {}, f() {}, g() {}, h() {}, i() {}, j() {},
-	k() {}, l() {}, m() {}, n() {}, o() {}, p() {}, q() {}, r() {}, s() {}, t() {}
+	a() {},
+	b() {},
+	c() {},
+	d() {},
+	e() {},
+	f() {},
+	g() {},
+	h() {},
+	i() {},
+	j() {},
+	k() {},
+	l() {},
+	m() {},
+	n() {},
+	o() {},
+	p() {},
+	q() {},
+	r() {},
+	s() {},
+	t() {},
 };
 
 class Context {
@@ -27,7 +45,7 @@ group("Context Creation", () => {
 			_params: 5,
 			_status: 200,
 			_isFinished: false,
-			...contextHelpers
+			...contextHelpers,
 		};
 	});
 

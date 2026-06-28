@@ -9,20 +9,40 @@ const routes: Route[] = [
 	{ method: "GET", path: "/", handlers: [() => new Response("Root")] },
 	{ method: "GET", path: "/about", handlers: [() => new Response("About")] },
 	{ method: "GET", path: "/api/health", handlers: [() => new Response("OK")] },
-	{ method: "GET", path: "/api/config", handlers: [() => new Response("Config")] },
+	{
+		method: "GET",
+		path: "/api/config",
+		handlers: [() => new Response("Config")],
+	},
 	{ method: "GET", path: "/login", handlers: [() => new Response("Login")] },
-	{ method: "GET", path: "/register", handlers: [() => new Response("Register")] },
+	{
+		method: "GET",
+		path: "/register",
+		handlers: [() => new Response("Register")],
+	},
 	{
 		method: "GET",
 		path: "/dashboard",
 		handlers: [() => new Response("Dashboard")],
 	},
-	{ method: "GET", path: "/pricing", handlers: [() => new Response("Pricing")] },
-	{ method: "GET", path: "/contact", handlers: [() => new Response("Contact")] },
+	{
+		method: "GET",
+		path: "/pricing",
+		handlers: [() => new Response("Pricing")],
+	},
+	{
+		method: "GET",
+		path: "/contact",
+		handlers: [() => new Response("Contact")],
+	},
 	{ method: "GET", path: "/terms", handlers: [() => new Response("Terms")] },
 
 	// 10 Simple Param routes
-	{ method: "GET", path: "/api/users/:id", handlers: [() => new Response("User")] },
+	{
+		method: "GET",
+		path: "/api/users/:id",
+		handlers: [() => new Response("User")],
+	},
 	{
 		method: "GET",
 		path: "/api/posts/:slug",
@@ -48,13 +68,21 @@ const routes: Route[] = [
 		path: "/download/:fileId",
 		handlers: [() => new Response("Download")],
 	},
-	{ method: "GET", path: "/docs/:page", handlers: [() => new Response("Docs")] },
+	{
+		method: "GET",
+		path: "/docs/:page",
+		handlers: [() => new Response("Docs")],
+	},
 	{
 		method: "GET",
 		path: "/events/:eventId",
 		handlers: [() => new Response("Event")],
 	},
-	{ method: "GET", path: "/orgs/:orgId", handlers: [() => new Response("Org")] },
+	{
+		method: "GET",
+		path: "/orgs/:orgId",
+		handlers: [() => new Response("Org")],
+	},
 	{
 		method: "GET",
 		path: "/settings/:section",
@@ -109,7 +137,11 @@ const routes: Route[] = [
 		path: "/api/legacy/*path",
 		handlers: [() => new Response("Legacy")],
 	},
-	{ method: "GET", path: "/proxy/*path", handlers: [() => new Response("Proxy")] },
+	{
+		method: "GET",
+		path: "/proxy/*path",
+		handlers: [() => new Response("Proxy")],
+	},
 ];
 
 const requestMix = [
