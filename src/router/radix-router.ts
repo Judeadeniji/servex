@@ -1,6 +1,6 @@
-import $$path from "node:path";
+import $$path from "path";
 import type { Context } from "../context";
-import type { Handler, InternalHandler, MiddlewareHandler } from "../types";
+import type { InternalHandler, MiddlewareHandler } from "../types";
 import {
 	type HTTPMethod,
 	type IRouter,

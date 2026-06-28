@@ -1,6 +1,6 @@
-import * as nodeHttp from "node:http";
-import * as nodeHttp2 from "node:http2";
-import * as nodeHttps from "node:https";
+import * as nodeHttp from "http";
+import * as nodeHttp2 from "http2";
+import * as nodeHttps from "https";
 
 type Fetcher = (request: Request) => Promise<Response>;
 

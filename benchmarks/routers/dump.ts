@@ -1,4 +1,4 @@
-import * as fs from "node:fs";
+import * as fs from "fs";
 import { SonicRouter } from "../../src/router/sonic-router";
 
 const sonic = new SonicRouter();

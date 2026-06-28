@@ -1,7 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it } from "bun:test";
-import * as fs from "node:fs/promises";
-import * as os from "node:os";
-import * as path from "node:path";
+import * as fs from "fs/promises";
+import * as os from "os";
+import * as path from "path";
 import { FileSystemStorage } from "../src/storage/fs";
 import { MemoryStorage } from "../src/storage/memory";
 

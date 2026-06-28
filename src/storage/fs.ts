@@ -1,7 +1,7 @@
 import type { StorageAdapter } from "./types";
-import type * as fsPromisesType from "node:fs/promises";
-import type * as nodePathType from "node:path";
-import type * as nodeCryptoType from "node:crypto";
+import type * as fsPromisesType from "fs/promises";
+import type * as nodePathType from "path";
+import type * as nodeCryptoType from "crypto";
 
 /**
  * A persistent file-system storage adapter for Node/Bun/Deno.
@@ -29,9 +29,9 @@ export class FileSystemStorage implements StorageAdapter {
 		if (this.initialized) return;
 
 		try {
-			this.fs = await import("node:fs/promises");
-			this.path = await import("node:path");
-			this.crypto = await import("node:crypto");
+			this.fs = await import("fs/promises");
+			this.path = await import("path");
+			this.crypto = await import("crypto");
 		} catch (_e) {
 			throw new Error(
 				"FileSystemStorage requires Node.js built-ins (fs, path, crypto) which are unavailable in this environment.",

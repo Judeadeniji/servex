@@ -5,7 +5,7 @@ function createHeavyApp() {
 	const app = createServer();
 	// Simulate an app with 1000 dynamic/static routes
 	for (let i = 0; i < 1000; i++) {
-		app.get(`/api/test/${i}`, (c) => new Response("OK"));
+		app.get(`/api/test/${i}`, (c) => c.text("OK"));
 	}
 	return app;
 }

@@ -22,7 +22,7 @@
  *   --pipelining   HTTP pipelining factor (default: 1)
  */
 
-import * as path from "node:path";
+import * as path from "path";
 import autocannon, { type Result } from "autocannon";
 import { type Subprocess, spawn } from "bun";
 

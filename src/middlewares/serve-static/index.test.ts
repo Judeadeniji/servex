@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
-import fs from "node:fs/promises";
-import path from "node:path";
+import fs from "fs/promises";
+import path from "path";
 import { createServer } from "../../../src";
 import { serveStatic } from "./index";
 

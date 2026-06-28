@@ -1,4 +1,4 @@
-import * as $$path from "node:path";
+import * as $$path from "path";
 import type { Context, InternalHandler, MiddlewareHandler } from "../types";
 import type { HTTPMethod, IRouter, MatchedRoute, Route } from "./base";
 import { compileSonicTrieMatcher } from "./sonic-trie-jit";
