@@ -1,13 +1,12 @@
-import type { Handler } from "../src/types";
 import { describe, expect, it } from "bun:test";
 import { SonicRouter } from "../src/router/sonic-router";
+import type { Handler } from "../src/types";
 
 describe("SonicRouter - Precedence & Specificity", () => {
 	function getWinner(routes: string[], url: string): string | undefined {
 		const router = new SonicRouter();
 		for (const route of routes) {
 			const fn = (() => {}) as unknown as Handler;
-			(fn as any).routeName = route;
 			router.addRoute({
 				method: "GET",
 				path: route,
@@ -15,9 +14,8 @@ describe("SonicRouter - Precedence & Specificity", () => {
 			});
 		}
 		const matched = router.match("GET", url);
-		if (!matched || !matched.handlers) return undefined;
-		const handler = Array.isArray(matched.handlers) ? matched.handlers[0] : matched.handlers;
-		return handler ? (handler as any).routeName : undefined;
+		const routePath = matched?.route?.path;
+		return routePath !== undefined ? (routePath === "" ? "/" : `/${routePath}`) : undefined;
 	}
 
 	it("Static vs Param (Param registered first)", () => {
