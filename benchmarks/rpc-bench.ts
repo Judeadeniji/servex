@@ -1,13 +1,12 @@
 import autocannon from "autocannon";
 import { createServer } from "../src/index";
 import { createRPCFunction } from "../src/rpc/function";
-import { rpc as rpcNew } from "../src/rpc/plugin";
-import { rpc as rpcOld } from "../src/rpc/plugin-old";
+import { rpc } from "../src/rpc/plugin";
 
 const ROUTE_COUNT = 500;
-const TARGET_ROUTE = `route${ROUTE_COUNT - 1}`; // The worst-case route for O(N) lookup
+const TARGET_ROUTE = `route${ROUTE_COUNT - 1}`; 
 
-// Generate a large registry to simulate a real-world RPC setup
+// Generate a large registry for RPC
 const registry: Record<string, any> = {};
 for (let i = 0; i < ROUTE_COUNT; i++) {
 	registry[`route${i}`] = createRPCFunction().handler(() => {
@@ -15,14 +14,27 @@ for (let i = 0; i < ROUTE_COUNT; i++) {
 	});
 }
 
-const appOld = createServer().use(rpcOld(registry));
-const appNew = createServer().use(rpcNew(registry));
+const appRPC = createServer().use(rpc(registry));
 
-const PORT_OLD = 3005;
-const PORT_NEW = 3006;
+// Generate the exact same routes using native ServeX Router
+const appNative = createServer();
+for (let i = 0; i < ROUTE_COUNT; i++) {
+	appNative.post(`/route${i}`, async (ctx) => {
+		try {
+			// Manually read JSON to simulate what the RPC wrapper does
+			await ctx.req.json();
+		} catch {
+			return ctx.json({ ok: false, error: "VALIDATION_ERROR" }, 400);
+		}
+		return ctx.json({ ok: true, data: { message: `Hello from route ${i}` } });
+	});
+}
 
-appOld.listen({ port: PORT_OLD });
-appNew.listen({ port: PORT_NEW });
+const PORT_RPC = 3005;
+const PORT_NATIVE = 3006;
+
+appRPC.listen({ port: PORT_RPC });
+appNative.listen({ port: PORT_NATIVE });
 
 async function runBench(name: string, url: string) {
 	console.log(`\nStarting benchmark: ${name}`);
@@ -34,7 +46,7 @@ async function runBench(name: string, url: string) {
 				url,
 				method: "POST",
 				connections: 200,
-				duration: 20, // 5 seconds is enough to see the difference
+				duration: 10,
 				headers: {
 					"content-type": "application/json",
 				},
@@ -61,8 +73,8 @@ async function main() {
 	await new Promise(r => setTimeout(r, 1000));
 	
 	try {
-		await runBench("Old RPC (Wildcard O(N) Lookup)", `http://localhost:${PORT_OLD}/rpc/${TARGET_ROUTE}`);
-		await runBench("New RPC (Radix Router Lookup)", `http://localhost:${PORT_NEW}/rpc/${TARGET_ROUTE}`);
+		await runBench("ServeX Native Router (JSON Parsing)", `http://localhost:${PORT_NATIVE}/${TARGET_ROUTE}`);
+		await runBench("ServeX RPC Plugin", `http://localhost:${PORT_RPC}/${TARGET_ROUTE}`);
 	} catch (e) {
 		console.error("Benchmark failed", e);
 	} finally {
