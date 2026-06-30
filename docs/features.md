@@ -96,29 +96,20 @@ app.get("/home", (c) => {
 });
 ```
 
-## Storage API
 
-ServeX provides lightweight storage abstractions out of the box, perfect for caching or managing data across requests.
 
-```typescript
-import { createStorage } from "servex/storage";
+## Signals & Go-Style Contexts
 
-// Creates an ephemeral MemoryStorage adapter by default.
-// Great for serverless platforms where disk access is wiped.
-const store = createStorage();
+ServeX implements a highly advanced **Go-style context architecture** via `c.routine()`. Just like `context.Context` in Go, ServeX's context manages nested cancellation, deadlines, and hierarchical values. 
 
-await store.set("key", "value");
-const data = await store.get("key");
-```
+The strict rules of ServeX signal routines are:
+- **Cancellation flows DOWN:** If a parent routine is cancelled, all descendant routines are instantly cancelled.
+- **Values flow UP:** Child routines walking up the tree can discover values injected by ancestors.
 
-## Signals (Request Cancellation)
-
-Every request in ServeX automatically carries an `AbortSignal` to gracefully handle timeouts or unexpected client disconnects. You can access it via `c.req.signal` or tap into the context's signal routine.
-
-This is highly recommended for aborting outgoing `fetch` calls, terminating database queries, or cleaning up background tasks if the user cancels the request.
+Every request automatically creates a root routine tied to an `AbortSignal`. 
 
 ### Example 1: Aborting Outbound Requests
-By passing the signal to native APIs like `fetch`, the outbound request will be instantly terminated if the client drops their connection to your server.
+By passing the context's signal to native APIs like `fetch`, the outbound request will be instantly terminated if the client drops their connection to your server.
 
 ```typescript
 app.get("/heavy-task", async (c) => {
@@ -138,18 +129,24 @@ app.get("/heavy-task", async (c) => {
 });
 ```
 
-### Example 2: Cleaning up Background Tasks
-You can manually listen for the `"abort"` event on the signal to stop loops or clear intervals.
+### Example 2: Managing Deadlines and Background Tasks
+You can use the Go-style context tree to spawn sub-routines that automatically clean up when the request drops.
 
 ```typescript
+import { withTimeout } from "servex/core/signal";
+
 app.get("/stream", async (c) => {
+  // Create a child routine that automatically times out after 5 seconds
+  const [childCtx, cancel] = withTimeout(c.routine(), 5000);
+
   const timer = setInterval(() => {
     console.log("Processing heavy background task...");
   }, 1000);
 
-  // Listen to the abort event to clean up memory
-  c.req.signal.addEventListener("abort", () => {
-    console.log("Client disconnected! Cleaning up interval...");
+  // Listen to the abort event on the child routine to clean up memory
+  // This will fire EITHER when 5 seconds pass OR if the client disconnects!
+  childCtx.signal.addEventListener("abort", () => {
+    console.log("Routine aborted! Cleaning up interval...");
     clearInterval(timer);
   });
 
