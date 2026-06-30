@@ -2,36 +2,44 @@
 
 ServeX provides a high-performance routing API designed for speed and simplicity. It supports all standard HTTP methods, dynamic route parameters, and seamless schema validation.
 
-## Creating an Application
+## Creating an Application & Configuration
 
-The entry point for a ServeX application is the `createServer()` function. This initializes your main app instance and configures the underlying high-performance router.
+The entry point for a ServeX application is the `createServer()` function. You can pass a `ServerOptions` configuration object to customize the router's behavior, compilation strategies, and base paths.
 
 ```typescript
 import { createServer } from "servex";
 
 const app = createServer({
-  basePath: "/api/v1", // Optional: Prefix all routes
-  debug: true,         // Optional: Enable debug mode
+  basePath: "/api/v1", // Optional: Prefix all routes registered on this app
+  debug: true,         // Optional: Enable debug mode for verbose logging
+  aot: true,           // Optional: Enable Ahead-of-Time compilation for routes
+  jit: true,           // Optional: Enable Just-in-Time optimizations
+  nativeStaticResponse: true, // Optional: Bypass the router entirely for static literal responses
+  adapter: "bun"       // Optional: Explicitly define the runtime adapter ("bun", "web-standard", etc.)
 });
-
-app.get("/status", (c) => {
-  return c.json({ status: "ok" });
-});
-
-export default app; // Assuming Bun execution
 ```
 
 ## Route Definitions
 
 ServeX supports standard HTTP methods via intuitive router methods: `.get()`, `.post()`, `.put()`, `.delete()`, `.patch()`, `.options()`, `.head()`, and `.all()`.
 
-You can return inline responses directly or use the Context (`c`) to formulate your response.
+### Static Handlers
+
+ServeX is heavily optimized for returning static data. If a route always returns the exact same string, JSON object, or number, you can pass it directly as the handler. When combined with the `nativeStaticResponse: true` configuration, ServeX can bypass execution overhead completely.
 
 ```typescript
 // Inline response (highly optimized natively)
 app.get("/health", { healthy: true });
 
-// Context-based handler
+// Plain string literal
+app.get("/version", "v1.0.0");
+```
+
+### Dynamic Handlers
+
+For dynamic data, use a standard function that takes the Context (`c`) to formulate your response.
+
+```typescript
 app.post("/users", async (c) => {
   const body = await c.req.json();
   // Process the user...

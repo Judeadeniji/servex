@@ -34,19 +34,61 @@ ServeX exposes a robust set of hooks that let you tap into different phases of t
 
 - **`onRequest(ctx)`**: Runs immediately when a request is received, before any routing or middleware execution.
 - **`onBeforeHandle(ctx)`**: Runs after routing matches, but before the main route handler executes.
-- **`onAfterHandle(ctx, response)`**: Runs after the route handler has executed and produced a response. You can intercept or modify the outgoing `Response`.
-- **`onError(error, ctx)`**: Catches and handles any unhandled errors or exceptions thrown during the request lifecycle.
-- **`onResponse(ctx)`**: The final hook, running right before the response is sent back to the client.
+- **`onAfterHandle(ctx, response)`**: Runs after the route handler has executed and produced a response. You can intercept, modify, or completely replace the outgoing `Response`.
+- **`onError(error, ctx)`**: Catches and handles any unhandled errors or `HttpException`s thrown during the request lifecycle.
+- **`onResponse(ctx)`**: The final hook, running right before the response is sent back to the client (read-only phase).
 
-**Example: Global Hooks**
+### Post Response Hooks
+
+ServeX allows you to modify responses globally after the handler has finished, but before the response is finalized. Use the `onAfterHandle` hook for this.
+
 ```typescript
-app.onRequest((c) => {
-  console.log(`Incoming request to: ${c.req.url}`);
+app.onAfterHandle((c, response) => {
+  // Add global CORS headers or custom metrics
+  response.headers.set("X-Powered-By", "ServeX");
+  
+  // You can modify the response or return an entirely new one!
+  return response;
 });
 
-app.onAfterHandle((c, response) => {
-  response.headers.set("X-Powered-By", "ServeX");
-  return response;
+app.onResponse((c) => {
+  // Runs right as the response is flushed to the network.
+  // Useful for cleanup or logging, but you cannot modify the response here.
+  console.log(`Flushed response for ${c.req.url}`);
+});
+```
+
+## Error Handling
+
+ServeX provides structured error handling through the `HttpException` class and the `onError` global hook.
+
+### Throwing HTTP Exceptions
+
+If you need to instantly break the execution flow and return an error (e.g., in a middleware or deeply nested function), use `HttpException`:
+
+```typescript
+import { HttpException } from "servex";
+
+app.get("/restricted", (c) => {
+  throw new HttpException(403, "You do not have access to this resource.");
+});
+```
+
+### Global Error Hook
+
+You can intercept all unhandled exceptions (including `HttpException`s) by defining a global `onError` hook. This is the ideal place to format your API's standard error response structure.
+
+```typescript
+app.onError((err, c) => {
+  console.error("Global Error Caught:", err);
+
+  if (err instanceof HttpException) {
+    // Gracefully format expected HTTP errors
+    return c.json({ ok: false, message: err.message }, err.status);
+  }
+
+  // Handle completely unexpected crashes
+  return c.json({ ok: false, message: "Internal Server Error" }, 500);
 });
 ```
 
@@ -98,12 +140,14 @@ export const myLogger = async (c: Context, next: NextFunction) => {
 You can easily apply multiple middlewares to a route or an entire application.
 
 **Global Application Middleware:**
+
 ```typescript
 app.use(myLogger);
 app.use(requireAuth);
 ```
 
 **Route-Specific Middleware:**
+
 ```typescript
 app.get("/dashboard", requireAuth, (c) => {
   const user = c.get("user");
