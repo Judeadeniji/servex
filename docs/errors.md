@@ -30,13 +30,30 @@ app.get("/secret", (c) => {
 }
 ```
 
+## Returning vs. Throwing (Performance)
+
+In ServeX, you can choose to either `throw` an error or `return` it directly. 
+
+Because generating stack traces in V8 (Node/Bun/Cloudflare) incurs a massive performance penalty, **returning** the error object is significantly faster for predictable control flow. ServeX detects the returned `HttpException` and handles it exactly as if it were thrown.
+
+```typescript
+app.get("/secret", (c) => {
+  // Option A: Throwing (Triggers the catch block / onError hook)
+  // throw new HttpException({ statusCode: 401, message: "Missing token" });
+
+  // Option B: Returning (Extremely fast, bypasses try/catch overhead)
+  return new HttpException({ statusCode: 401, message: "Missing token" });
+});
+```
+
 ## The Context Shorthand
 
 For simple errors, you don't even need to instantiate the class manually. The `Context` object provides a `c.error()` helper that creates the `HttpException` for you.
 
 ```typescript
 app.get("/file", (c) => {
-  throw c.error(404, "File not found");
+  // You can return this just as easily!
+  return c.error(404, "File not found");
 });
 ```
 
@@ -61,12 +78,12 @@ app.post("/users", async (c) => {
   
   if (!user.email) {
     // 400 Bad Request
-    throw new BadRequestError("Email is required");
+    return new BadRequestError("Email is required");
   }
 
   if (await db.exists(user.email)) {
     // 409 Conflict
-    throw new ConflictError("Email already in use");
+    return new ConflictError("Email already in use");
   }
 
   return c.json({ success: true });
