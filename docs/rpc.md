@@ -24,7 +24,8 @@ ServeX RPC uses [Standard Schema](https://github.com/standard-schema/standard-sc
 You can chain `.input()`, `.output()`, and `.error()` to strictly type and validate the data flowing through your RPC endpoints.
 
 ```typescript
-import { createRPCFunction, RPCTypedError } from "servex/rpc";
+import { createRPCFunction } from "servex/rpc";
+import { HttpException } from "servex/http-exception";
 import { z } from "zod";
 
 const getUser = createRPCFunction()
@@ -36,8 +37,14 @@ const getUser = createRPCFunction()
     const user = await database.findUser(input.id);
     
     if (!user) {
-      // You can throw typed errors that the client can catch and infer
-      throw new RPCTypedError({ code: "NOT_FOUND" });
+      // Return or throw an HttpException with typed data.
+      // This maps perfectly to the .error() schema!
+      return new HttpException({ 
+        error: "TYPED_ERROR",
+        statusCode: 404,
+        message: "User could not be located",
+        data: { code: "NOT_FOUND" } 
+      });
     }
     
     return { id: user.id, name: user.name };
@@ -166,5 +173,27 @@ When configuring `createRPCClient`, you can pass the following options:
 
 - `baseURL`: The base URL of your API (e.g., `http://localhost:3000` or `https://api.example.com`).
 - `prefix`: The route prefix where the RPC plugin is mounted (defaults to `/rpc` if omitted).
-- `fetch`: Provide a custom fetch implementation. Useful for environments like testing where you want to pass the request directly to the app without network overhead.
 - `hash`: A hashing function to shorten URLs in production.
+- `fetch`: Provide a custom fetch implementation. 
+
+#### Bypassing the Network Stack for Testing
+One of ServeX RPC's most powerful features is overriding the internal fetch implementation. By passing the `app.fetch` function directly, your RPC client can test your server without ever making a real network request or opening a port. This makes integration testing blazing fast:
+
+```typescript
+import { createServer } from "servex";
+import { createRPCClient } from "servex/rpc";
+import { rpcRegistry } from "./router";
+
+const app = createServer();
+const plugin = rpc(rpcRegistry);
+app.use("/rpc", plugin);
+
+// Zero-network integration test client!
+const testClient = createRPCClient<typeof plugin>({
+  baseURL: "http://localhost",
+  fetch: async (url, init) => app.fetch(new Request(url, init)),
+});
+
+// Runs entirely in-memory
+const res = await testClient.users.getUser({ id: "123" });
+```
