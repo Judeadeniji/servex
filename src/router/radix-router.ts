@@ -82,9 +82,7 @@ export class RadixRouteTrie implements IRouter {
 		}
 	}
 
-	private addGlobalMiddleware(
-		middlewares: MiddlewareHandler<Context>[],
-	): void {
+	private addGlobalMiddleware(middlewares: MiddlewareHandler<Context>[]): void {
 		const applyMiddlewareToSegment = (segment: RadixSegmentNode) => {
 			segment.middlewares.push(...middlewares);
 			for (const child of segment.children.values()) {
@@ -200,10 +198,7 @@ export class RadixRouteTrie implements IRouter {
 		return this;
 	}
 
-	match(
-		method: HTTPMethod,
-		url: string,
-	): MatchedRoute | null {
+	match(method: HTTPMethod, url: string): MatchedRoute | null {
 		let sanitizedPath = url;
 		if (sanitizedPath.charCodeAt(0) === 47)
 			sanitizedPath = sanitizedPath.slice(1);
@@ -253,7 +248,9 @@ export class RadixRouteTrie implements IRouter {
 							route: undefined,
 							matched_route: matchedRoute,
 							params,
-							handlers: child.handlers[methodUpper] as InternalHandler<Context>[] | InternalHandler<Context>,
+							handlers: child.handlers[methodUpper] as
+								| InternalHandler<Context>[]
+								| InternalHandler<Context>,
 							store: undefined,
 							executor: undefined,
 							is405: false,
@@ -275,7 +272,9 @@ export class RadixRouteTrie implements IRouter {
 				route: undefined,
 				matched_route: matchedRoute,
 				params,
-				handlers: currentNode.handlers[methodUpper] as InternalHandler<Context>[] | InternalHandler<Context>,
+				handlers: currentNode.handlers[methodUpper] as
+					| InternalHandler<Context>[]
+					| InternalHandler<Context>,
 				store: undefined,
 				executor: undefined,
 				is405: false,

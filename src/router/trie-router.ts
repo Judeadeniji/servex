@@ -1,6 +1,6 @@
 import $$path from "path";
 import type { Context } from "../context";
-import type { Handler, InternalHandler, MiddlewareHandler } from "../types";
+import type { InternalHandler, MiddlewareHandler } from "../types";
 import {
 	type HTTPMethod,
 	type IRouter,
@@ -104,9 +104,7 @@ export class TrieRouter implements IRouter {
 		}
 	}
 
-	private addGlobalMiddleware(
-		middlewares: MiddlewareHandler<Context>[],
-	): void {
+	private addGlobalMiddleware(middlewares: MiddlewareHandler<Context>[]): void {
 		const applyMiddlewareToSegment = (segment: TrieSegmentNode) => {
 			segment.middlewares.push(...middlewares);
 			for (const child of segment.children.values()) {
@@ -283,10 +281,7 @@ export class TrieRouter implements IRouter {
 		return routes;
 	}
 
-	match(
-		method: HTTPMethod,
-		_route: string,
-	): MatchedRoute | null {
+	match(method: HTTPMethod, _route: string): MatchedRoute | null {
 		const route = this.sanitizeRoute(_route);
 		const segments = route === "/" ? [route] : route.split("/");
 		const matched_route: MatchedRoute = {
@@ -339,7 +334,9 @@ export class TrieRouter implements IRouter {
 		if (!nextSegment && route.isEndOfRoute) {
 			if (route.handlers[method]) {
 				matched_route.matched = true;
-				matched_route.handlers = route.handlers[method] as InternalHandler<Context>[] | InternalHandler<Context>;
+				matched_route.handlers = route.handlers[method] as
+					| InternalHandler<Context>[]
+					| InternalHandler<Context>;
 				return matched_route;
 			} else {
 				return null; // Method not allowed for this route
@@ -401,7 +398,9 @@ export class TrieRouter implements IRouter {
 					matched_route.matched_route += `/${seg}`;
 					if (trieSegment.handlers[method]) {
 						matched_route.matched = true;
-						matched_route.handlers = trieSegment.handlers[method] as InternalHandler<Context>[] | InternalHandler<Context>;
+						matched_route.handlers = trieSegment.handlers[method] as
+							| InternalHandler<Context>[]
+							| InternalHandler<Context>;
 						this.collectMiddlewares(trieSegment, matched_route.middlewares!);
 						return matched_route;
 					}

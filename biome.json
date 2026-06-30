@@ -6,7 +6,8 @@
 		"useIgnoreFile": false
 	},
 	"files": {
-		"ignoreUnknown": false
+		"ignoreUnknown": false,
+		"includes": ["**", "!**/.tmp_elysia"]
 	},
 	"formatter": {
 		"enabled": true,
@@ -15,11 +16,12 @@
 	"linter": {
 		"enabled": true,
 		"rules": {
-			"recommended": true,
+			"preset": "recommended",
 			"suspicious": {
 				"noTsIgnore": "off",
 				"noAssignInExpressions": "off",
-				"noConfusingVoidType": "off"
+				"noConfusingVoidType": "off",
+				"noExplicitAny": "off"
 			},
 			"style": {
 				"noNonNullAssertion": "off",

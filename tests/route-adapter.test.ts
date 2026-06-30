@@ -1,4 +1,3 @@
-import type { Handler } from "../src/types";
 import { describe, expect, it } from "bun:test";
 import { RouterAdapter, RouterType } from "../src/router/adapter";
 import type { Route } from "../src/router/base";

@@ -3,7 +3,6 @@ import type { Context, InternalHandler, MiddlewareHandler } from "../types";
 import type { HTTPMethod, IRouter, MatchedRoute, Route } from "./base";
 import { compileSonicTrieMatcher } from "./sonic-trie-jit";
 
-
 const createNoMatch = (is405: boolean): MatchedRoute => ({
 	matched: false,
 	method: undefined,
@@ -124,10 +123,7 @@ export class SonicRouter implements IRouter {
 		(url: string, method: string) => MatchedRoute | null
 	> = {};
 
-	private staticRoutes: Record<
-		string,
-		Record<string, MatchedRoute>
-	> = {};
+	private staticRoutes: Record<string, Record<string, MatchedRoute>> = {};
 
 	private isDirty: Record<string, boolean> = {};
 
@@ -251,10 +247,7 @@ export class SonicRouter implements IRouter {
 		this.matchFns[method] = matchFn;
 	}
 
-	match(
-		method: HTTPMethod,
-		url: string,
-	): MatchedRoute | null {
+	match(method: HTTPMethod, url: string): MatchedRoute | null {
 		this.compile(method);
 
 		const p = url as string;
@@ -270,7 +263,7 @@ export class SonicRouter implements IRouter {
 			const m = dynamicMatchFn(p, method);
 			if (m) return m;
 		}
-		
+
 		// 405 check for dynamic routes: check other compiled methods
 		for (const m in this.matchFns) {
 			if (m !== method) {

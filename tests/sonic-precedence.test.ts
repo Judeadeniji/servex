@@ -15,7 +15,11 @@ describe("SonicRouter - Precedence & Specificity", () => {
 		}
 		const matched = router.match("GET", url);
 		const routePath = matched?.route?.path;
-		return routePath !== undefined ? (routePath === "" ? "/" : `/${routePath}`) : undefined;
+		return routePath !== undefined
+			? routePath === ""
+				? "/"
+				: `/${routePath}`
+			: undefined;
 	}
 
 	it("Static vs Param (Param registered first)", () => {

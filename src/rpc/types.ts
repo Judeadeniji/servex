@@ -1,11 +1,10 @@
 import type { StandardSchemaV1 } from "@standard-schema/spec";
+import type { HttpException } from "../http-exception";
 import type {
 	MiddlewareHandler,
 	Context as ServeXContext,
 	ServeXPlugin,
 } from "../types";
-import type { RPCError, RPCTypedError } from "./error";
-import type { HttpException } from "../http-exception";
 import type { Result } from "./result";
 
 export type RPCContext = ServeXContext & {

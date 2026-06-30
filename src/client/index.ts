@@ -77,7 +77,6 @@ export type ClientNode<
 };
 
 export type Client<TApp> =
-	// biome-ignore lint/suspicious/noExplicitAny: Required for broad generic inference of the app instance
 	TApp extends ServeXRouter<any, infer S, any> ? ClientNode<S> : never;
 
 type FetchLike =
@@ -85,7 +84,6 @@ type FetchLike =
 			input: RequestInfo | URL,
 			init?: RequestInit,
 	  ) => Promise<Response> | Response)
-	// biome-ignore lint/suspicious/noExplicitAny: any is needed here
 	| ((request: Request, ...args: any[]) => Promise<Response> | Response);
 
 export interface ClientOptions {

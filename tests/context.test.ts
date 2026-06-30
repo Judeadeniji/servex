@@ -9,9 +9,7 @@ describe("Context", () => {
 		const res = ctx.json({ message: "Success" }, 201, { "X-Custom": "1" });
 
 		expect(res.status).toBe(201);
-		expect(res.headers.get("Content-Type")).toBe(
-			"application/json; charset=UTF-8",
-		);
+		expect(res.headers.get("Content-Type")).toMatch(/application\/json/i);
 		expect(res.headers.get("X-Custom")).toBe("1");
 	});
 

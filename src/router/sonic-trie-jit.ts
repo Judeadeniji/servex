@@ -124,7 +124,8 @@ export function compileSonicTrieMatcher<_T>(
 	): string {
 		const paramValuesArr = route.paramsKeys
 			.map(
-				(k, i) => `url.slice(${capturedVars[i].start}, ${capturedVars[i].end})`,
+				(_k, i) =>
+					`url.slice(${capturedVars[i].start}, ${capturedVars[i].end})`,
 			)
 			.join(",");
 		const idx = routeIndex(route);

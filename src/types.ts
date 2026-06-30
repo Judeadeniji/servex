@@ -33,8 +33,7 @@ export type MiddlewareHandler<C extends Context = Context> = Handler<C>;
 
 export interface HTMLBundlelike {
 	index: string;
-	// biome-ignore lint/suspicious/noExplicitAny: any is allowed here
-		[key: string]: any;
+	[key: string]: any;
 }
 
 export type InlineHandler =
@@ -120,7 +119,10 @@ export type ExtractResponseType<T> = T extends (
 	? R
 	: never;
 
-export type Last<T extends unknown[]> = T extends readonly [...unknown[], infer L]
+export type Last<T extends unknown[]> = T extends readonly [
+	...unknown[],
+	infer L,
+]
 	? L
 	: never;
 
@@ -276,7 +278,12 @@ type ValidatedContext<
 	P extends string,
 	T extends ValidationTarget,
 	Schema extends StandardSchemaV1,
-> = Context<E, P, ExtractUrl<P>, { [K in T]: StandardSchemaV1.InferOutput<Schema> }>;
+> = Context<
+	E,
+	P,
+	ExtractUrl<P>,
+	{ [K in T]: StandardSchemaV1.InferOutput<Schema> }
+>;
 
 /**
  * Narrows the schema produced by a plain (non-validated) route.
@@ -324,13 +331,28 @@ export interface ServeXRouter<
 
 	// ── GET ───────────────────────────────────────────────────────────────────
 
-	get<P extends string, T extends ValidationTarget, Schema extends StandardSchemaV1>(
+	get<
+		P extends string,
+		T extends ValidationTarget,
+		Schema extends StandardSchemaV1,
+	>(
 		path: P,
 		validator: ValidatorMiddleware<T, Schema>,
 		handler: InlineHandler,
-	): AddRoute<E, S, B, P, ValidatedRouteSchema<"GET", T, Schema, InlineHandler, true>>;
+	): AddRoute<
+		E,
+		S,
+		B,
+		P,
+		ValidatedRouteSchema<"GET", T, Schema, InlineHandler, true>
+	>;
 
-	get<P extends string, T extends ValidationTarget, Schema extends StandardSchemaV1, R>(
+	get<
+		P extends string,
+		T extends ValidationTarget,
+		Schema extends StandardSchemaV1,
+		R,
+	>(
 		path: P,
 		validator: ValidatorMiddleware<T, Schema>,
 		handler: Handler<ValidatedContext<E, P, T, Schema>, R>,
@@ -348,13 +370,28 @@ export interface ServeXRouter<
 
 	// ── POST ──────────────────────────────────────────────────────────────────
 
-	post<P extends string, T extends ValidationTarget, Schema extends StandardSchemaV1>(
+	post<
+		P extends string,
+		T extends ValidationTarget,
+		Schema extends StandardSchemaV1,
+	>(
 		path: P,
 		validator: ValidatorMiddleware<T, Schema>,
 		handler: InlineHandler,
-	): AddRoute<E, S, B, P, ValidatedRouteSchema<"POST", T, Schema, InlineHandler, true>>;
+	): AddRoute<
+		E,
+		S,
+		B,
+		P,
+		ValidatedRouteSchema<"POST", T, Schema, InlineHandler, true>
+	>;
 
-	post<P extends string, T extends ValidationTarget, Schema extends StandardSchemaV1, R>(
+	post<
+		P extends string,
+		T extends ValidationTarget,
+		Schema extends StandardSchemaV1,
+		R,
+	>(
 		path: P,
 		validator: ValidatorMiddleware<T, Schema>,
 		handler: Handler<ValidatedContext<E, P, T, Schema>, R>,
@@ -372,13 +409,28 @@ export interface ServeXRouter<
 
 	// ── PUT ───────────────────────────────────────────────────────────────────
 
-	put<P extends string, T extends ValidationTarget, Schema extends StandardSchemaV1>(
+	put<
+		P extends string,
+		T extends ValidationTarget,
+		Schema extends StandardSchemaV1,
+	>(
 		path: P,
 		validator: ValidatorMiddleware<T, Schema>,
 		handler: InlineHandler,
-	): AddRoute<E, S, B, P, ValidatedRouteSchema<"PUT", T, Schema, InlineHandler, true>>;
+	): AddRoute<
+		E,
+		S,
+		B,
+		P,
+		ValidatedRouteSchema<"PUT", T, Schema, InlineHandler, true>
+	>;
 
-	put<P extends string, T extends ValidationTarget, Schema extends StandardSchemaV1, R>(
+	put<
+		P extends string,
+		T extends ValidationTarget,
+		Schema extends StandardSchemaV1,
+		R,
+	>(
 		path: P,
 		validator: ValidatorMiddleware<T, Schema>,
 		handler: Handler<ValidatedContext<E, P, T, Schema>, R>,

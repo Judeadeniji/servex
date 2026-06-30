@@ -1,8 +1,8 @@
-import { describe, expect, it, mock } from "bun:test";
+import { describe, expect, it } from "bun:test";
 import { createServer } from "../app";
 import { BunAdapter } from "./bun";
-import { WebStandardAdapter } from "./web-standard";
 import { CloudflareAdapter } from "./cloudflare-worker";
+import { WebStandardAdapter } from "./web-standard";
 
 describe("Adapters", () => {
 	describe("BunAdapter", () => {

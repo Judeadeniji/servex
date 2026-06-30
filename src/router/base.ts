@@ -5,7 +5,6 @@ import type {
 	MiddlewareHandler,
 } from "../types";
 
-
 export type HTTPMethod = Method;
 
 export type Route = {
@@ -40,7 +39,6 @@ export type MatchedRoute = {
 		| undefined;
 	is405?: boolean;
 };
-
 
 /**
  * Orders a map of trie segments by type (static, dynamic, wildcard)
@@ -170,8 +168,5 @@ export interface IRouter {
 
 	addSubTrie(parent: string, trie: IRouter): IRouter;
 
-	pushMiddlewares(
-		path: string,
-		middleware: MiddlewareHandler<Context>[],
-	): void;
+	pushMiddlewares(path: string, middleware: MiddlewareHandler<Context>[]): void;
 }

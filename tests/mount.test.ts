@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { Elysia } from "elysia";
-import { Hono } from "hono";
 import type { ExecutionContext } from "hono";
+import { Hono } from "hono";
 import { createServer } from "../src/index";
 
 describe("Mounting WinterTC apps (Hono & Elysia)", () => {

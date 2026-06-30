@@ -1,14 +1,27 @@
 import type { ServeOptions } from "bun";
 import type { ListenCallback, Serve, Server } from "../server";
 import type { ServeXAdapter } from "../types";
+import {
+	createStaticHandler,
+	mapCompactResponse,
+	mapEarlyResponse,
+	mapResponse,
+} from "./handler";
 
 export const BunAdapter: ServeXAdapter = {
 	name: "bun",
-	staticFile: (path: string) => {
-		return new Response(Bun.file(path), {
-			headers: { "Content-Type": "text/html; charset=UTF-8" },
-		});
+
+	handler: {
+		mapResponse,
+		mapEarlyResponse,
+		mapCompactResponse,
+		createStaticHandler,
 	},
+
+	staticFile: (path: string) => {
+		return new Response(Bun.file(path));
+	},
+
 	listen: (app) => {
 		return (
 			portOrOptions: string | number | Partial<Serve>,

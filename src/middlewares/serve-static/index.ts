@@ -1,8 +1,8 @@
+import type * as fsPromisesType from "fs/promises";
+import type * as nodePathType from "path";
 import type { Context } from "../../context";
 import type { StorageAdapter } from "../../storage/types";
 import type { NextFunction } from "../../types";
-import type * as fsPromisesType from "fs/promises";
-import type * as nodePathType from "path";
 export interface ServeStaticOptions {
 	/**
 	 * Root directory to serve files from. Defaults to "./public" if no storage adapter is provided.

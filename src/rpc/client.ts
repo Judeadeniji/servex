@@ -32,7 +32,7 @@ function createProxy(
 		precomputedPath ??
 		(options.hash
 			? `${options.baseURL}${options.prefix ?? "/rpc"}/${options.hash(path.join("."))}`
-			: `${options.baseURL}${options.prefix ?? "/rpc"}${path.length > 0 ? "/" + path.join("/") : ""}`);
+			: `${options.baseURL}${options.prefix ?? "/rpc"}${path.length > 0 ? `/${path.join("/")}` : ""}`);
 
 	return new Proxy(
 		// Target must be a function so the proxy is callable

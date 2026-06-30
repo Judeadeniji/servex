@@ -2,7 +2,11 @@ import { HttpException } from "../http-exception";
 import type { Env, JSONValue, ServeXRouter } from "../types";
 import { composeMiddlewares } from "./middleware";
 import { type CompileOptions, compileRoutes } from "./router";
-import type { InferClientFromRegistry, RPCContext, RPCPluginInstance } from "./types";
+import type {
+	InferClientFromRegistry,
+	RPCContext,
+	RPCPluginInstance,
+} from "./types";
 import { validateInput, validateOutput } from "./validation";
 
 export type RPCPluginOptions = CompileOptions;
@@ -92,11 +96,7 @@ export function rpc<R extends Record<string, unknown>>(
 				}
 			});
 
-			return app as ServeXRouter<
-				E,
-				S & InferClientFromRegistry<R>,
-				B
-			>;
+			return app as ServeXRouter<E, S & InferClientFromRegistry<R>, B>;
 		},
 	};
 }

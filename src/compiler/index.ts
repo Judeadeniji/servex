@@ -11,9 +11,7 @@ import type { InternalHandler } from "../types";
  * 3. State Opt: Uses a simple integer bitmask (or Uint8Array) to perfectly mimic `next()`
  *    short-circuiting and duplicate call prevention without array allocations.
  */
-export function buildCompilerSource(
-	handlers: InternalHandler[],
-): string {
+export function buildCompilerSource(handlers: InternalHandler[]): string {
 	if (handlers.length === 0) {
 		return `return () => Promise.resolve(undefined);\n`;
 	}
@@ -71,9 +69,7 @@ export function buildCompilerSource(
 
 export function compileHandlerChain(
 	handlers: InternalHandler[],
-): (
-	context: Context,
-) => Response | undefined | Promise<Response | undefined> {
+): (context: Context) => Response | undefined | Promise<Response | undefined> {
 	if (handlers.length === 0) {
 		return async () => undefined;
 	}

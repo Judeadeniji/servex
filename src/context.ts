@@ -545,19 +545,14 @@ const contextHelpers = {
 		_headers?: HeaderRecord,
 	) {
 		_warnIfFinished.call(this, "json");
-		const body = JSON.stringify(object);
 		this._status = status ?? 200;
 
 		if (!this._headers && !_headers && !this._response) {
-			this._response = new Response(body, {
-				status: this._status,
-				headers: { "Content-Type": "application/json; charset=UTF-8" },
-			});
+			this._response = Response.json(object, { status: this._status });
 			return this._response;
 		}
 
 		const headers = this._headers || new Headers();
-		headers.set("Content-Type", "application/json; charset=UTF-8");
 		if (_headers) {
 			for (const key in _headers) {
 				const val = _headers[key];
@@ -565,7 +560,7 @@ const contextHelpers = {
 			}
 		}
 
-		this._response = new Response(body, { status: this._status, headers });
+		this._response = Response.json(object, { status: this._status, headers });
 		return this._response;
 	},
 

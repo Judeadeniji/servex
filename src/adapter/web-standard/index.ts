@@ -1,8 +1,22 @@
 import type { ListenCallback, Serve, Server } from "../server";
 import type { ServeXAdapter } from "../types";
+import {
+	createStaticHandler,
+	mapCompactResponse,
+	mapEarlyResponse,
+	mapResponse,
+} from "./handler";
 
 export const WebStandardAdapter: ServeXAdapter = {
 	name: "web-standard",
+
+	handler: {
+		mapResponse,
+		mapEarlyResponse,
+		mapCompactResponse,
+		createStaticHandler,
+	},
+
 	listen: () => {
 		return (
 			_portOrOptions: string | number | Partial<Serve>,
