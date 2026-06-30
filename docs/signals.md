@@ -82,3 +82,37 @@ app.get("/nested", async (c) => {
   return c.text("Values logged");
 });
 ```
+
+## 4. Composing Routines
+
+Because routines are hierarchical, you can freely compose them to build complex execution trees. For example, you can attach a strict timeout to a background task that carries specific state, while leaving the main request completely unaffected.
+
+```typescript
+import { withValue, withTimeout } from "servex/core/signal";
+
+app.post("/process-video", async (c) => {
+  // 1. Create a branch with state specifically for the worker
+  const workerState = withValue(c.routine(), "jobId", "video-889");
+
+  // 2. Wrap that state with a strict 30-second deadline
+  const [workerCtx, cancelWorker] = withTimeout(workerState, 30000);
+
+  // The final `workerCtx` routine now has:
+  // - The "jobId" value flowing UP
+  // - A 30s deadline flowing DOWN
+  // - Connection drop awareness flowing DOWN from the root c.routine()
+
+  runBackgroundWorker(workerCtx).catch((err) => {
+    console.error(`Job ${workerCtx.value("jobId")} failed:`, err);
+  });
+
+  // We can respond immediately to the client.
+  // The workerCtx will continue in the background but will abort if the 30s deadline passes.
+  return c.json({ status: "processing" });
+});
+
+async function runBackgroundWorker(ctx) {
+  // Pass the fully composed signal to your heavy lifting logic
+  await fetch("https://internal-worker.local/start", { signal: ctx.signal });
+}
+```
