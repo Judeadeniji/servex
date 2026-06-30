@@ -14,8 +14,7 @@ export const SUPPORTED_METHODS = [
 	"head",
 ] as const;
 
-// biome-ignore lint/suspicious/noExplicitAny: val could be anything
 export const isHTMLBundle = (val: any): val is HTMLBundlelike =>
-	val &&
+	!!val &&
 	(val.toString() === "[object HTMLBundle]" ||
 		val.constructor?.name === "HTMLBundle");
