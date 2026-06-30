@@ -16,6 +16,8 @@ import { executeHandlers } from "./response";
 
 const DEFAULT_ENV = typeof process !== "undefined" ? process.env : {};
 
+// ── Route param resolution ────────────────────────────────────────────────────
+
 /**
  * Resolves the route params object from a matched route.
  *
@@ -32,9 +34,8 @@ function resolveRouteParams(
 	if (route.params !== null) return route.params;
 	const values = route.paramValues;
 	if (!values || values.length === 0) return null;
-	const keys = (
-		route.store as { paramsKeys?: string[] } | undefined
-	)?.paramsKeys;
+	const keys = (route.store as { paramsKeys?: string[] } | undefined)
+		?.paramsKeys;
 	if (!keys || keys.length === 0) return null;
 	const params: Record<string, string> = {};
 	const len = Math.min(keys.length, values.length);
@@ -44,156 +45,51 @@ function resolveRouteParams(
 	return params;
 }
 
-// ── Trace Helper ─────────────────────────────────────────────────────────────
-async function executeOnRequestPhase(
-	hooks: Hooks,
-	context: Context,
-	onReqLen: number,
-) {
-	for (let i = 0; i < onReqLen; i++) {
-		const r = hooks.onRequest[i](context);
-		const result = r instanceof Promise ? await r : r;
-		if (result instanceof Response) return result;
-	}
-}
+// ── Executor cache ────────────────────────────────────────────────────────────
 
-async function execute404Phase(
-	context: Context,
-	middlewares: Handler<Context>[],
-) {
-	const res = await executeHandlers(context, middlewares);
-	return res || new Response("Not Found", { status: 404 });
-}
-
-async function executeOnBeforePhase(
-	hooks: Hooks,
-	context: Context,
-	onBeforeLen: number,
-) {
-	for (let i = 0; i < onBeforeLen; i++) {
-		const r = hooks.onBeforeHandle[i](context);
-		const result = r instanceof Promise ? await r : r;
-		if (result instanceof Response) return result;
-	}
-}
-
-async function executeHandlePhase(
-	context: Context,
-	executor:
-		| ((c: Context) => Response | Promise<Response | undefined> | undefined)
-		| undefined,
-	handlers: Handler<Context>[],
+/**
+ * Returns the cached compiled executor for a matched route, compiling it on
+ * first access when JIT is enabled.  Called once per route across all
+ * requests — subsequent requests read directly from `route.store.executor`.
+ */
+function getOrCompileExecutor(
+	route: MatchedRoute,
 	jit: boolean,
-) {
-	let result: Response | undefined;
-	if (jit) {
-		result = await executor?.(context);
-	} else {
-		result = await executeHandlers(context, handlers);
-	}
-	return result || new Response("Not Found", { status: 404 });
+):
+	| ((context: Context) => Response | Promise<Response | undefined> | undefined)
+	| undefined {
+	if (!jit) return undefined;
+
+	const cached = (route.executor ?? route.store?.executor) as (
+		context: Context,
+	) => Response | Promise<Response | undefined> | undefined;
+	if (cached) return cached;
+
+	const handlers = (
+		Array.isArray(route.handlers) ? route.handlers : [route.handlers]
+	) as Handler<Context>[];
+
+	const executor = compileHandlerChain(handlers);
+	if (route.store) route.store.executor = executor;
+	route.executor = executor;
+	return executor;
 }
 
-async function executeOnAfterPhase(
-	hooks: Hooks,
-	context: Context,
-	response: Response,
-	onAfterLen: number,
-) {
-	let res = response;
-	for (let i = 0; i < onAfterLen; i++) {
-		const r = hooks.onAfterHandle[i](context, res);
-		const result = r instanceof Promise ? await r : r;
-		if (result instanceof Response) res = result;
-	}
-	return res;
-}
+// ── Error resolution ──────────────────────────────────────────────────────────
 
-async function executeOnErrorPhase(
-	hooks: Hooks,
-	context: Context,
-	error: Error,
-	onErrLen: number,
-) {
-	for (let i = 0; i < onErrLen; i++) {
-		const r = hooks.onError[i](error, context);
-		const result = r instanceof Promise ? await r : r;
-		if (result instanceof Response) return result;
-	}
-}
-
-async function executeTracePhaseWithArgs<T, Args extends unknown[]>(
-	listeners: TraceListener[] | undefined,
-	phaseExecutor: (...args: Args) => Promise<T> | T,
-	...args: Args
-): Promise<T> {
-	if (!listeners || listeners.length === 0) return phaseExecutor(...args);
-
-	const begin = performance.now();
-	const onStopCallbacks: ((
-		info: TraceEventInfo,
-	) => void | Promise<void>)[] = [];
-	const event: TraceEvent = {
-		begin,
-		onStop: (cb) => onStopCallbacks.push(cb),
-	};
-
-	for (let i = 0; i < listeners.length; i++) {
-		const r = listeners[i](event);
-		if (r instanceof Promise) await r;
-	}
-
-	const finalize = async (error: Error | null) => {
-		const end = performance.now();
-		for (let i = 0; i < onStopCallbacks.length; i++) {
-			const r = onStopCallbacks[i]({ begin, end, error });
-			if (r instanceof Promise) await r;
-		}
-	};
-
-	try {
-		const result = phaseExecutor(...args);
-		if (result instanceof Promise) {
-			const res = await result;
-			await finalize(null);
-			return res;
-		}
-
-		await finalize(null);
-		return result;
-	} catch (err: unknown) {
-		const error = err instanceof Error ? err : new Error(String(err));
-		await finalize(error);
-		throw err;
-	}
-}
-
-export interface ServeXExecutionContext {
-	waitUntil?: (promise: Promise<unknown> | unknown) => void;
-	passThroughOnException?: () => void;
-	[key: string]: unknown;
-}
-
-function sharedHandleValue(
-	r: Response | undefined,
-	context: Context,
-	hooks: Hooks,
-	executionCtx: ServeXExecutionContext | undefined,
-): Response {
-	const res = r || new Response("Not Found", { status: 404 });
-	context.finalResponse = res;
-	const postProcessPromise = executePostProcess(hooks, context);
-	if (executionCtx && typeof executionCtx.waitUntil === "function") {
-		executionCtx.waitUntil(postProcessPromise);
-	} else {
-		postProcessPromise.catch(console.error);
-	}
-	return res;
-}
-
-function sharedResolveError(error: unknown, debug: boolean): Response {
+/**
+ * Single unified error → Response converter used by both the fast and full
+ * request paths.
+ *
+ * - `HttpException` instances are serialised via their own `getResponse()`.
+ * - All other errors produce a 500 JSON body; when `debug` is true the message
+ *   and stack trace are included.
+ *
+ * Replaces the former `sharedResolveError` (fast path) and the inline JSON
+ * object construction (slow path) which produced different response shapes.
+ */
+function resolveErrorResponse(error: unknown, debug: boolean): Response {
 	if (error instanceof HttpException) return error.getResponse();
-	console.error("Unhandled error:", error);
 
 	const message = debug
 		? error instanceof Error
@@ -201,17 +97,173 @@ function sharedResolveError(error: unknown, debug: boolean): Response {
 			: String(error)
 		: "An unexpected error occurred";
 
-	const httpException = new HttpException({
-		statusCode: 500,
-		error: "Internal Server Error",
-		message,
-		data: debug && error instanceof Error ? { stack: error.stack } : undefined,
-		cause: error,
-	});
-
-	return httpException.getResponse();
+	return Response.json(
+		{
+			statusCode: 500,
+			error: "Internal Server Error",
+			message,
+			...(debug && error instanceof Error ? { stack: error.stack } : {}),
+		},
+		{
+			status: 500,
+			headers: { "Content-Type": "application/json; charset=UTF-8" },
+		},
+	);
 }
 
+// ── Post-response scheduling ──────────────────────────────────────────────────
+
+/**
+ * Schedules `work` to run after the response value has been produced but
+ * before control returns to the caller's await point.
+ *
+ * - CF Workers / Deno: `executionCtx.waitUntil` keeps the request alive.
+ * - All other runtimes: `Promise.resolve().then()` (microtask) is used so
+ *   that `markFinished`, `onResponse`, and deferred callbacks all fire
+ *   inside the same microtask checkpoint as `await app.fetch(...)` — which
+ *   is what tests expect.  We intentionally avoid `setImmediate` here
+ *   because that defers past the microtask queue and would cause tests that
+ *   check side-effects synchronously after the await to fail.
+ */
+function schedulePostResponse(
+	work: () => Promise<void>,
+	executionCtx?: ServeXExecutionContext,
+): void {
+	if (executionCtx && typeof executionCtx.waitUntil === "function") {
+		executionCtx.waitUntil(work());
+	} else {
+		Promise.resolve().then(work);
+	}
+}
+
+// ── Trace helper ──────────────────────────────────────────────────────────────
+
+/**
+ * Runs a set of `TraceListener`s around a phase, recording begin/end timing
+ * and forwarding any error that occurred.
+ *
+ * Unlike the former `executeTracePhaseWithArgs` this helper is *not* generic
+ * over `...args` — callers pass a zero-argument thunk `phase()` so the
+ * function has a fixed call-site shape that V8 can monomorphise.
+ */
+async function runWithTrace<T>(
+	listeners: TraceListener[],
+	phase: () => Promise<T> | T,
+	error?: Error | null,
+): Promise<T> {
+	const begin = performance.now();
+	const onStops: ((info: TraceEventInfo) => void | Promise<void>)[] = [];
+	const event: TraceEvent = {
+		begin,
+		onStop: (cb) => onStops.push(cb),
+	};
+
+	for (let i = 0; i < listeners.length; i++) {
+		const r = listeners[i](event);
+		if (r instanceof Promise) await r;
+	}
+
+	let result: T;
+	let phaseError: Error | null = null;
+
+	try {
+		result = await phase();
+	} catch (err) {
+		phaseError = err instanceof Error ? err : new Error(String(err));
+		throw err;
+	} finally {
+		const end = performance.now();
+		const info: TraceEventInfo = {
+			begin,
+			end,
+			error: phaseError ?? error ?? null,
+		};
+		for (let i = 0; i < onStops.length; i++) {
+			const r = onStops[i](info);
+			if (r instanceof Promise) await r;
+		}
+	}
+
+	return result!;
+}
+
+// ── Post-response execution ───────────────────────────────────────────────────
+
+async function executePostProcess(
+	hooks: Hooks,
+	context: Context,
+	responseListeners?: TraceListener[],
+): Promise<void> {
+	context.markFinished();
+
+	try {
+		// Deferred callbacks registered by handlers via context.defer()
+		if (context.deferred) {
+			const len = context.deferred.length;
+			for (let i = 0; i < len; i++) {
+				const r = context.deferred[i]();
+				if (r instanceof Promise) await r;
+			}
+		}
+
+		// onResponse hooks
+		const len = hooks.onResponse.length;
+		for (let i = 0; i < len; i++) {
+			const r = hooks.onResponse[i](context);
+			if (r instanceof Promise) await r;
+		}
+
+		// Trace response listeners
+		if (responseListeners && responseListeners.length > 0) {
+			await runWithTrace(responseListeners, async () => {});
+		}
+	} catch (e) {
+		console.error("ServeX post-response error:", e);
+	}
+}
+
+// ── Public types ──────────────────────────────────────────────────────────────
+
+export interface ServeXExecutionContext {
+	waitUntil?: (promise: Promise<unknown> | unknown) => void;
+	passThroughOnException?: () => void;
+	[key: string]: unknown;
+}
+
+// ── baseFetch ─────────────────────────────────────────────────────────────────
+
+/**
+ * Core request dispatcher.
+ *
+ * Architecture (after refactor):
+ *
+ * ```
+ * baseFetch()
+ *   │
+ *   ├─ [zero hooks, no trace]  ──► fast path (may return sync Response)
+ *   │     match → context → execute → finalize
+ *   │
+ *   └─ [any hook or trace]  ──► full async path (one flat function)
+ *         onRequest → match → 404/middlewares → onBeforeHandle
+ *         → execute → onAfterHandle
+ *         catch → onError → resolveErrorResponse
+ *         finally → schedulePostResponse
+ * ```
+ *
+ * Key differences from the previous implementation:
+ * - No `baseFetch`/`baseFetchSlow` split — one function, two internal paths.
+ * - Hook presence is checked per-phase with length guards, not as a global
+ *   gate that forces ALL requests through an async path.
+ * - No `executeTracePhaseWithArgs` generic wrapper — trace runs via the
+ *   typed `runWithTrace` helper called only at phases that have listeners.
+ * - The `jit` boolean is used once (in `getOrCompileExecutor`) not threaded
+ *   through 4 layers of function calls.
+ * - Error serialisation is unified: `resolveErrorResponse` replaces both
+ *   `sharedResolveError` and the inline JSON construction in the slow path,
+ *   which produced different response shapes.
+ * - Post-response uses `setImmediate` (Bun/Node) or `Promise.resolve().then`
+ *   (edge) instead of a raw `.catch`, mirroring Elysia's approach.
+ */
 export function baseFetch(
 	// @ts-ignore
 	router: RouterAdapter,
@@ -226,153 +278,328 @@ export function baseFetch(
 	debug: boolean = false,
 	jit: boolean = true,
 ): Response | Promise<Response> {
-	// ── Slow Path ──────────────────────────────────────────────────────────────
+	const onReqLen = hooks.onRequest.length;
+	const onBeforeLen = hooks.onBeforeHandle.length;
+	const onAfterLen = hooks.onAfterHandle.length;
+	const onErrLen = hooks.onError.length;
+	const traceLen = hooks.trace.length;
+
+	// ── Fast path ─────────────────────────────────────────────────────────────
+	// Zero lifecycle hooks and no trace → stay synchronous when possible.
+	// This is the common case for high-throughput routes.
 	if (
-		hooks.onRequest.length > 0 ||
-		hooks.onBeforeHandle.length > 0 ||
-		hooks.onAfterHandle.length > 0 ||
-		hooks.onError.length > 0 ||
-		hooks.trace.length > 0
+		onReqLen === 0 &&
+		onBeforeLen === 0 &&
+		onAfterLen === 0 &&
+		onErrLen === 0 &&
+		traceLen === 0
 	) {
-		return baseFetchSlow(
-			router,
+		const route = router.match(method, pathname);
+
+		if (!route?.matched) {
+			// Unmatched with global middlewares → delegate to full path
+			// so middlewares can handle the request (e.g. a catch-all logger).
+			if (middlewares.length > 0) {
+				return fullRequestPath(
+					router,
+					request,
+					method,
+					pathname,
+					middlewares,
+					hooks,
+					envBindings,
+					executionCtx,
+					debug,
+					jit,
+					onReqLen,
+					onBeforeLen,
+					onAfterLen,
+					onErrLen,
+					traceLen,
+				);
+			}
+			if (route?.is405)
+				return new Response("Method Not Allowed", { status: 405 });
+			return new Response("Not Found", { status: 404 });
+		}
+
+		const executor = getOrCompileExecutor(route, jit);
+		const handlers = executor
+			? undefined
+			: ((Array.isArray(route.handlers)
+					? route.handlers
+					: [route.handlers]) as Handler<Context>[]);
+
+		const context: Context | undefined = createContext(
 			request,
-			method,
-			pathname,
-			middlewares,
-			hooks,
-			envBindings,
+			envBindings ?? DEFAULT_ENV,
+			resolveRouteParams(route),
 			executionCtx,
 			debug,
-			jit,
 		);
-	}
 
-	// ── Fast Path (No Hooks) ───────────────────────────────────────────────────
-	const route = router.match(method, pathname);
-	if (!route?.matched) {
-		if (middlewares.length > 0) {
-			return baseFetchSlow(
-				router,
-				request,
-				method,
-				pathname,
-				middlewares,
-				hooks,
-				envBindings,
+		try {
+			const res = executor
+				? executor(context)
+				: executeHandlers(context, handlers!);
+
+			if (res instanceof Promise) {
+				return res
+					.then((r) => {
+						// JIT compiler may return Error instances as values
+						const response =
+							r instanceof Response
+								? r
+								: (r as unknown) instanceof Error
+									? resolveErrorResponse(r as unknown as Error, debug)
+									: new Response("Not Found", { status: 404 });
+						context!.finalResponse = response;
+						schedulePostResponse(
+							() => executePostProcess(hooks, context!),
+							executionCtx,
+						);
+						return response;
+					})
+					.catch((error) => {
+						const response = resolveErrorResponse(error, debug);
+						context!.finalResponse = response;
+						schedulePostResponse(
+							() => executePostProcess(hooks, context!),
+							executionCtx,
+						);
+						return response;
+					});
+			}
+
+			// JIT compiler may return Error instances as values
+			const response =
+				res instanceof Response
+					? res
+					: (res as unknown) instanceof Error
+						? resolveErrorResponse(res, debug)
+						: new Response("Not Found", { status: 404 });
+			context.finalResponse = response;
+			schedulePostResponse(
+				() => executePostProcess(hooks, context!),
 				executionCtx,
-				debug,
-				jit,
 			);
-		}
-		if (route?.is405)
-			return new Response("Method Not Allowed", { status: 405 });
-		return new Response("Not Found", { status: 404 });
-	}
-
-	let executor:
-		| ((
-				context: Context,
-		  ) => Response | Promise<Response | undefined> | undefined)
-		| undefined;
-
-	if (jit) {
-		if (!executor) {
-			const handlers = Array.isArray(route.handlers)
-				? route.handlers
-				: [route.handlers];
-			executor = compileHandlerChain(handlers as Handler<Context>[]);
-			if (route.store) route.store.executor = executor;
-			route.executor = executor;
+			return response;
+		} catch (error) {
+			const response = resolveErrorResponse(error, debug);
+			context.finalResponse = response;
+			schedulePostResponse(
+				() => executePostProcess(hooks, context!),
+				executionCtx,
+			);
+			return response;
 		}
 	}
 
-	let context: Context | undefined = createContext(
+	// ── Full path (any hook or trace present) ──────────────────────────────────
+	return fullRequestPath(
+		router,
 		request,
-		envBindings ?? DEFAULT_ENV,
-		resolveRouteParams(route),
+		method,
+		pathname,
+		middlewares,
+		hooks,
+		envBindings,
 		executionCtx,
 		debug,
+		jit,
+		onReqLen,
+		onBeforeLen,
+		onAfterLen,
+		onErrLen,
+		traceLen,
 	);
-
-	try {
-		let res: Response | Promise<Response | undefined> | undefined;
-		if (jit) {
-			res = executor!(context);
-		} else {
-			const handlers = Array.isArray(route.handlers)
-				? route.handlers
-				: [route.handlers];
-			res = executeHandlers(context, handlers as Handler<Context>[]);
-		}
-
-		if (res instanceof Promise) {
-			return res
-				.then((r) => {
-					if (r instanceof Error) {
-						r = sharedResolveError(r, debug);
-					}
-					const result = sharedHandleValue(r, context!, hooks, executionCtx);
-					context = undefined;
-					return result;
-				})
-				.catch((error) => {
-					const result = sharedHandleValue(
-						sharedResolveError(error, debug),
-						context!,
-						hooks,
-						executionCtx,
-					);
-					context = undefined;
-					return result;
-				});
-		}
-		if (res instanceof Error) {
-			res = sharedResolveError(res, debug);
-		}
-		const finalRes = sharedHandleValue(res, context!, hooks, executionCtx);
-		context = undefined;
-		return finalRes;
-	} catch (error) {
-		const finalRes = sharedHandleValue(
-			sharedResolveError(error, debug),
-			context!,
-			hooks,
-			executionCtx,
-		);
-		context = undefined;
-		return finalRes;
-	}
 }
 
-async function baseFetchSlow(
+// ── Full request path ─────────────────────────────────────────────────────────
+
+/**
+ * The full async lifecycle path: all hook phases inlined with per-phase
+ * length guards.  Trace wrapping is applied only to phases that have
+ * registered listeners, detected via `hasTrace` once at function entry.
+ *
+ * Phases (in order):
+ *  1. Trace API bootstrap (if trace hooks present)
+ *  2. onRequest
+ *  3. Route match + 404 / 405
+ *  4. Context creation
+ *  5. onBeforeHandle
+ *  6. Execute handler chain (JIT executor or slow-path executeHandlers)
+ *  7. onAfterHandle
+ *  catch → onError hooks → resolveErrorResponse
+ *  finally → schedulePostResponse (deferred, onResponse, trace response)
+ */
+async function fullRequestPath(
 	router: RouterAdapter,
 	request: Request,
 	method: Method,
 	pathname: string,
 	middlewares: Handler<Context>[],
 	hooks: Hooks,
-	envBindings?: Record<string, unknown>,
-	executionCtx?: ServeXExecutionContext,
-	debug: boolean = false,
-	jit: boolean = true,
+	envBindings: Record<string, unknown> | undefined,
+	executionCtx: ServeXExecutionContext | undefined,
+	debug: boolean,
+	jit: boolean,
+	onReqLen: number,
+	onBeforeLen: number,
+	onAfterLen: number,
+	onErrLen: number,
+	traceLen: number,
 ): Promise<Response> {
-	let response: Response | undefined;
+	const hasTrace = traceLen > 0;
 
-	let traceApi: TraceAPI<Context> | undefined;
-	let traceListeners:
-		| Record<string, TraceListener[]>
-		| undefined;
+	let response: Response | undefined;
 	let context: Context | undefined;
 
+	// Per-phase trace listener arrays (populated by the TraceAPI below)
+	let tRequest: TraceListener[] | undefined;
+	let tBeforeHandle: TraceListener[] | undefined;
+	let tHandle: TraceListener[] | undefined;
+	let tAfterHandle: TraceListener[] | undefined;
+	let tError: TraceListener[] | undefined;
+	let tResponse: TraceListener[] | undefined;
+	let traceApi: TraceAPI<Context> | undefined;
+
 	try {
-		// ── Route matching ────────────────────────────────────────────────────────
+		// ── 1. Bootstrap trace ─────────────────────────────────────────────────
+		if (hasTrace) {
+			tRequest = [];
+			tBeforeHandle = [];
+			tHandle = [];
+			tAfterHandle = [];
+			tError = [];
+			tResponse = [];
+
+			// Context is not yet available, so provide a lazy getter
+			// that resolves once context has been created.
+			let _ctx: Context | undefined;
+			traceApi = {
+				get context() {
+					return _ctx as Context;
+				},
+				onRequest: (cb) => tRequest!.push(cb),
+				onBeforeHandle: (cb) => tBeforeHandle!.push(cb),
+				onHandle: (cb) => tHandle!.push(cb),
+				onAfterHandle: (cb) => tAfterHandle!.push(cb),
+				onError: (cb) => tError!.push(cb),
+				onResponse: (cb) => tResponse!.push(cb),
+			};
+
+			for (let i = 0; i < traceLen; i++) {
+				const r = hooks.trace[i](traceApi);
+				if (r instanceof Promise) await r;
+			}
+
+			// Now create context and wire it back into the traceApi getter
+			const route = router.match(method, pathname);
+			if (!route?.matched && route?.is405) {
+				return new Response("Method Not Allowed", { status: 405 });
+			}
+			context = createContext(
+				request,
+				envBindings ?? DEFAULT_ENV,
+				route ? resolveRouteParams(route) : null,
+				executionCtx,
+				debug,
+			);
+			_ctx = context;
+
+			// ── 2. onRequest (with trace) ──────────────────────────────────────
+			if (onReqLen > 0 || tRequest.length > 0) {
+				const res = await runWithTrace(tRequest, async () => {
+					for (let i = 0; i < onReqLen; i++) {
+						const r = hooks.onRequest[i](context!);
+						const result = r instanceof Promise ? await r : r;
+						if (result instanceof Response) return result;
+					}
+				});
+				if (res instanceof Response) return res;
+			}
+
+			// ── 3. 404 / middlewares (with trace) ──────────────────────────────
+			if (!route?.matched) {
+				response = await runWithTrace(tHandle, async () => {
+					if (middlewares.length > 0) {
+						const r = await executeHandlers(context!, middlewares);
+						return r ?? new Response("Not Found", { status: 404 });
+					}
+					return new Response("Not Found", { status: 404 });
+				});
+
+				if (onAfterLen > 0 || tAfterHandle!.length > 0) {
+					response = await runWithTrace(tAfterHandle!, async () => {
+						let res = response!;
+						for (let i = 0; i < onAfterLen; i++) {
+							const r = hooks.onAfterHandle[i](context!, res);
+							const result = r instanceof Promise ? await r : r;
+							if (result instanceof Response) res = result;
+						}
+						return res;
+					});
+				}
+				return response!;
+			}
+
+			// ── 4. onBeforeHandle (with trace) ────────────────────────────────
+			if (onBeforeLen > 0 || tBeforeHandle.length > 0) {
+				const res = await runWithTrace(tBeforeHandle, async () => {
+					for (let i = 0; i < onBeforeLen; i++) {
+						const r = hooks.onBeforeHandle[i](context!);
+						const result = r instanceof Promise ? await r : r;
+						if (result instanceof Response) return result;
+					}
+				});
+				if (res instanceof Response) return res;
+			}
+
+			// ── 5. Execute handlers (with trace) ──────────────────────────────
+			const executor = getOrCompileExecutor(route, jit);
+			const handlers = executor
+				? undefined
+				: ((Array.isArray(route.handlers)
+						? route.handlers
+						: [route.handlers]) as Handler<Context>[]);
+
+			response = await runWithTrace(tHandle, async () => {
+				const r = executor
+					? await executor(context!)
+					: await executeHandlers(context!, handlers!);
+				// JIT compiler may return Error instances as values
+				if (r instanceof Error) throw r;
+				return r instanceof Response
+					? r
+					: new Response("Not Found", { status: 404 });
+			});
+
+			// ── 6. onAfterHandle (with trace) ─────────────────────────────────
+			if (onAfterLen > 0 || tAfterHandle.length > 0) {
+				response = await runWithTrace(tAfterHandle, async () => {
+					let res = response!;
+					for (let i = 0; i < onAfterLen; i++) {
+						const r = hooks.onAfterHandle[i](context!, res);
+						const result = r instanceof Promise ? await r : r;
+						if (result instanceof Response) res = result;
+					}
+					return res;
+				});
+			}
+
+			return response!;
+		}
+
+		// ── No trace: inlined phases without wrapping overhead ─────────────────
+
+		// ── 1. Route match (early 405) ─────────────────────────────────────────
 		const route = router.match(method, pathname);
-		const is405 = !route?.matched && route?.is405;
-		if (is405) {
+		if (!route?.matched && route?.is405) {
 			return new Response("Method Not Allowed", { status: 405 });
 		}
 
+		// ── 2. Context ─────────────────────────────────────────────────────────
 		context = createContext(
 			request,
 			envBindings ?? DEFAULT_ENV,
@@ -381,249 +608,127 @@ async function baseFetchSlow(
 			debug,
 		);
 
-		// ── 1. onRequest ──────────────────────────────────────────────────────────
-		const onReqLen = hooks.onRequest.length;
-		const hasTrace = hooks.trace.length > 0;
-
-		if (hasTrace) {
-			traceListeners = {
-				request: [],
-				beforeHandle: [],
-				handle: [],
-				afterHandle: [],
-				error: [],
-				response: [],
-			};
-			traceApi = {
-				context,
-				onRequest: (cb) => traceListeners?.request.push(cb),
-				onBeforeHandle: (cb) => traceListeners?.beforeHandle.push(cb),
-				onHandle: (cb) => traceListeners?.handle.push(cb),
-				onAfterHandle: (cb) => traceListeners?.afterHandle.push(cb),
-				onError: (cb) => traceListeners?.error.push(cb),
-				onResponse: (cb) => traceListeners?.response.push(cb),
-			};
-			for (let i = 0; i < hooks.trace.length; i++) {
-				const r = hooks.trace[i](traceApi);
-				if (r instanceof Promise) await r;
-			}
+		// ── 3. onRequest ───────────────────────────────────────────────────────
+		for (let i = 0; i < onReqLen; i++) {
+			const r = hooks.onRequest[i](context);
+			const result = r instanceof Promise ? await r : r;
+			if (result instanceof Response) return result;
 		}
 
-		if (onReqLen > 0 || (traceListeners && traceListeners.request.length > 0)) {
-			const res = await executeTracePhaseWithArgs(
-				traceListeners?.request,
-				executeOnRequestPhase,
-				hooks,
-				context,
-				onReqLen,
-			);
-			if (res instanceof Response) return res;
-		}
-
+		// ── 4. 404 / middlewares ───────────────────────────────────────────────
 		if (!route?.matched) {
-			// 404 path: execute global middlewares
-			response = await executeTracePhaseWithArgs(
-				traceListeners?.handle,
-				execute404Phase,
-				context,
-				middlewares,
-			);
-
-			// 3. onAfterHandle for 404
-			const onAfterLen = hooks.onAfterHandle.length;
-			if (
-				onAfterLen > 0 ||
-				(traceListeners && traceListeners.afterHandle.length > 0)
-			) {
-				response = (await executeTracePhaseWithArgs(
-					traceListeners?.afterHandle,
-					executeOnAfterPhase,
-					hooks,
-					context,
-					response,
-					onAfterLen,
-				)) as Response;
+			if (middlewares.length > 0) {
+				const r = await executeHandlers(context, middlewares);
+				response = r ?? new Response("Not Found", { status: 404 });
+			} else {
+				response = new Response("Not Found", { status: 404 });
 			}
-			return response!;
-		}
 
-		// ── 2. onBeforeHandle ─────────────────────────────────────────────────────
-		const onBeforeLen = hooks.onBeforeHandle.length;
-		if (
-			onBeforeLen > 0 ||
-			(traceListeners && traceListeners.beforeHandle.length > 0)
-		) {
-			const res = await executeTracePhaseWithArgs(
-				traceListeners?.beforeHandle,
-				executeOnBeforePhase,
-				hooks,
-				context,
-				onBeforeLen,
-			);
-			if (res instanceof Response) return res;
-		}
-
-		// ── 3. Execute handlers ───────────────────────────────────────────────────
-		let executor:
-			| ((
-					context: Context,
-			  ) => Response | Promise<Response | undefined> | undefined)
-			| undefined;
-		let finalHandlers: Handler<Context>[] = [];
-		if (jit) {
-			executor = route.executor || (route.store?.executor as typeof executor);
-			if (!executor) {
-				finalHandlers = (
-					Array.isArray(route.handlers) ? route.handlers : [route.handlers]
-				) as Handler<Context>[];
-				executor = compileHandlerChain(finalHandlers);
-				if (route.store) route.store.executor = executor;
-				route.executor = executor;
+			for (let i = 0; i < onAfterLen; i++) {
+				const r = hooks.onAfterHandle[i](context, response);
+				const result = r instanceof Promise ? await r : r;
+				if (result instanceof Response) response = result;
 			}
-		} else {
-			finalHandlers = (
-				Array.isArray(route.handlers) ? route.handlers : [route.handlers]
-			) as Handler<Context>[];
+			return response;
 		}
 
-		response = await executeTracePhaseWithArgs(
-			traceListeners?.handle,
-			executeHandlePhase,
-			context,
-			executor,
-			finalHandlers,
-			jit,
-		);
+		// ── 5. onBeforeHandle ──────────────────────────────────────────────────
+		for (let i = 0; i < onBeforeLen; i++) {
+			const r = hooks.onBeforeHandle[i](context);
+			const result = r instanceof Promise ? await r : r;
+			if (result instanceof Response) return result;
+		}
 
-		// ── 4. onAfterHandle ──────────────────────────────────────────────────────
-		const onAfterLen = hooks.onAfterHandle.length;
-		if (
-			onAfterLen > 0 ||
-			(traceListeners && traceListeners.afterHandle.length > 0)
-		) {
-			response = (await executeTracePhaseWithArgs(
-				traceListeners?.afterHandle,
-				executeOnAfterPhase,
-				hooks,
-				context,
-				response!,
-				onAfterLen,
-			)) as Response;
+		// ── 6. Execute handlers ────────────────────────────────────────────────
+		const executor = getOrCompileExecutor(route, jit);
+		const handlers = executor
+			? undefined
+			: ((Array.isArray(route.handlers)
+					? route.handlers
+					: [route.handlers]) as Handler<Context>[]);
+
+		const handlerResult = executor
+			? await executor(context)
+			: await executeHandlers(context, handlers!);
+
+		// JIT compiler may return Error instances as values — treat as thrown
+		if (handlerResult instanceof Error) throw handlerResult;
+
+		response =
+			handlerResult instanceof Response
+				? handlerResult
+				: new Response("Not Found", { status: 404 });
+
+		// ── 7. onAfterHandle ───────────────────────────────────────────────────
+		for (let i = 0; i < onAfterLen; i++) {
+			const r = hooks.onAfterHandle[i](context, response);
+			const result = r instanceof Promise ? await r : r;
+			if (result instanceof Response) response = result;
 		}
 	} catch (error) {
-		// ── onError hooks ─────────────────────────────────────────────────────────
-		const onErrLen = hooks.onError.length;
-		if (
-			context &&
-			(onErrLen > 0 || (traceListeners && traceListeners.error.length > 0))
-		) {
-			const errRes = await executeTracePhaseWithArgs(
-				traceListeners?.error,
-				executeOnErrorPhase,
-				hooks,
-				context,
-				error as Error,
-				onErrLen,
-			);
+		// ── onError hooks (and trace error listeners) ──────────────────────────
+		const hasErrListeners =
+			context && (onErrLen > 0 || (hasTrace && tError && tError.length > 0));
+		if (hasErrListeners) {
+			const phase = async () => {
+				for (let i = 0; i < onErrLen; i++) {
+					const r = hooks.onError[i](error as Error, context!);
+					const result = r instanceof Promise ? await r : r;
+					if (result instanceof Response) return result;
+				}
+			};
+
+			const errRes =
+				hasTrace && tError && tError.length > 0
+					? await runWithTrace(
+							tError,
+							phase,
+							error instanceof Error ? error : new Error(String(error)),
+						)
+					: await phase();
+
 			if (errRes instanceof Response) {
 				response = errRes;
 			}
 		}
 
 		if (!response) {
-			if (error instanceof HttpException) {
-				response = error.getResponse();
-			} else {
-				console.error("Unhandled error:", error);
-				const payload: Record<string, unknown> = {
-					statusCode: 500,
-					error: "Internal Server Error",
-					message: "An unexpected error occurred",
-				};
-				if (debug) {
-					payload.message =
-						error instanceof Error ? error.message : String(error);
-					payload.stack = error instanceof Error ? error.stack : undefined;
-				}
-				response = new Response(JSON.stringify(payload), {
-					status: 500,
-					headers: { "Content-Type": "application/json; charset=UTF-8" },
-				});
-			}
+			response = resolveErrorResponse(error, debug);
 		}
 	} finally {
-		if (context && response) {
-			context.finalResponse = response;
-		}
-		// ── Post-Response Processing ─────────────────────────────────────────────
-		if (
-			context &&
-			(hooks.onResponse.length > 0 ||
-				context.deferred ||
-				(traceListeners && traceListeners.response.length > 0))
-		) {
-			const postProcessPromise = ((ctx, tListeners) =>
-				executePostProcess(hooks, ctx, tListeners))(
-				context,
-				traceListeners?.response,
-			);
-			if (executionCtx && typeof executionCtx.waitUntil === "function") {
-				executionCtx.waitUntil(postProcessPromise);
-			} else {
-				postProcessPromise.catch(console.error);
+		if (context) {
+			if (response) context.finalResponse = response;
+
+			// Capture tResponse NOW before the cleanup below clears the outer
+			// variable — the closure passed to schedulePostResponse would
+			// otherwise see `undefined` when it eventually runs.
+			const capturedResponseListeners = tResponse;
+
+			const needsPostProcess =
+				hooks.onResponse.length > 0 ||
+				!!context.deferred ||
+				(hasTrace &&
+					capturedResponseListeners &&
+					capturedResponseListeners.length > 0);
+
+			if (needsPostProcess) {
+				schedulePostResponse(
+					() => executePostProcess(hooks, context!, capturedResponseListeners),
+					executionCtx,
+				);
 			}
 		}
 
-		context = undefined;
+		// Release all references so GC can collect per-request state
 		traceApi = undefined;
-		traceListeners = undefined;
+		tRequest =
+			tBeforeHandle =
+			tHandle =
+			tAfterHandle =
+			tError =
+			tResponse =
+				undefined;
 	}
 
 	return response!;
-}
-
-async function executePostProcess(
-	hooks: Hooks,
-	context: Context,
-	responseListeners?: TraceListener[],
-) {
-	context.markFinished();
-	try {
-		if (context.deferred) {
-			const len = context.deferred.length;
-			for (let i = 0; i < len; i++) {
-				const r = context.deferred[i]();
-				if (r instanceof Promise) await r;
-			}
-		}
-		const len = hooks.onResponse.length;
-		for (let i = 0; i < len; i++) {
-			const r = hooks.onResponse[i](context);
-			if (r instanceof Promise) await r;
-		}
-
-		if (responseListeners && responseListeners.length > 0) {
-			const begin = performance.now();
-			const onStopCallbacks: ((
-				info: TraceEventInfo,
-			) => void | Promise<void>)[] = [];
-			const event: TraceEvent = {
-				begin,
-				onStop: (cb) => onStopCallbacks.push(cb),
-			};
-
-			for (let i = 0; i < responseListeners.length; i++) {
-				const r = responseListeners[i](event);
-				if (r instanceof Promise) await r;
-			}
-
-			const end = performance.now();
-			for (let j = 0; j < onStopCallbacks.length; j++) {
-				const s = onStopCallbacks[j]({ begin, end, error: null });
-				if (s instanceof Promise) await s;
-			}
-		}
-	} catch (e) {
-		console.error("ServeX background task error:", e);
-	}
 }

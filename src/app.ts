@@ -8,20 +8,20 @@ import { baseFetch } from "./core/fetch";
 import { RouterAdapter, RouterType } from "./router/adapter";
 import type { NormalisePath } from "./router/types";
 import type {
-    AfterHandleHook,
-    Env,
-    ErrorHook,
-    Handler,
-    HookHandler,
-    Hooks,
-    InlineHandler,
-    Method,
-    MiddlewareHandler,
-    ServerOptions,
-    ServerRoute,
-    ServeXPlugin,
-    ServeXRouter,
-    TraceAPI,
+	AfterHandleHook,
+	Env,
+	ErrorHook,
+	Handler,
+	HookHandler,
+	Hooks,
+	InlineHandler,
+	Method,
+	MiddlewareHandler,
+	ServerOptions,
+	ServerRoute,
+	ServeXPlugin,
+	ServeXRouter,
+	TraceAPI,
 } from "./types";
 import { isHTMLBundle, SUPPORTED_METHODS } from "./utils";
 
@@ -52,11 +52,7 @@ export class ServeXRouterImpl<
 		);
 	}
 
-	trace(
-		_handler: (
-			api: TraceAPI<Context<E>>,
-		) => void | Promise<void>,
-	): this {
+	trace(_handler: (api: TraceAPI<Context<E>>) => void | Promise<void>): this {
 		throw new Error(
 			"trace hook can only be registered on the main ServeXApp instance, not a sub-router.",
 		);
@@ -64,14 +60,8 @@ export class ServeXRouterImpl<
 
 	// @ts-ignore: Implementation signature
 	use(
-		pathOrPlugin:
-			| string
-			| MiddlewareHandler<Context>
-			| ServeXPlugin,
-		...middlewaresOrPlugins: (
-			| MiddlewareHandler<Context>
-			| ServeXPlugin
-		)[]
+		pathOrPlugin: string | MiddlewareHandler<Context> | ServeXPlugin,
+		...middlewaresOrPlugins: (MiddlewareHandler<Context> | ServeXPlugin)[]
 	) {
 		if (
 			typeof pathOrPlugin === "object" &&
@@ -88,8 +78,7 @@ export class ServeXRouterImpl<
 				typeof middlewaresOrPlugins[0] === "object" &&
 				"setup" in middlewaresOrPlugins[0]
 			) {
-				const plugin =
-					middlewaresOrPlugins[0] as ServeXPlugin;
+				const plugin = middlewaresOrPlugins[0] as ServeXPlugin;
 				this.route(pathOrPlugin, (childApp) =>
 					plugin.setup(childApp, pathOrPlugin),
 				);
@@ -112,10 +101,7 @@ export class ServeXRouterImpl<
 	private add(
 		method: Method,
 		path: string,
-		handlers: (
-			| Handler<Context>
-			| InlineHandler
-		)[],
+		handlers: (Handler<Context> | InlineHandler)[],
 	) {
 		const finalHandlers = [...handlers];
 		for (let i = 0; i < handlers.length; i++) {
@@ -129,22 +115,19 @@ export class ServeXRouterImpl<
 				)
 			) {
 				const inlineVal = handler;
-				let routeHandler: Handler<
-					Context
-				>;
+				let routeHandler: Handler<Context>;
 
 				if (inlineVal instanceof Response) {
 					routeHandler = () => inlineVal.clone();
 				} else if (isHTMLBundle(inlineVal)) {
 					routeHandler = () =>
 						this.envAdapter.staticFile
-							? this.envAdapter.staticFile((inlineVal).index)
+							? this.envAdapter.staticFile(inlineVal.index)
 							: new Response("Static file serving not supported by adapter", {
 									status: 500,
 								});
 				} else if (typeof inlineVal === "object" && inlineVal !== null) {
-					routeHandler = (c: Context) =>
-						c.json(inlineVal);
+					routeHandler = (c: Context) => c.json(inlineVal);
 				} else {
 					routeHandler = (c) => c.text(String(inlineVal));
 				}
@@ -168,7 +151,7 @@ export class ServeXRouterImpl<
 						res = inlineVal;
 					} else if (isHTMLBundle(inlineVal)) {
 						res = this.envAdapter.staticFile
-							? this.envAdapter.staticFile((inlineVal).index)
+							? this.envAdapter.staticFile(inlineVal.index)
 							: new Response("Static file serving not supported by adapter", {
 									status: 500,
 								});
@@ -198,59 +181,31 @@ export class ServeXRouterImpl<
 
 	// @ts-ignore: Implementation signature
 	get(path: string, ...handlers: Handler[]) {
-		return this.add(
-			"GET",
-			path,
-			handlers,
-		);
+		return this.add("GET", path, handlers);
 	}
 	// @ts-ignore: Implementation signature
 	post(path: string, ...handlers: Handler[]) {
-		return this.add(
-			"POST",
-			path,
-			handlers,
-		);
+		return this.add("POST", path, handlers);
 	}
 	// @ts-ignore: Implementation signature
 	put(path: string, ...handlers: Handler[]) {
-		return this.add(
-			"PUT",
-			path,
-			handlers,
-		);
+		return this.add("PUT", path, handlers);
 	}
 	// @ts-ignore: Implementation signature
 	delete(path: string, ...handlers: Handler[]) {
-		return this.add(
-			"DELETE",
-			path,
-			handlers,
-		);
+		return this.add("DELETE", path, handlers);
 	}
 	// @ts-ignore: Implementation signature
 	patch(path: string, ...handlers: Handler[]) {
-		return this.add(
-			"PATCH",
-			path,
-			handlers,
-		);
+		return this.add("PATCH", path, handlers);
 	}
 	// @ts-ignore: Implementation signature
 	options(path: string, ...handlers: Handler[]) {
-		return this.add(
-			"OPTIONS",
-			path,
-			handlers,
-		);
+		return this.add("OPTIONS", path, handlers);
 	}
 	// @ts-ignore: Implementation signature
 	head(path: string, ...handlers: Handler[]) {
-		return this.add(
-			"HEAD",
-			path,
-			handlers,
-		);
+		return this.add("HEAD", path, handlers);
 	}
 	// @ts-ignore: Implementation signature
 	all(path: string, ...handlers: Handler[]) {
@@ -404,7 +359,9 @@ export class ServeXApp<
 				if (matched?.handlers && matched.store) {
 					if (!matched.store.executor) {
 						matched.store.executor = compileHandlerChain(
-							Array.isArray(matched.handlers) ? matched.handlers : [matched.handlers]
+							Array.isArray(matched.handlers)
+								? matched.handlers
+								: [matched.handlers],
 						);
 					}
 				}
@@ -428,25 +385,15 @@ export class ServeXApp<
 		this.hooks.onResponse.push(handler);
 		return this;
 	}
-	trace(
-		handler: (
-			api: TraceAPI<Context<E>>,
-		) => void | Promise<void>,
-	) {
+	trace(handler: (api: TraceAPI<Context<E>>) => void | Promise<void>) {
 		this.hooks.trace.push(handler as never);
 		return this;
 	}
 
 	// @ts-ignore: Implementation signature
 	use(
-		pathOrPlugin:
-			| string
-			| MiddlewareHandler<Context>
-			| ServeXPlugin,
-		...middlewaresOrPlugins: (
-			| MiddlewareHandler<Context>
-			| ServeXPlugin
-		)[]
+		pathOrPlugin: string | MiddlewareHandler<Context> | ServeXPlugin,
+		...middlewaresOrPlugins: (MiddlewareHandler<Context> | ServeXPlugin)[]
 	) {
 		if (
 			typeof pathOrPlugin === "object" &&
@@ -463,21 +410,29 @@ export class ServeXApp<
 				typeof middlewaresOrPlugins[0] === "object" &&
 				"setup" in middlewaresOrPlugins[0]
 			) {
-				super.use(
-					pathOrPlugin,
-					middlewaresOrPlugins[0] as ServeXPlugin,
-				);
+				super.use(pathOrPlugin, middlewaresOrPlugins[0] as ServeXPlugin);
 				return this;
 			}
 			if (pathOrPlugin === "*" || pathOrPlugin === "/*") {
-				this.middlewares.push(...(middlewaresOrPlugins as MiddlewareHandler<Context>[]));
-				this.routerAdapter.pushMiddlewares("*", middlewaresOrPlugins as MiddlewareHandler<Context>[]);
+				this.middlewares.push(
+					...(middlewaresOrPlugins as MiddlewareHandler<Context>[]),
+				);
+				this.routerAdapter.pushMiddlewares(
+					"*",
+					middlewaresOrPlugins as MiddlewareHandler<Context>[],
+				);
 			} else {
-				this.routerAdapter.pushMiddlewares(pathOrPlugin, middlewaresOrPlugins as MiddlewareHandler<Context>[]);
+				this.routerAdapter.pushMiddlewares(
+					pathOrPlugin,
+					middlewaresOrPlugins as MiddlewareHandler<Context>[],
+				);
 			}
 			return this;
 		}
-		this.middlewares.push(pathOrPlugin as MiddlewareHandler<Context>, ...(middlewaresOrPlugins as MiddlewareHandler<Context>[]));
+		this.middlewares.push(
+			pathOrPlugin as MiddlewareHandler<Context>,
+			...(middlewaresOrPlugins as MiddlewareHandler<Context>[]),
+		);
 		this.routerAdapter.pushMiddlewares("*", [
 			pathOrPlugin as MiddlewareHandler<Context>,
 			...(middlewaresOrPlugins as MiddlewareHandler<Context>[]),
@@ -499,10 +454,7 @@ export class ServeXApp<
 			pathname = "/";
 		} else {
 			pathname = decodeURI(
-				url.substring(
-					pathIdx,
-					queryIndex === -1 ? url.length : queryIndex,
-				),
+				url.substring(pathIdx, queryIndex === -1 ? url.length : queryIndex),
 			);
 		}
 
@@ -572,7 +524,7 @@ export function createServer<E extends Env = Env, B extends string = "/">(
 		aot = false,
 		jit = true,
 		nativeStaticResponse = false,
-		adapter = BunAdapter
+		adapter = BunAdapter,
 	} = options;
 	const routerAdapter = new RouterAdapter({
 		type: router,

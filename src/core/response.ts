@@ -1,74 +1,59 @@
 import type { Context } from "../context";
 import type { Env, Handler } from "../types";
 
-// Pre-resolved promise reused across all next() calls that don't resume.
-const _RESOLVED = Promise.resolve();
-
 /**
  * Executes an array of handlers sequentially with a single shared next().
  *
- * Key optimizations vs the original:
- *  1. One `next` closure per request (vs one per handler in the old version).
- *  2. Flat `while` loop — no recursion, no extra async frame per step.
- *  3. Pre-resolved Promise.resolve() returned from next() avoids microtask allocation.
- *  4. No wrapper try/catch inside the loop — errors bubble to the caller.
- *  5. No intermediate handler array allocation — caller passes slices or
- *     combined arrays directly.
+ * This is the **non-JIT slow path** used when AOT compilation is disabled.
+ * The JIT fast path lives in `src/compiler/index.ts` which generates an
+ * equivalent flat switch-based function string at startup.
  *
- * @returns The first Response returned by any handler, or undefined if none.
- * @throws  Re-throws any error from a handler for the caller to handle once.
+ * Key properties (must stay in sync with compiler/index.ts semantics):
+ *  1. Only allocates a `next` closure when the handler accepts a second arg —
+ *     identical to the compiler's `handler.length > 1` rule.
+ *  2. Dispatch is recursive but bounded: at most N stack frames for N handlers.
+ *  3. Errors thrown by handlers bubble to the caller — never caught here.
+ *  4. `InlineHandler` branches are intentionally absent: `app.add()` wraps ALL
+ *     inline static values (strings, numbers, plain objects, Response instances)
+ *     into function closures **at route-registration time**, before they are
+ *     stored in `route.handlers`. Both this function AND the JIT compiler
+ *     therefore always receive an array of pure `function` values — the
+ *     `typeof handler !== "function"` guard below is purely defensive.
+ *
+ * @returns The first `Response` returned by any handler, or `undefined`.
+ * @throws  Re-throws any error from a handler for the caller to handle.
  */
-export async function executeHandlers<
-	E extends Env = Env,
->(
+export async function executeHandlers<E extends Env = Env>(
 	context: Context<E>,
 	handlers: Handler<Context<E>>[],
 ): Promise<Response | undefined> {
-	async function dispatch(i: number): Promise<Response | undefined> {
-		if (i >= handlers.length) return undefined;
+	const len = handlers.length;
 
-		let nextPromise: Promise<Response | undefined> | undefined;
+	async function dispatch(index: number): Promise<Response | undefined> {
+		if (index >= len) return undefined;
+
 		let nextCalled = false;
+		let nextPromise: Promise<Response | undefined> | undefined;
 
-		const next = async () => {
+		const next = (): Promise<Response | undefined> => {
 			if (nextCalled) throw new Error("next() called multiple times");
 			nextCalled = true;
-			nextPromise = dispatch(i + 1);
-			return await nextPromise;
+			nextPromise = dispatch(index + 1);
+			return nextPromise;
 		};
 
-		const handlerOrStatic = handlers[i];
+		const handler = handlers[index];
 
-		if (typeof handlerOrStatic === "function") {
-			// CRITICAL FIX: Added `await` so async middleware resolves properly
-			const res = await handlerOrStatic(context, next);
-			if (res instanceof Response) return res;
-		}
+		// Only functions reach this path — InlineHandlers are handled by JIT.
+		if (typeof handler !== "function") return undefined;
 
-		// TODO: Everything below should only exec if native static response is false
-		else if (
-			handlerOrStatic &&
-			typeof handlerOrStatic === "object" &&
-			(handlerOrStatic as unknown) instanceof Response
-		) {
-			// Fast path for static responses (clone to avoid consuming body)
-			return (handlerOrStatic as Response).clone();
-		} else if (
-			typeof handlerOrStatic === "object" &&
-			handlerOrStatic !== null
-		) {
-			// Stringify JSON objects and set the correct headers
-			return new Response(JSON.stringify(handlerOrStatic), {
-				headers: { "Content-Type": "application/json; charset=UTF-8" },
-			});
-		} else {
-			// Coerce numbers and booleans to strings
-			return new Response(String(handlerOrStatic), {
-				headers: { "Content-Type": "text/plain; charset=UTF-8" },
-			});
-		}
+		const res = await handler(context as Context<E>, next);
 
-		if (nextCalled && nextPromise) return await nextPromise;
+		// Short-circuit on Response — errors are thrown not returned in async path.
+		if (res instanceof Response) return res;
+
+		// Handler called next() — propagate whatever the rest of the chain returned.
+		if (nextCalled && nextPromise) return nextPromise;
 
 		return undefined;
 	}
