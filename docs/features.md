@@ -96,9 +96,7 @@ app.get("/home", (c) => {
 });
 ```
 
-
-
-## Signals & Go-Style Contexts
+## Signals & Go-Style Contexts (Routines)
 
 ServeX implements a highly advanced **Go-style context architecture** via `c.routine()`. Just like `context.Context` in Go, ServeX's context manages nested cancellation, deadlines, and hierarchical values. 
 
@@ -106,51 +104,76 @@ The strict rules of ServeX signal routines are:
 - **Cancellation flows DOWN:** If a parent routine is cancelled, all descendant routines are instantly cancelled.
 - **Values flow UP:** Child routines walking up the tree can discover values injected by ancestors.
 
-Every request automatically creates a root routine tied to an `AbortSignal`. 
+Every request automatically creates a root routine tied to an `AbortSignal`. You can branch off this root routine using helpers from `servex/core/signal`.
 
-### Example 1: Aborting Outbound Requests
-By passing the context's signal to native APIs like `fetch`, the outbound request will be instantly terminated if the client drops their connection to your server.
+### 1. `withCancel`: Manual Branch Cancellation
+You can spawn a sub-routine that can be manually aborted without affecting the parent request.
 
 ```typescript
-app.get("/heavy-task", async (c) => {
-  try {
-    // Pass the signal to an external API call
-    const data = await fetch("https://api.example.com/data", {
-      signal: c.req.signal
-    });
+import { withCancel } from "servex/core/signal";
 
-    return c.json(await data.json());
-  } catch (err: any) {
-    if (err.name === "AbortError") {
-      console.log("Client disconnected, fetch aborted early to save resources!");
-    }
-    throw err;
+app.get("/task", async (c) => {
+  // Branch off the main request routine
+  const [childCtx, cancel] = withCancel(c.routine());
+
+  // Pass childCtx.signal to an external process
+  fetch("https://api.example.com/long-polling", { signal: childCtx.signal }).catch(() => {});
+
+  // Manually cancel the child routine after some condition is met
+  // This does NOT cancel the parent request (c.routine())
+  if (someCondition) {
+    cancel(); 
   }
+
+  return c.text("Done");
 });
 ```
 
-### Example 2: Managing Deadlines and Background Tasks
-You can use the Go-style context tree to spawn sub-routines that automatically clean up when the request drops.
+### 2. `withTimeout`: Managing Deadlines
+You can use the Go-style context tree to spawn sub-routines that automatically clean up when a deadline passes or the request drops—whichever happens first.
 
 ```typescript
 import { withTimeout } from "servex/core/signal";
 
 app.get("/stream", async (c) => {
-  // Create a child routine that automatically times out after 5 seconds
+  // Create a child routine that times out after 5 seconds
+  // If the user drops connection before 5s, the child is STILL aborted because cancellation flows DOWN!
   const [childCtx, cancel] = withTimeout(c.routine(), 5000);
 
   const timer = setInterval(() => {
     console.log("Processing heavy background task...");
   }, 1000);
 
-  // Listen to the abort event on the child routine to clean up memory
-  // This will fire EITHER when 5 seconds pass OR if the client disconnects!
   childCtx.signal.addEventListener("abort", () => {
     console.log("Routine aborted! Cleaning up interval...");
     clearInterval(timer);
   });
 
   return c.text("Processing started in the background.");
+});
+```
+
+### 3. `withValue`: Hierarchical State
+While `c.set()` is great for flat request state, `withValue` lets you scope state to a specific branch of execution. Because values flow UP, a child can always read an ancestor's value, but an ancestor cannot read a child's value.
+
+```typescript
+import { withValue } from "servex/core/signal";
+
+app.get("/nested", async (c) => {
+  // Attach a value to a new sub-routine
+  const routineA = withValue(c.routine(), "traceId", "abc-123");
+  
+  // Attach another value deeper down
+  const routineB = withValue(routineA, "userId", "999");
+
+  // routineB can read values from routineA
+  console.log(routineB.value("traceId")); // "abc-123"
+  console.log(routineB.value("userId"));  // "999"
+
+  // routineA CANNOT read values from routineB
+  console.log(routineA.value("userId"));  // undefined
+
+  return c.text("Values logged");
 });
 ```
 
