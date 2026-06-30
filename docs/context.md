@@ -12,11 +12,13 @@ ServeX provides optimized helpers to read the incoming body and URL data.
 - **`c.urlEncoded()`**: Reads the body as `URLSearchParams`.
 
 ### URL Parameters
+
 - **`c.params("id")`**: Gets a path parameter (e.g., from `/users/:id`).
 - **`c.query("search")`**: Gets the first value of a query parameter.
 - **`c.queries("tags")`**: Gets an array of all values for a query parameter (e.g., `?tags=a&tags=b`).
 
 ### Validation Data
+
 - **`c.valid(target)`**: If you use the `validator` middleware, this returns strictly-typed data. Targets can be `"body"`, `"query"`, or `"params"`.
 
 ## 2. State & Environment
