@@ -1,4 +1,4 @@
-import { BunAdapter } from "./adapter/bun";
+import { WebStandardAdapter } from "./adapter/web-standard";
 import type { ListenCallback, Serve, Server } from "./adapter/server";
 import type { ServeXAdapter } from "./adapter/types";
 import { compileHandlerChain } from "./compiler";
@@ -39,7 +39,7 @@ export class ServeXRouterImpl<
 
 	constructor(
 		protected routerAdapter: RouterAdapter,
-		protected envAdapter: ServeXAdapter = BunAdapter,
+		protected envAdapter: ServeXAdapter = WebStandardAdapter,
 	) {}
 
 	get routes(): ServerRoute[] {
@@ -349,7 +349,7 @@ export class ServeXApp<
 		public aot: boolean = false,
 		public jit: boolean = true,
 		nativeStaticResponse: boolean = false,
-		envAdapter: ServeXAdapter = BunAdapter,
+		envAdapter: ServeXAdapter = WebStandardAdapter,
 	) {
 		super(router, envAdapter);
 		this._nativeStaticResponse = nativeStaticResponse;
@@ -538,7 +538,7 @@ export function createServer<E extends Env = Env, B extends string = "/">(
 		aot = false,
 		jit = true,
 		nativeStaticResponse = false,
-		adapter = BunAdapter,
+		adapter = WebStandardAdapter,
 	} = options;
 	const routerAdapter = new RouterAdapter({
 		type: router,

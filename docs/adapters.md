@@ -4,7 +4,7 @@ ServeX abstracts the underlying HTTP server, allowing you to run the exact same 
 
 ## Choosing an Adapter
 
-When creating your server, you can explicitly provide an adapter. If omitted, ServeX defaults to the `BunAdapter` for maximum native throughput.
+When creating your server, you can explicitly provide an adapter. If omitted, ServeX defaults to the `WebStandardAdapter` to ensure maximum compatibility out-of-the-box.
 
 ```typescript
 import { createServer } from "servex";
@@ -12,7 +12,7 @@ import { CloudflareAdapter, BunAdapter, WebStandardAdapter } from "servex/adapte
 
 const app = createServer({
   // Pick the target runtime
-  adapter: CloudflareAdapter
+  adapter: BunAdapter
 });
 ```
 

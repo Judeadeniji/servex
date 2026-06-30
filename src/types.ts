@@ -235,7 +235,7 @@ export interface ServerOptions<B extends string = "/"> {
 	nativeStaticResponse?: boolean;
 	/**
 	 * Adapter to use for environment-specific features (e.g., listening on a port,
-	 * serving static files). Defaults to BunAdapter.
+	 * serving static files). Defaults to WebStandardAdapter.
 	 */
 	adapter?: import("./adapter/types").ServeXAdapter;
 }
