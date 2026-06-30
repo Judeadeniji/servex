@@ -4,15 +4,42 @@ This guide covers additional built-in features, APIs, and middlewares provided b
 
 ## Plugins
 
-ServeX allows you to modularize your application by passing sub-routers or plugin instances into `app.use()`.
+ServeX allows you to modularize your application by writing reusable plugins. A plugin is simply an object that implements the `ServeXPlugin` interface, exposing a `setup` method.
+
+### Writing a Plugin
+
+```typescript
+import type { ServeXPlugin } from "servex";
+
+export const myPlugin: ServeXPlugin = {
+  name: "my-user-plugin",
+  setup(app, prefix) {
+    // You can mount routes directly onto the application instance
+    app.get(`${prefix}/profile`, (c) => c.json({ user: "Alice" }));
+    
+    // You can also register plugin-specific middlewares
+    app.use(async (c, next) => {
+       console.log(`[Plugin] Request to: ${c.req.url}`);
+       await next();
+    });
+
+    return app;
+  }
+};
+```
+
+### Using a Plugin
+
+You can register plugins globally or mount them under a specific prefix using `app.use()`.
 
 ```typescript
 import { createServer } from "servex";
-import myPlugin from "./my-plugin";
+import { myPlugin } from "./my-plugin";
 
 const app = createServer();
 
 // Mounts the plugin logic to the /api prefix
+// The plugin's routes will now be available at /api/profile
 app.use("/api", myPlugin);
 ```
 
@@ -86,18 +113,47 @@ const data = await store.get("key");
 
 ## Signals (Request Cancellation)
 
-Every request in ServeX carries an `AbortSignal` to gracefully handle timeouts or client disconnects. You can access it via `c.req.signal` or tap into the context's signal routine.
+Every request in ServeX automatically carries an `AbortSignal` to gracefully handle timeouts or unexpected client disconnects. You can access it via `c.req.signal` or tap into the context's signal routine.
 
-This is highly recommended for aborting outgoing `fetch` calls or database queries if the user cancels the request.
+This is highly recommended for aborting outgoing `fetch` calls, terminating database queries, or cleaning up background tasks if the user cancels the request.
+
+### Example 1: Aborting Outbound Requests
+By passing the signal to native APIs like `fetch`, the outbound request will be instantly terminated if the client drops their connection to your server.
 
 ```typescript
 app.get("/heavy-task", async (c) => {
-  // Pass the signal to an external API call
-  const data = await fetch("https://api.example.com/data", {
-    signal: c.req.signal
+  try {
+    // Pass the signal to an external API call
+    const data = await fetch("https://api.example.com/data", {
+      signal: c.req.signal
+    });
+
+    return c.json(await data.json());
+  } catch (err: any) {
+    if (err.name === "AbortError") {
+      console.log("Client disconnected, fetch aborted early to save resources!");
+    }
+    throw err;
+  }
+});
+```
+
+### Example 2: Cleaning up Background Tasks
+You can manually listen for the `"abort"` event on the signal to stop loops or clear intervals.
+
+```typescript
+app.get("/stream", async (c) => {
+  const timer = setInterval(() => {
+    console.log("Processing heavy background task...");
+  }, 1000);
+
+  // Listen to the abort event to clean up memory
+  c.req.signal.addEventListener("abort", () => {
+    console.log("Client disconnected! Cleaning up interval...");
+    clearInterval(timer);
   });
 
-  return c.json(await data.json());
+  return c.text("Processing started in the background.");
 });
 ```
 
