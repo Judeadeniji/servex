@@ -1,0 +1,112 @@
+# ServeX Middlewares & Context
+
+This guide explains how to use ServeX's powerful middleware system and Context object. Middlewares allow you to intercept, modify, and act upon requests and responses, while the Context object provides a performant interface for interacting with them.
+
+## The Context Object
+
+The `Context` (often abbreviated as `c`) is the central object passed to every route handler, middleware, and lifecycle hook in ServeX. It provides everything you need to handle a request, access parameters, read variables, and send a response.
+
+### Key Context Methods
+
+- **Request Parsing**:
+  - `c.req.json()`: Parses the request body as JSON.
+  - `c.params("key")`: Retrieves matched route parameters.
+  - `c.query("key")`: Retrieves URL query parameters.
+  - `c.formData()`, `c.urlEncoded()`: Parse form submissions.
+
+- **Variables & Environment**:
+  - `c.set("key", value)` / `c.get("key")`: Share data between middlewares and handlers.
+  - `c.env`: Access environment variables and bindings (like Cloudflare Workers KV or D1).
+
+- **Sending Responses**:
+  - `c.json({ message: "Hello" })`: Sends a JSON response.
+  - `c.text("Hello")`: Sends plain text.
+  - `c.html("<h1>Hello</h1>")`: Sends HTML.
+  - `c.redirect("/login")`: Redirects the client.
+  - `c.error(404, "Not Found")`: Throws an HTTP exception.
+
+- **Background Tasks**:
+  - `c.defer(() => { ... })`: Defers execution of a task until *after* the response has been sent to the client. Perfect for logging or analytics.
+
+## Request Lifecycle Hooks
+
+ServeX exposes a robust set of hooks that let you tap into different phases of the request lifecycle. These hooks can be registered on the application instance.
+
+- **`onRequest(ctx)`**: Runs immediately when a request is received, before any routing or middleware execution.
+- **`onBeforeHandle(ctx)`**: Runs after routing matches, but before the main route handler executes.
+- **`onAfterHandle(ctx, response)`**: Runs after the route handler has executed and produced a response. You can intercept or modify the outgoing `Response`.
+- **`onError(error, ctx)`**: Catches and handles any unhandled errors or exceptions thrown during the request lifecycle.
+- **`onResponse(ctx)`**: The final hook, running right before the response is sent back to the client.
+
+**Example: Global Hooks**
+```typescript
+app.onRequest((c) => {
+  console.log(`Incoming request to: ${c.req.url}`);
+});
+
+app.onAfterHandle((c, response) => {
+  response.headers.set("X-Powered-By", "ServeX");
+  return response;
+});
+```
+
+## Custom Middlewares
+
+Middlewares are functions that receive the `Context` and a `next` function. They allow you to run code before and after the downstream handlers. ServeX middlewares are fully asynchronous and use the standard `await next()` pattern.
+
+### Writing a Custom Middleware
+
+Here is an example of writing a custom authentication middleware:
+
+```typescript
+import type { Context, NextFunction } from "servex";
+
+export const requireAuth = async (c: Context, next: NextFunction) => {
+  const token = c.req.headers.get("Authorization");
+
+  if (!token) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+
+  // Set data in context to be used by the handler
+  c.set("user", "user-id-from-token");
+
+  // Call next() to proceed to the next middleware or route handler
+  await next();
+}
+```
+
+### Deferring Execution
+
+You can use the `c.defer()` method within a middleware to run code *after* the client has received the response. This is highly optimized and avoids blocking the response loop.
+
+```typescript
+export const myLogger = async (c: Context, next: NextFunction) => {
+  const start = performance.now();
+  
+  await next();
+  
+  c.defer(() => {
+    const duration = performance.now() - start;
+    console.log(`Request to ${c.req.url} took ${duration}ms`);
+  });
+};
+```
+
+### Chaining Middlewares
+
+You can easily apply multiple middlewares to a route or an entire application.
+
+**Global Application Middleware:**
+```typescript
+app.use(myLogger);
+app.use(requireAuth);
+```
+
+**Route-Specific Middleware:**
+```typescript
+app.get("/dashboard", requireAuth, (c) => {
+  const user = c.get("user");
+  return c.json({ message: `Welcome ${user}` });
+});
+```
