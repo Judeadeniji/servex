@@ -130,3 +130,54 @@ app.get(
 ```
 
 If validation fails, the `validator` middleware automatically rejects the request with a `400 Bad Request` and a JSON response detailing the schema issues. This guarantees your handlers only execute when the incoming data is fully sound.
+
+## Sub-Routing & Routing Patterns
+
+As your application grows, defining all routes on a single `app` instance becomes unmanageable. ServeX provides powerful routing patterns to help you compose nested applications via the `app.route()` method.
+
+### Nesting via Callbacks
+
+You can mount a group of routes under a specific prefix using a callback. ServeX will automatically create a child router and prefix all definitions inside it.
+
+```typescript
+app.route("/api", (api) => {
+  // Matches: GET /api/users
+  api.get("/users", (c) => c.json([]));
+  
+  // Matches: POST /api/users
+  api.post("/users", (c) => c.json({ created: true }));
+
+  // You can nest infinitely!
+  api.route("/v1", (v1) => {
+    // Matches: GET /api/v1/status
+    v1.get("/status", "OK");
+  });
+});
+```
+
+### Nesting via Separate Instances
+
+For massive codebases, you can create entirely separate router instances in different files and merge them into the main app. This pattern is perfect for building modular plugins and domain-driven architectures.
+
+```typescript
+// users.ts
+import { createRouter } from "servex/router"; // Or whatever ServeX exposes for sub-routers
+
+const usersApp = createRouter();
+
+usersApp.get("/", (c) => c.json([{ id: 1 }]));
+usersApp.post("/", (c) => c.json({ created: true }));
+
+export default usersApp;
+```
+
+```typescript
+// main.ts
+import { createServer } from "servex";
+import usersApp from "./users";
+
+const app = createServer();
+
+// Mounts the usersApp router at the /users prefix
+app.route("/users", usersApp);
+```

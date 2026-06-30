@@ -87,22 +87,33 @@ export const myLogger = async (c: Context, next: NextFunction) => {
 };
 ```
 
-### Chaining Middlewares
+### Chaining and Composition
 
-You can easily apply multiple middlewares to a route or an entire application.
+ServeX makes it trivial to compose multiple middlewares. Instead of deeply nesting `app.use` calls, you can compose them by passing multiple middleware functions into a single method call. They will execute sequentially in the order they are provided.
 
-**Global Application Middleware:**
+**Global Composition:**
 
 ```typescript
-app.use(myLogger);
-app.use(requireAuth);
+// Compose globally via multiple arguments
+app.use(myLogger, rateLimiter, requireAuth);
+
+// Or via an array spread
+const standardStack = [myLogger, rateLimiter];
+app.use(...standardStack, requireAuth);
 ```
 
-**Route-Specific Middleware:**
+**Route-Specific Composition:**
+
+Middlewares can be composed directly onto specific routes. This ensures they only trigger when the route is matched.
 
 ```typescript
-app.get("/dashboard", requireAuth, (c) => {
-  const user = c.get("user");
-  return c.json({ message: `Welcome ${user}` });
-});
+app.get(
+  "/dashboard", 
+  requireAuth,           // Middleware 1
+  checkPermissions,      // Middleware 2
+  (c) => {               // Final Handler
+    const user = c.get("user");
+    return c.json({ message: `Welcome ${user}` });
+  }
+);
 ```
