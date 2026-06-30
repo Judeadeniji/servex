@@ -161,9 +161,10 @@ For massive codebases, you can create entirely separate router instances in diff
 
 ```typescript
 // users.ts
-import { createRouter } from "servex/router"; // Or whatever ServeX exposes for sub-routers
+import { createServer } from "servex";
 
-const usersApp = createRouter();
+// You just create a standard ServeX instance to act as a sub-router
+const usersApp = createServer();
 
 usersApp.get("/", (c) => c.json([{ id: 1 }]));
 usersApp.post("/", (c) => c.json({ created: true }));
