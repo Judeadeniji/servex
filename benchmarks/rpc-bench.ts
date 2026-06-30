@@ -56,6 +56,8 @@ async function runBench(name: string, url: string) {
 				if (err) return reject(err);
 				
 				console.log(`\nResults for ${name}:`);
+				console.log(`- 2xx Responses: ${result["2xx"]}`);
+				console.log(`- Non-2xx Responses: ${result.non2xx}`);
 				console.log(`- Requests/sec: ${result.requests.average}`);
 				console.log(`- Latency (p99): ${result.latency.p99} ms`);
 				console.log(`- Latency (p99.9): ${result.latency.p99_9} ms`); // Required by Rule 03
