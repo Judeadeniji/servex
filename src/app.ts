@@ -303,6 +303,20 @@ export class ServeXRouterImpl<
 			"Cannot call request() on a sub-router. Please ensure you are calling request() on the main application instance created by createServer().",
 		);
 	};
+
+	/**
+	 * Start the server.
+	 * Note: This method is only fully implemented on the main application instance
+	 * returned by `createServer()`.
+	 */
+	listen(
+		_options: string | number | Partial<Serve>,
+		_callback?: ListenCallback,
+	): Server {
+		throw new Error(
+			"Cannot call listen() on a sub-router. Please ensure you are calling listen() on the main application instance created by createServer().",
+		);
+	}
 }
 
 export class ServeXApp<

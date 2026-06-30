@@ -577,4 +577,13 @@ export interface ServeXRouter<
 	 * `fetch`. Useful in tests and server-side `request()` calls.
 	 */
 	request(input: RequestInfo, init?: RequestInit): Response | Promise<Response>;
+
+	/**
+	 * Start the server using the configured environment adapter.
+	 * Note: This method is only fully implemented on the main application instance.
+	 */
+	listen(
+		options: string | number | Partial<import("./adapter/server").Serve>,
+		callback?: import("./adapter/server").ListenCallback,
+	): import("./adapter/server").Server;
 }
