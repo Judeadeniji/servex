@@ -28,35 +28,7 @@ The `Context` (often abbreviated as `c`) is the central object passed to every r
 - **Background Tasks**:
   - `c.defer(() => { ... })`: Defers execution of a task until *after* the response has been sent to the client. Perfect for logging or analytics.
 
-## Request Lifecycle Hooks
 
-ServeX exposes a robust set of hooks that let you tap into different phases of the request lifecycle. These hooks can be registered on the application instance.
-
-- **`onRequest(ctx)`**: Runs immediately when a request is received, before any routing or middleware execution.
-- **`onBeforeHandle(ctx)`**: Runs after routing matches, but before the main route handler executes.
-- **`onAfterHandle(ctx, response)`**: Runs after the route handler has executed and produced a response. You can intercept, modify, or completely replace the outgoing `Response`.
-- **`onError(error, ctx)`**: Catches and handles any unhandled errors or `HttpException`s thrown during the request lifecycle.
-- **`onResponse(ctx)`**: The final hook, running right before the response is sent back to the client (read-only phase).
-
-### Post Response Hooks
-
-ServeX allows you to modify responses globally after the handler has finished, but before the response is finalized. Use the `onAfterHandle` hook for this.
-
-```typescript
-app.onAfterHandle((c, response) => {
-  // Add global CORS headers or custom metrics
-  response.headers.set("X-Powered-By", "ServeX");
-  
-  // You can modify the response or return an entirely new one!
-  return response;
-});
-
-app.onResponse((c) => {
-  // Runs right as the response is flushed to the network.
-  // Useful for cleanup or logging, but you cannot modify the response here.
-  console.log(`Flushed response for ${c.req.url}`);
-});
-```
 
 ## Error Handling
 
@@ -74,23 +46,7 @@ app.get("/restricted", (c) => {
 });
 ```
 
-### Global Error Hook
 
-You can intercept all unhandled exceptions (including `HttpException`s) by defining a global `onError` hook. This is the ideal place to format your API's standard error response structure.
-
-```typescript
-app.onError((err, c) => {
-  console.error("Global Error Caught:", err);
-
-  if (err instanceof HttpException) {
-    // Gracefully format expected HTTP errors
-    return c.json({ ok: false, message: err.message }, err.status);
-  }
-
-  // Handle completely unexpected crashes
-  return c.json({ ok: false, message: "Internal Server Error" }, 500);
-});
-```
 
 ## Custom Middlewares
 
