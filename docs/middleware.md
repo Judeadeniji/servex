@@ -28,8 +28,6 @@ The `Context` (often abbreviated as `c`) is the central object passed to every r
 - **Background Tasks**:
   - `c.defer(() => { ... })`: Defers execution of a task until *after* the response has been sent to the client. Perfect for logging or analytics.
 
-
-
 ## Error Handling
 
 ServeX provides structured error handling through the `HttpException` class and the `onError` global hook.
@@ -45,8 +43,6 @@ app.get("/restricted", (c) => {
   throw new HttpException(403, "You do not have access to this resource.");
 });
 ```
-
-
 
 ## Custom Middlewares
 

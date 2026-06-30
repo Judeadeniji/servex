@@ -95,5 +95,3 @@ app.get("/home", (c) => {
   return c.html("<h1>Welcome to ServeX!</h1>");
 });
 ```
-
-
