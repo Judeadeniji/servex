@@ -15,9 +15,10 @@ const app = createServer({
 
 In standard frameworks, calling `await next()` creates a new closure, pushes to the call stack, and iterates over an array of functions. Over millions of requests, allocating these closures causes severe Garbage Collection (GC) pauses.
 
-ServeX's `compileHandlerChain` converts your middleware arrays into a monolithic string evaluated via `new Function()`. 
+ServeX's `compileHandlerChain` converts your middleware arrays into a monolithic string evaluated via `new Function()`.
 
 **The resulting compiled function:**
+
 1. **Monomorphic Call Sites**: V8 and JavaScriptCore can optimize flat `switch` cases perfectly, preventing CPU pipeline stalls.
 2. **Zero Allocations**: Allocates exactly 1 closure per request instead of `N` closures.
 3. **State Optimization**: Uses a simple integer state machine to track `next()` calls, short-circuiting, and duplicate call prevention without array allocations.
